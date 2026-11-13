@@ -49,7 +49,9 @@ export function coverHTML(book, { key, badge = true } = {}) {
   const badges = badge
     ? `${book.status && book.status !== 'Okunacak' ? `<span class="badge" title="${esc(st.name)}">${st.emoji}</span>` : ''}${book.favorite ? '<span class="badge l">❤️</span>' : ''}`
     : '';
-  return `<div class="cover"${k ? ` data-cover="${esc(k)}"` : ''}>${ph}${badges}</div>`;
+  const pct = book.status === 'Okunuyor' && typeof book.progress?.percent === 'number' ? Math.min(100, book.progress.percent) : null;
+  const prog = badge && pct !== null ? `<div class="cprog"><span style="width:${pct}%"></span></div>` : '';
+  return `<div class="cover"${k ? ` data-cover="${esc(k)}"` : ''}>${ph}${badges}${prog}</div>`;
 }
 
 const io = 'IntersectionObserver' in window
@@ -90,7 +92,7 @@ export function bookRow(b, { sub } = {}) {
   const subline = sub ?? [b.author, b.series ? `${b.series}${b.seriesOrder ? ' #' + b.seriesOrder : ''}` : ''].filter(Boolean).join(' · ');
   return `<a class="row" href="#/book/${enc(b.id)}">${coverHTML(b, { badge: false })}
     <div class="body"><div class="t">${b.favorite ? '❤️ ' : ''}${esc(displayTitle(b))}</div><div class="s">${esc(subline)}</div>
-    <div class="s">${st.emoji} ${esc(st.name)}</div></div>
+    <div class="s">${st.emoji} ${esc(st.name)}${typeof b.progress?.percent === 'number' && b.status === 'Okunuyor' ? ` · %${Math.floor(b.progress.percent)}` : ''}${b.file ? ' · 📄' : ''}</div></div>
     <div class="end">${s !== null ? `<span class="score">${s.toFixed(1)}</span>` : ''}</div></a>`;
 }
 

@@ -10,6 +10,7 @@ import { renderEdit } from './views/edit.js';
 import { renderReading } from './views/reading.js';
 import { renderSettings, renderOptions } from './views/settings.js';
 import { renderAuthor, renderSeries } from './views/group.js';
+import { renderReader } from './views/reader.js';
 
 const routes = [
   [/^\/?$/, renderLibrary, 'library'],
@@ -22,10 +23,12 @@ const routes = [
   [/^\/reading$/, renderReading, 'reading'],
   [/^\/settings$/, renderSettings, 'settings'],
   [/^\/options\/([a-z]+)$/, renderOptions, 'settings'],
+  [/^\/read\/([^/]+)$/, renderReader, 'read'],
 ];
 
 const scrollMemory = new Map();
 let current = null;
+let cleanup = null; // açık ekranın kapanırken çalıştıracağı iş (örn. okuyucu)
 
 function parse() {
   const raw = location.hash.replace(/^#/, '') || '/';
@@ -43,9 +46,11 @@ async function route() {
     if (!m) continue;
     current = raw;
     $$('#tabbar a').forEach(a => a.classList.toggle('active', a.dataset.tab === tab));
-    $('#tabbar').classList.toggle('hidden', tab === 'add');
+    $('#tabbar').classList.toggle('hidden', tab === 'add' || tab === 'read');
     const params = m.slice(1).map(decodeURIComponent);
-    await fn(view, params, query);
+    if (cleanup) { const c = cleanup; cleanup = null; try { await c(); } catch { /* yok */ } }
+    const ret = await fn(view, params, query);
+    if (typeof ret === 'function') cleanup = ret;
     window.scrollTo(0, scrollMemory.get(raw) || 0);
     return;
   }
@@ -55,7 +60,7 @@ async function route() {
 // Veri değişince açık ekranı yenile (düzenleme ekranı hariç; o kendi durumunu tutar).
 let pending = false;
 onChange(() => {
-  if (pending || parse().path.startsWith('/edit/')) return;
+  if (pending || parse().path.startsWith('/edit/') || parse().path.startsWith('/read/')) return;
   pending = true;
   requestAnimationFrame(async () => {
     pending = false;

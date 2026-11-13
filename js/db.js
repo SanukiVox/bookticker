@@ -1,6 +1,6 @@
 // Telefonda (tarayıcının IndexedDB'sinde) veri saklama katmanı.
 const DB_NAME = 'kitapligim';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 let dbp = null;
 function open() {
@@ -12,8 +12,13 @@ function open() {
       if (!db.objectStoreNames.contains('books')) db.createObjectStore('books', { keyPath: 'id' });
       if (!db.objectStoreNames.contains('covers')) db.createObjectStore('covers');
       if (!db.objectStoreNames.contains('meta')) db.createObjectStore('meta');
+      if (!db.objectStoreNames.contains('files')) db.createObjectStore('files'); // kitap dosyaları (PDF/EPUB)
     };
-    req.onsuccess = () => resolve(req.result);
+    req.onsuccess = () => {
+      const d = req.result;
+      d.onversionchange = () => d.close(); // başka sekmede yeni sürüm açılırsa engelleme
+      resolve(d);
+    };
     req.onerror = () => reject(req.error);
   });
   return dbp;
@@ -45,6 +50,12 @@ export const db = {
   deleteCover: key => tx('covers', 'readwrite', s => { s.delete(key); }),
   allCoverKeys: () => tx('covers', 'readonly', s => reqP(s.getAllKeys())),
   clearCovers: () => tx('covers', 'readwrite', s => { s.clear(); }),
+
+  getFile: key => tx('files', 'readonly', s => reqP(s.get(key))),
+  putFile: (key, blob) => tx('files', 'readwrite', s => { s.put(blob, key); }),
+  deleteFile: key => tx('files', 'readwrite', s => { s.delete(key); }),
+  allFileKeys: () => tx('files', 'readonly', s => reqP(s.getAllKeys())),
+  clearFiles: () => tx('files', 'readwrite', s => { s.clear(); }),
 
   getMeta: key => tx('meta', 'readonly', s => reqP(s.get(key))),
   putMeta: (key, val) => tx('meta', 'readwrite', s => { s.put(val, key); }),

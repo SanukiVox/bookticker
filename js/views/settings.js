@@ -6,12 +6,14 @@ import { backButton, wireBack } from './detail.js';
 import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 
-export const APP_VERSION = '1.2.0';
+export const APP_VERSION = '1.3.0';
 
 export async function renderSettings(view) {
   const s = state.settings;
   const lastBackup = s.lastBackup ? new Date(s.lastBackup).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'hiç alınmadı';
   let storage = '';
+  const { filesUsage, formatSize } = await import('../files.js');
+  const fu = await filesUsage();
   try {
     const est = await navigator.storage?.estimate?.();
     const persisted = await navigator.storage?.persisted?.();
@@ -48,7 +50,7 @@ export async function renderSettings(view) {
       <button class="set-row" id="exp" style="width:100%;border:0;background:none;text-align:left">📤 Excel'e aktar<span class="chev"></span></button>
       <button class="set-row" id="bak" style="width:100%;border:0;background:none;text-align:left">💾 Yedek al (kapaklar dahil)<span class="chev"></span></button>
       <label class="set-row" style="position:relative">♻️ Yedekten geri yükle<span class="chev"></span><input type="file" id="res" accept=".json,application/json" style="position:absolute;inset:0;opacity:0"></label>
-      <div class="set-row muted small" style="display:block">Son yedek: ${lastBackup}${storage ? `<br>${storage}` : ''}<br>Veriler yalnızca bu telefonda saklanır. Ara sıra yedek alıp Dosyalar'a ya da iCloud Drive'a kaydetmeni öneririm.</div>
+      <div class="set-row muted small" style="display:block">Son yedek: ${lastBackup}${storage ? `<br>${storage}` : ''}${fu.count ? `<br>📄 Kitap dosyaları: ${fu.count} dosya · ${formatSize(fu.bytes)} (sadece bu telefonda; yedeğe ve GitHub'a dahil değil)` : ''}<br>Veriler yalnızca bu telefonda saklanır. Ara sıra yedek alıp Dosyalar'a ya da iCloud Drive'a kaydetmeni öneririm.</div>
     </div>
 
     <div class="form-group"><button class="set-row" id="wipe" style="width:100%;border:0;background:none;color:var(--danger)">Tüm verileri sil</button></div>
@@ -110,8 +112,9 @@ export async function renderSettings(view) {
     try { const n = await restore(file); applyTheme(); toast(`${n} kitap geri yüklendi`); location.hash = '#/'; } catch (err) { toast(err.message); }
   });
   $('#wipe', view).addEventListener('click', async () => {
-    if (!(await confirmSheet('Tüm verileri sil', 'Bütün kitaplar, kapaklar ve notlar bu telefondan silinecek. Bu işlem geri alınamaz.', 'Hepsini sil'))) return;
+    if (!(await confirmSheet('Tüm verileri sil', 'Bütün kitaplar, kapaklar, kitap dosyaları ve notlar bu telefondan silinecek. Bu işlem geri alınamaz.', 'Hepsini sil'))) return;
     await db.clearCovers();
+    await db.clearFiles();
     await replaceAll([]);
     toast('Tüm veriler silindi');
   });

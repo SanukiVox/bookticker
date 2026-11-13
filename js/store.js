@@ -175,11 +175,13 @@ export async function deleteBook(id) {
   await db.deleteBook(id);
   if (b?.coverTr) await db.deleteCover(b.coverTr);
   if (b?.coverOrig) await db.deleteCover(b.coverOrig);
+  if (b?.file?.key) { await db.deleteFile(b.file.key); await db.putMeta(`loc:${b.file.key}`, null); }
   state.books = state.books.filter(x => x.id !== id);
   emit();
 }
 
-export const today = () => new Date().toISOString().slice(0, 10);
+// Yerel saate göre bugünün tarihi (YYYY-AA-GG)
+export const today = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 // Kitaplarda geçen ama listede olmayan seçenekleri listeye ekle (örn. yeni yayınevi).
 export function learnOptions(books) {

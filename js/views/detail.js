@@ -1,6 +1,7 @@
 // Kitap detay sayfası.
 import { state, getBook, saveBook, computeScore, CRITERIA, SPICY_LABELS, statusInfo, displayTitle, booksInSeries, booksByAuthor } from '../store.js';
 import { esc, enc, ICON, coverHTML, bookCard, hydrateCovers, peppers, toast, sheet, $, $$ } from '../ui.js';
+import { fileSectionShell, fillFileSection } from './bookfile.js';
 
 export function backButton(fallback = '#/') {
   return `<button class="icon-btn" data-back="${fallback}" aria-label="Geri">${ICON.back}</button>`;
@@ -63,6 +64,7 @@ export async function renderDetail(view, [id]) {
       ${b.series ? `<div class="ser">${esc(b.series)}${b.seriesOrder ? ` · ${b.seriesOrder}. kitap` : ''}</div>` : ''}</div>
     <div class="status-pick">${state.options.statuses.map(s => `<button class="chip ${b.status === s.name ? 'on' : ''}" data-st="${esc(s.name)}">${s.emoji} ${esc(s.name)}</button>`).join('')}</div>
     ${seriesWarn}
+    ${fileSectionShell()}
     ${score !== null || scored.length ? `<div class="section"><div class="bigscore"><div class="n">${score !== null ? score.toFixed(1) : '—'}</div><div><b>Genel uyum puanı</b><div class="muted small">5 üzerinden, ağırlıklı ortalama</div></div></div>
       <div class="bars">${scored.map(c => `<div class="bar"><span>${c.label}</span><div class="track"><span style="width:${(Number(b.scores[c.key]) / 5) * 100}%"></span></div><b>${b.scores[c.key]}</b></div>`).join('')}</div></div>` : ''}
     ${b.summary ? `<div class="section"><h3>Özet</h3><div class="prose">${esc(b.summary)}</div></div>` : ''}
@@ -85,6 +87,7 @@ export async function renderDetail(view, [id]) {
 
   wireBack(view);
   hydrateCovers(view);
+  fillFileSection(view, b);
   $$('[data-st]', view).forEach(c => c.addEventListener('click', async () => {
     if (b.status === c.dataset.st) return;
     b.status = c.dataset.st;

@@ -282,3 +282,53 @@ h3 { font-size: 15px; text-transform: uppercase; letter-spacing: .06em; color: v
   .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
 }
 input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+
+/* ===== Okuyucu ===== */
+.reader { --rbg: #fffdf9; --rfg: #24202a; --rbar: rgba(255,253,249,.94); --rline: #e6ddd2;
+  position: fixed; inset: 0; z-index: 40; background: var(--rbg); color: var(--rfg); overflow: hidden; }
+.reader[data-rtheme="sepia"] { --rbg: #f4ecd8; --rfg: #4b3a2a; --rbar: rgba(244,236,216,.95); --rline: #ddd0b4; }
+.reader[data-rtheme="dark"] { --rbg: #121014; --rfg: #e6dfe8; --rbar: rgba(28,24,31,.95); --rline: #332c38; }
+.reader .r-stage { position: absolute; left: 0; right: 0; top: calc(var(--safe-top) + 34px); bottom: calc(var(--safe-bottom) + 30px); }
+.reader.epub .r-stage { left: 6px; right: 6px; }
+.reader.pdf .r-stage { top: var(--safe-top); bottom: 0; overflow: auto; -webkit-overflow-scrolling: touch; background: color-mix(in srgb, var(--rfg) 8%, var(--rbg)); }
+.reader .r-status { position: absolute; left: 18px; right: 18px; bottom: calc(var(--safe-bottom) + 8px); display: flex; justify-content: space-between; gap: 10px;
+  font-size: 12px; opacity: .55; pointer-events: none; white-space: nowrap; }
+.reader .r-status span:first-child { overflow: hidden; text-overflow: ellipsis; }
+.reader.pdf .r-status { display: none; }
+.reader .r-top, .reader .r-bottom { position: absolute; left: 0; right: 0; z-index: 3; background: var(--rbar); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  transition: transform .22s ease, opacity .22s; }
+.reader .r-top { top: 0; display: flex; align-items: center; gap: 2px; padding: calc(var(--safe-top) + 4px) 6px 4px; border-bottom: 1px solid var(--rline); transform: translateY(-100%); opacity: 0; }
+.reader .r-bottom { bottom: 0; padding: 10px 18px calc(var(--safe-bottom) + 12px); border-top: 1px solid var(--rline); transform: translateY(100%); opacity: 0; }
+.reader.chrome .r-top, .reader.chrome .r-bottom { transform: none; opacity: 1; }
+.reader .icon-btn { color: var(--rfg); }
+.reader .icon-btn.on svg { fill: currentColor; }
+.reader .r-title { flex: 1; min-width: 0; font-weight: 600; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+.reader .r-info { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; opacity: .75; margin-bottom: 6px; }
+.reader input[type=range] { width: 100%; accent-color: #7b3f61; }
+.reader .r-finish { position: absolute; z-index: 4; left: 12px; right: 12px; bottom: calc(var(--safe-bottom) + 90px); background: var(--surface); color: var(--text);
+  border-radius: 16px; padding: 14px; box-shadow: 0 8px 30px rgba(0,0,0,.25); display: grid; gap: 10px; }
+.reader .r-finish .btn { flex: 1; }
+.reader .r-loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px; font-size: 15px; opacity: .8; }
+.pdf-inner { margin: 0 auto; padding: calc(44px) 0 40px; min-width: 100%; }
+.pdf-page { position: relative; width: calc(100% - 12px); margin: 0 auto 8px; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,.18); }
+.pdf-page canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.pdf-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #bbb; font-size: 22px; }
+.r-themes { display: flex; gap: 10px; }
+.r-themes button { flex: 1; height: 54px; border-radius: 12px; border: 2px solid var(--line); font-weight: 600; }
+.r-themes button.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+
+/* İlerleme çubukları (kapak altı, kitap sayfası) */
+.cprog { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(0,0,0,.35); }
+.cprog span { display: block; height: 100%; background: #e3a529; }
+.read-card { display: grid; gap: 10px; }
+.read-cta { display: flex; align-items: center; gap: 12px; }
+.read-cta .btn { flex: 1; }
+.file-chip { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-2); }
+.file-chip b { color: var(--text); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.week-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; align-items: end; height: 90px; margin-top: 8px; }
+.week-bars div { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; font-size: 11px; color: var(--text-2); }
+.week-bars i { display: block; width: 100%; max-width: 26px; border-radius: 5px 5px 2px 2px; background: var(--accent); min-height: 3px; }
+.week-bars i.zero { background: var(--surface-2); }
+.reader.pdf[data-rtheme="dark"] .pdf-page { background: #1b181d; }
+.reader.pdf[data-rtheme="dark"] .pdf-page canvas { filter: invert(.9) hue-rotate(180deg); }
+.reader.pdf[data-rtheme="sepia"] .pdf-page canvas { filter: sepia(.35) brightness(.97); }

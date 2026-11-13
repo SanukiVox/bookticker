@@ -11,6 +11,7 @@ Bütün veriler (kitaplar, kapaklar, notlar) **sadece telefonunda** saklanır.
 - **Kitap sayfası:** Türkçe + orijinal kapak, özet, puanlar, serinin ve yazarın diğer kitapları
 - **Ekleme formu:** Açılır seçenekler (listeleri kendin düzenlersin), yazar/seri otomatik tamamlama, kameradan/galeriden kapak
 - **Okuma:** Sıradaki kitap önerisi, sürükle-bırak öncelik sırası, okuma kuralları, istatistik, yıllık hedef
+- **Kitap okuyucu:** Kitaba PDF veya EPUB ekleyip uygulamanın içinde oku. Kaldığın yerden devam, içindekiler, yer imleri, yazı boyutu, beyaz/sepya/koyu tema, okuma süresi ve ilerleme takibi. Dosyalar sadece telefonda saklanır; ilerleme GitHub ile eşitlenir.
 - **Kapak ve özet bulma:** Google Books ve Open Library'den — kitap formunda tek tek seçerek ya da Ayarlar'dan toplu
 - **Veriler:** Excel'den içe aktarma, Excel'e dışa aktarma, kapaklar dahil yedek alma/geri yükleme
 
@@ -51,4 +52,4 @@ Kod değiştiğinde `sw.js` içindeki `VERSION` değerini artır. Uygulama bir s
 ## Teknik
 
 Saf HTML/CSS/JavaScript, derleme adımı yok. Veriler IndexedDB'de, çevrimdışı çalışma service worker ile.
-Excel okuma/yazma için [SheetJS](https://sheetjs.com) (`vendor/`, Apache 2.0) kullanılır.
+Excel için [SheetJS](https://sheetjs.com) (Apache 2.0), EPUB için [epub.js](https://github.com/futurepress/epub.js) (BSD) ve [JSZip](https://stuk.github.io/jszip/) (MIT), PDF için [pdf.js](https://mozilla.github.io/pdf.js/) (Apache 2.0) kullanılır; hepsi `vendor/` klasöründedir.

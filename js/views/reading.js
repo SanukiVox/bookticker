@@ -1,6 +1,7 @@
 // Okuma: şu an okunanlar, sıradaki kitap önerisi, öncelik sırası, istatistik.
 import { state, computeScore, booksInSeries, displayTitle, statusInfo, genreColor, saveBooks, saveSettings, norm } from '../store.js';
 import { esc, enc, coverHTML, bookCard, hydrateCovers, sheet, toast, $, $$ } from '../ui.js';
+import { readingStats, formatDuration, progressOf } from '../files.js';
 
 const DONE = new Set(['Okundu', 'Elendi', 'Yarım bırakıldı']);
 const hasTurkish = b => !b.translation || b.translation === 'Var';
@@ -56,7 +57,13 @@ export async function renderReading(view) {
   const top = sugg[0];
   view.innerHTML = `
     <div class="page-head"><h1>Okuma</h1></div>
-    ${reading.length ? `<h3 style="margin-bottom:8px">Şu an okuduğun</h3><div class="strip" style="margin:0 -16px 18px;padding:2px 16px 4px">${reading.map(b => bookCard(b)).join('')}</div>` : ''}
+    ${reading.length ? `<h3 style="margin-bottom:8px">Şu an okuduğun</h3><div class="list" style="margin-bottom:18px">${reading.map(b => {
+      const pct = progressOf(b);
+      return `<div class="row"><a href="#/book/${enc(b.id)}" style="display:contents">${coverHTML(b, { badge: false })}
+        <div class="body"><div class="t">${esc(displayTitle(b))}</div><div class="s">${esc(b.author || '')}${b.readingSeconds ? ` · ⏱ ${formatDuration(b.readingSeconds)}` : ''}</div>
+        ${pct != null ? `<div class="progress"><span style="width:${pct}%"></span></div><div class="s">%${Math.floor(pct)}${b.progress?.page && b.progress?.pages ? ` · sayfa ${b.progress.page}/${b.progress.pages}` : ''}</div>` : ''}</div></a>
+        ${b.file ? `<a class="mini-btn" href="#/read/${enc(b.id)}">📖 Devam</a>` : ''}</div>`;
+    }).join('')}</div>` : ''}
     ${top ? `<a class="next-card" href="#/book/${enc(top.b.id)}">${coverHTML(top.b, { badge: false })}
       <div><div class="lbl">Sıradaki kitap önerisi</div><div class="t">${esc(displayTitle(top.b))}</div><div class="small">${esc(top.b.author || '')}</div><div class="why">${esc(top.why)}</div></div></a>` : ''}
     ${sugg.length > 1 ? `<h3 style="margin-bottom:8px">Diğer öneriler</h3><div class="strip" style="margin:0 -16px 20px;padding:2px 16px 4px">${sugg.slice(1).map(s => bookCard(s.b)).join('')}</div>` : ''}
@@ -74,6 +81,18 @@ export async function renderReading(view) {
       <button class="mini-btn" id="edit-rules" style="margin-top:6px">Kuralları düzenle</button></div>
 
     <h3 style="margin:20px 0 10px">İstatistik</h3>
+    ${(() => {
+      const r = readingStats();
+      if (!r.totalSec) return '';
+      const max = Math.max(...r.last7.map(x => x.sec), 1);
+      const days = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+      return `<div class="section"><h3>Okuma süresi</h3>
+        <div class="stat-grid" style="margin-bottom:6px;grid-template-columns:repeat(3,1fr)"><div><div class="n" style="font:700 22px/1.1 var(--serif)">${formatDuration(r.todaySec)}</div><div class="muted small">Bugün</div></div>
+          <div><div class="n" style="font:700 22px/1.1 var(--serif)">${formatDuration(r.weekSec)}</div><div class="muted small">Son 7 gün</div></div>
+          <div><div class="n" style="font:700 22px/1.1 var(--serif)">${r.streak ? `🔥 ${r.streak} gün` : '—'}</div><div class="muted small">Art arda okuma</div></div></div>
+        <div class="week-bars">${r.last7.map(x => `<div><i class="${x.sec ? '' : 'zero'}" style="height:${x.sec ? Math.max(6, (x.sec / max) * 70) : 3}px" title="${formatDuration(x.sec)}"></i>${days[x.d.getDay()]}</div>`).join('')}</div>
+        <div class="muted small" style="margin-top:8px">Bu ay ${formatDuration(r.monthSec)} · Toplam ${formatDuration(r.totalSec)}</div></div>`;
+    })()}
     <div class="section"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>${year} hedefi</b><span class="muted small">${readThisYear.length} / ${goal || '—'} kitap</span></div>
       <div class="progress" style="height:10px;margin-top:8px"><span style="width:${goal ? Math.min(100, (readThisYear.length / goal) * 100) : 0}%"></span></div></div>
     <div class="stat-grid">
