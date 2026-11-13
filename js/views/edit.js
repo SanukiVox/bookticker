@@ -1,0 +1,281 @@
+// Kitap ekleme / düzenleme formu.
+import { state, getBook, newBook, saveBook, deleteBook, CRITERIA, SPICY_LABELS, OPTION_LISTS, computeScore, authors, seriesList, norm, displayTitle, saveOptions } from '../store.js';
+import { db } from '../db.js';
+import { esc, enc, coverHTML, forgetCover, toast, confirmSheet, promptSheet, $, $$ } from '../ui.js';
+
+// Fotoğrafı küçültüp JPEG'e çevir (telefonda yer kaplamasın).
+export async function shrinkImage(file, maxH = 900) {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Görsel okunamadı')); i.src = url; });
+    const scale = Math.min(1, maxH / img.naturalHeight);
+    const w = Math.round(img.naturalWidth * scale), h = Math.round(img.naturalHeight * scale);
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    c.getContext('2d').drawImage(img, 0, 0, w, h);
+    return await new Promise(res => c.toBlob(res, 'image/jpeg', 0.85));
+  } finally { URL.revokeObjectURL(url); }
+}
+
+const scoreRow = (key, label, val, min = 1) => `
+  <div class="field"><span class="lbl">${label}</span>
+    <div class="rating" data-rate="${key}">${Array.from({ length: 6 - min }, (_, i) => i + min).map(n => `<button type="button" class="${Number(val) === n && val !== null && val !== '' && val !== undefined ? 'on' : ''}" data-n="${n}">${n}</button>`).join('')}
+    <button type="button" class="clear" data-n="" aria-label="Temizle">✕</button></div></div>`;
+
+export async function renderEdit(view, [id], query) {
+  const isNew = id === 'new';
+  const orig = isNew ? null : getBook(id);
+  if (!isNew && !orig) { location.replace('#/'); return; }
+  const b = isNew
+    ? newBook({ author: query.get('author') || '', series: query.get('series') || '', seriesOrder: query.get('order') ? Number(query.get('order')) : null })
+    : structuredClone(orig);
+  b.scores ||= {}; b.warnings ||= []; b.tags ||= [];
+
+  // Kapaklar kaydedilene kadar hafızada tutulur.
+  const covers = { tr: { blob: undefined, url: null }, orig: { blob: undefined, url: null } };
+  let dirty = false;
+
+  const selectField = (key, label, field) => {
+    const opts = state.options[key];
+    const cur = b[field] || '';
+    const has = opts.some(o => o.name === cur);
+    return `<div class="field"><label for="f-${field}">${label}</label><div class="with-add">
+      <select id="f-${field}" data-field="${field}"><option value="">— Seç —</option>${!has && cur ? `<option selected>${esc(cur)}</option>` : ''}
+      ${opts.map(o => `<option ${o.name === cur ? 'selected' : ''} value="${esc(o.name)}">${o.emoji ? o.emoji + ' ' : ''}${esc(o.name)}</option>`).join('')}</select>
+      <button type="button" class="mini-btn" data-newopt="${key}" data-for="${field}">＋ Yeni</button></div></div>`;
+  };
+
+  const multiField = (key, label) => {
+    const field = OPTION_LISTS[key].field;
+    return `<div class="field"><span class="lbl">${label}</span><div class="check-list" data-multi="${field}">
+      ${state.options[key].map(o => `<button type="button" class="chip ${b[field].includes(o.name) ? 'on' : ''}" data-v="${esc(o.name)}">${esc(o.name)}</button>`).join('')}
+      <button type="button" class="chip" data-newmulti="${key}" style="border-style:dashed">＋ Yeni</button></div></div>`;
+  };
+
+  const coverSlot = (which, label) => `
+    <div class="slot" data-slot="${which}"><div class="cover-holder">${coverHTML(b, { key: which === 'tr' ? b.coverTr : b.coverOrig, badge: false })}</div>
+      <div class="small muted" style="margin-bottom:6px">${label}</div>
+      <div class="btn-row"><label class="mini-btn" style="position:relative;overflow:hidden">📷 Seç<input type="file" accept="image/*" data-pick="${which}" style="position:absolute;inset:0;opacity:0"></label>
+      <button type="button" class="mini-btn" data-rmcover="${which}" style="color:var(--danger);background:transparent">Kaldır</button></div></div>`;
+
+  view.innerHTML = `
+    <div class="topbar"><button class="icon-btn" id="cancel">Vazgeç</button><div class="title">${isNew ? 'Yeni kitap' : 'Düzenle'}</div><button class="icon-btn" id="save" style="font-weight:700">Kaydet</button></div>
+    <form id="form" autocomplete="off" onsubmit="return false">
+      <div class="form-group-title">Kapaklar</div>
+      <div class="form-group"><div class="cover-edit">${coverSlot('tr', 'Türkçe kapak')}${coverSlot('orig', 'Orijinal kapak')}</div></div>
+
+      <div class="form-group-title">Kitap</div>
+      <div class="form-group">
+        <div class="field"><label for="f-title">Kitap adı (Türkçe) <span class="req">*</span></label><input id="f-title" data-field="title" value="${esc(b.title)}" placeholder="Örn. Cam Şato"><div class="small" id="dup" style="color:var(--danger)"></div></div>
+        <div class="field"><label for="f-originalTitle">Orijinal adı</label><input id="f-originalTitle" data-field="originalTitle" value="${esc(b.originalTitle)}" placeholder="Örn. Throne of Glass"></div>
+        <div class="field"><label for="f-author">Yazar</label><input id="f-author" data-field="author" data-suggest="author" value="${esc(b.author)}" placeholder="Yazmaya başla…"></div>
+        <div class="field"><label for="f-series">Seri</label><input id="f-series" data-field="series" data-suggest="series" value="${esc(b.series)}" placeholder="Seri değilse boş bırak"></div>
+        <div class="field inline"><label for="f-seriesOrder">Serideki sırası</label><input id="f-seriesOrder" data-field="seriesOrder" type="number" inputmode="decimal" min="0" step="0.5" value="${b.seriesOrder ?? ''}"></div>
+      </div>
+
+      <div class="form-group-title">Durum ve sınıflandırma</div>
+      <div class="form-group">
+        ${selectField('statuses', 'Okuma durumu', 'status')}
+        ${selectField('genres', 'Tür', 'genre')}
+        ${selectField('translations', 'Türkçe çeviri', 'translation')}
+        ${selectField('publishers', 'Türkçe yayınevi', 'publisher')}
+        ${selectField('confidences', 'Güven', 'confidence')}
+        <div class="field"><label for="f-inVisuals">Görsellerde var mı</label><input id="f-inVisuals" data-field="inVisuals" data-suggest="inVisuals" value="${esc(b.inVisuals)}"></div>
+        <div class="field inline"><label for="f-priority">Okuma önceliği (1, 2, 3…)</label><input id="f-priority" data-field="priority" type="number" inputmode="numeric" min="1" value="${b.priority ?? ''}"></div>
+        <div class="field inline"><label>❤️ Favori</label><span class="toggle"><input type="checkbox" id="f-favorite" ${b.favorite ? 'checked' : ''}><span></span></span></div>
+      </div>
+
+      <div class="form-group-title">Puanlar (1–5) · Genel uyum: <b id="live-score">${computeScore(b)?.toFixed(1) ?? '—'}</b></div>
+      <div class="form-group">
+        ${CRITERIA.map(c => scoreRow(c.key, c.label, b.scores[c.key])).join('')}
+        ${scoreRow('spicy', 'Spicy / +18 (0–5)', b.spicy, 0)}
+        <div class="small muted" id="spicy-hint" style="padding:0 14px 10px">${b.spicy !== null && b.spicy !== undefined ? esc(SPICY_LABELS[b.spicy]) : ''}</div>
+      </div>
+
+      <div class="form-group-title">Özet ve değerlendirme</div>
+      <div class="form-group">
+        <div class="field"><label for="f-summary">Özet</label><textarea id="f-summary" data-field="summary" placeholder="Kitabın konusu…">${esc(b.summary)}</textarea></div>
+        <div class="field"><label for="f-review">Kısa değerlendirme</label><textarea id="f-review" data-field="review" placeholder="Neden okumalı / okumamalı?">${esc(b.review)}</textarea></div>
+      </div>
+
+      <div class="form-group-title">Uyarılar ve etiketler</div>
+      <div class="form-group">${multiField('warnings', 'İçerik uyarıları')}${multiField('tags', 'Etiketler (örn. düşmandan âşığa)')}</div>
+
+      <div class="form-group-title">Benim okumam</div>
+      <div class="form-group">
+        <div class="field inline"><label for="f-startDate">Başlama tarihi</label><input id="f-startDate" type="date" data-field="startDate" value="${esc(b.startDate)}" style="width:auto"></div>
+        <div class="field inline"><label for="f-endDate">Bitirme tarihi</label><input id="f-endDate" type="date" data-field="endDate" value="${esc(b.endDate)}" style="width:auto"></div>
+        ${scoreRow('myRating', 'Benim puanım', b.myRating)}
+        <div class="field"><label for="f-notes">Notlarım</label><textarea id="f-notes" data-field="notes">${esc(b.notes)}</textarea></div>
+        <div class="field"><label for="f-quotes">Sevdiğim alıntılar</label><textarea id="f-quotes" data-field="quotes">${esc(b.quotes)}</textarea></div>
+      </div>
+      ${isNew ? '' : '<button type="button" class="btn block danger" id="delete" style="margin-top:6px">Kitabı sil</button>'}
+      <button type="button" class="btn block primary" id="save2" style="margin-top:12px">Kaydet</button>
+    </form>`;
+
+  const form = $('#form', view);
+
+  // Metin / seçim alanları
+  $$('[data-field]', form).forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => {
+    const f = el.dataset.field;
+    let v = el.value;
+    if (['seriesOrder', 'priority'].includes(f)) v = v === '' ? null : Number(v);
+    b[f] = v; dirty = true;
+    if (f === 'title' || f === 'originalTitle') checkDup();
+  }));
+  $('#f-favorite', form).addEventListener('change', e => { b.favorite = e.target.checked; dirty = true; });
+
+  function checkDup() {
+    const t = norm(b.title), o = norm(b.originalTitle);
+    const d = state.books.find(x => x.id !== b.id && ((t && norm(x.title) === t) || (o && norm(x.originalTitle) === o)));
+    $('#dup', form).innerHTML = d ? `Bu kitap zaten kayıtlı olabilir: <a href="#/book/${enc(d.id)}" style="text-decoration:underline">${esc(displayTitle(d))}</a>` : '';
+  }
+
+  // Puan butonları
+  $$('[data-rate]', form).forEach(row => row.addEventListener('click', e => {
+    const btn = e.target.closest('button[data-n]');
+    if (!btn) return;
+    const key = row.dataset.rate;
+    const n = btn.dataset.n === '' ? null : Number(btn.dataset.n);
+    if (key === 'spicy') { b.spicy = n; $('#spicy-hint', form).textContent = n === null ? '' : SPICY_LABELS[n]; }
+    else if (key === 'myRating') b.myRating = n;
+    else { if (n === null) delete b.scores[key]; else b.scores[key] = n; }
+    $$('button', row).forEach(x => x.classList.toggle('on', x.dataset.n !== '' && Number(x.dataset.n) === n));
+    $('#live-score', view).textContent = computeScore(b)?.toFixed(1) ?? '—';
+    dirty = true;
+  }));
+
+  // Çoklu seçim (uyarılar, etiketler)
+  $$('[data-multi]', form).forEach(box => box.addEventListener('click', async e => {
+    const c = e.target.closest('.chip');
+    if (!c) return;
+    const field = box.dataset.multi;
+    if (c.dataset.newmulti) {
+      const key = c.dataset.newmulti;
+      const name = await promptSheet(`Yeni: ${OPTION_LISTS[key].label}`);
+      if (!name) return;
+      if (!state.options[key].some(o => o.name === name)) { state.options[key].push({ name }); await saveOptions(); }
+      if (!b[field].includes(name)) b[field].push(name);
+      const nc = document.createElement('button');
+      nc.type = 'button'; nc.className = 'chip on'; nc.dataset.v = name; nc.textContent = name;
+      c.before(nc); dirty = true;
+      return;
+    }
+    const v = c.dataset.v;
+    b[field] = b[field].includes(v) ? b[field].filter(x => x !== v) : [...b[field], v];
+    c.classList.toggle('on'); dirty = true;
+  }));
+
+  // Seçenek listesine yeni değer ekle
+  $$('[data-newopt]', form).forEach(btn => btn.addEventListener('click', async () => {
+    const key = btn.dataset.newopt, field = btn.dataset.for;
+    const name = await promptSheet(`Yeni: ${OPTION_LISTS[key].label}`);
+    if (!name) return;
+    if (!state.options[key].some(o => o.name === name)) {
+      state.options[key].push(key === 'statuses' ? { name, emoji: '•', color: '#6b6370' } : { name });
+      await saveOptions();
+    }
+    const sel = $(`#f-${field}`, form);
+    if (![...sel.options].some(o => o.value === name)) sel.add(new Option(name, name));
+    sel.value = name; b[field] = name; dirty = true;
+  }));
+
+  // Otomatik tamamlama (yazar, seri)
+  $$('[data-suggest]', form).forEach(inp => {
+    const field = inp.parentElement;
+    const source = () => inp.dataset.suggest === 'author' ? authors().map(a => a.name).filter(n => n !== 'Yazarı bilinmiyor')
+      : inp.dataset.suggest === 'series' ? seriesList().map(s => s.name)
+      : [...new Set(state.books.map(x => x.inVisuals).filter(Boolean))];
+    const close = () => field.querySelector('.suggest')?.remove();
+    const show = () => {
+      close();
+      const q = norm(inp.value);
+      const list = source().filter(n => (!q || norm(n).includes(q)) && n !== inp.value).slice(0, 8);
+      if (!list.length) return;
+      const box = document.createElement('div');
+      box.className = 'suggest';
+      box.innerHTML = list.map(n => `<button type="button">${esc(n)}</button>`).join('');
+      box.addEventListener('pointerdown', e => {
+        const t = e.target.closest('button'); if (!t) return;
+        e.preventDefault();
+        inp.value = t.textContent; b[inp.dataset.field] = inp.value; dirty = true; close();
+        if (inp.dataset.suggest === 'series') fillFromSeries(inp.value);
+      });
+      field.appendChild(box);
+    };
+    inp.addEventListener('input', show);
+    inp.addEventListener('focus', show);
+    inp.addEventListener('blur', () => setTimeout(close, 150));
+  });
+
+  // Seri seçilince yazar/tür/sıra boşsa doldur.
+  function fillFromSeries(name) {
+    const sib = state.books.filter(x => x.series === name);
+    if (!sib.length) return;
+    if (!b.author) { b.author = sib[0].author; $('#f-author', form).value = b.author; }
+    if (!b.genre) { b.genre = sib[0].genre; $('#f-genre', form).value = b.genre; }
+    if (b.seriesOrder === null || b.seriesOrder === undefined) { b.seriesOrder = Math.max(0, ...sib.map(x => Number(x.seriesOrder) || 0)) + 1; $('#f-seriesOrder', form).value = b.seriesOrder; }
+  }
+
+  // Kapak seçme / kaldırma
+  $$('[data-pick]', form).forEach(inp => inp.addEventListener('change', async () => {
+    const file = inp.files?.[0];
+    if (!file) return;
+    const which = inp.dataset.pick;
+    try {
+      const blob = await shrinkImage(file);
+      if (covers[which].url) URL.revokeObjectURL(covers[which].url);
+      covers[which] = { blob, url: URL.createObjectURL(blob) };
+      $(`[data-slot="${which}"] .cover-holder`, form).innerHTML = `<div class="cover"><img src="${covers[which].url}" alt=""></div>`;
+      dirty = true;
+    } catch (err) { toast(err.message); }
+    inp.value = '';
+  }));
+  $$('[data-rmcover]', form).forEach(btn => btn.addEventListener('click', () => {
+    const which = btn.dataset.rmcover;
+    covers[which] = { blob: null, url: null };
+    $(`[data-slot="${which}"] .cover-holder`, form).innerHTML = coverHTML({ ...b, coverTr: null, coverOrig: null }, { key: null, badge: false });
+    dirty = true;
+  }));
+
+  // Var olan kapakları göster
+  for (const [which, key] of [['tr', b.coverTr], ['orig', b.coverOrig]]) {
+    if (!key) continue;
+    db.getCover(key).then(blob => {
+      if (!blob || covers[which].blob !== undefined) return;
+      $(`[data-slot="${which}"] .cover-holder`, form).innerHTML = `<div class="cover"><img src="${URL.createObjectURL(blob)}" alt=""></div>`;
+    });
+  }
+
+  async function save() {
+    b.title = b.title.trim(); b.originalTitle = b.originalTitle.trim(); b.author = b.author.trim(); b.series = b.series.trim();
+    if (!b.title && !b.originalTitle) { toast('Kitap adını yaz'); $('#f-title', form).focus(); return; }
+    for (const which of ['tr', 'orig']) {
+      const prop = which === 'tr' ? 'coverTr' : 'coverOrig';
+      const c = covers[which];
+      if (c.blob === undefined) continue;
+      if (b[prop]) { await db.deleteCover(b[prop]); forgetCover(b[prop]); }
+      if (c.blob) { const key = `${b.id}-${which}-${Date.now().toString(36)}`; await db.putCover(key, c.blob); b[prop] = key; }
+      else b[prop] = null;
+    }
+    await saveBook(b);
+    dirty = false;
+    toast(isNew ? 'Kitap eklendi' : 'Kaydedildi');
+    if (isNew) location.replace(`#/book/${enc(b.id)}`); else history.back();
+  }
+  $('#save', view).addEventListener('click', save);
+  $('#save2', view).addEventListener('click', save);
+  $('#cancel', view).addEventListener('click', async () => {
+    if (dirty && !(await confirmSheet('Değişiklikler kaydedilmedi', 'Çıkarsan yaptığın değişiklikler kaybolacak.', 'Çık'))) return;
+    if ((window.__navCount || 0) > 1) history.back(); else location.hash = '#/';
+  });
+  $('#delete', view)?.addEventListener('click', async () => {
+    if (!(await confirmSheet('Kitabı sil', `"${displayTitle(b)}" kalıcı olarak silinsin mi?`, 'Sil'))) return;
+    await deleteBook(b.id);
+    toast('Kitap silindi');
+    location.replace('#/');
+  });
+
+  if (query.get('focus') === 'notes') setTimeout(() => $('#f-notes', form).scrollIntoView({ block: 'center' }), 50);
+  else if (isNew) setTimeout(() => $('#f-title', form).focus(), 50);
+}

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Kitaplığım</title>
+  <meta name="description" content="Kişisel kitap okuma listesi">
+  <meta name="theme-color" content="#f7f3ee" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16131a" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Kitaplığım">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+  <div id="app">
+    <main id="view" tabindex="-1"></main>
+    <nav class="tabbar" id="tabbar" aria-label="Ana menü">
+      <a href="#/" data-tab="library"><svg viewBox="0 0 24 24"><path d="M4 4h4v16H4zM10 4h4v16h-4zM16.5 4.5l3.8 1-4 15.3-3.8-1z"/></svg><span>Kitaplık</span></a>
+      <a href="#/search" data-tab="search"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg><span>Ara</span></a>
+      <a href="#/edit/new" data-tab="add" class="tab-add" aria-label="Kitap ekle"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></a>
+      <a href="#/reading" data-tab="reading"><svg viewBox="0 0 24 24"><path d="M3 5c3-1 6-1 9 1 3-2 6-2 9-1v14c-3-1-6-1-9 1-3-2-6-2-9-1z"/><path d="M12 6v14"/></svg><span>Okuma</span></a>
+      <a href="#/settings" data-tab="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg><span>Ayarlar</span></a>
+    </nav>
+  </div>
+  <div id="sheet-root"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
