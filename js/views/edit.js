@@ -261,13 +261,12 @@ export async function renderEdit(view, [id], query) {
           <button class="row" data-act="find" style="width:100%;border:0;background:none;text-align:left"><div class="body"><div class="t">🔍 Otomatik bul</div><div class="s">Google Books ve Open Library'de ara, seç</div></div><span class="chev"></span></button>
           <a class="row" href="https://www.google.com/search?tbm=isch&q=${q}" target="_blank" rel="noopener"><div class="body"><div class="t">🌐 Google Görseller'de ara</div><div class="s">Safari'de açılır</div></div><span class="chev"></span></a>
           <a class="row" href="${shop[1]}" target="_blank" rel="noopener"><div class="body"><div class="t">${shop[0]}</div><div class="s">Safari'de açılır</div></div><span class="chev"></span></a>
-          ${tr ? `<a class="row" href="https://1000kitap.com/ara?q=${encodeURIComponent(name)}" target="_blank" rel="noopener"><div class="body"><div class="t">📚 1000Kitap'ta ara</div><div class="s">Safari'de açılır · Türkçe baskı kapakları</div></div><span class="chev"></span></a>` : ''}
           <button class="row" data-act="paste" style="width:100%;border:0;background:none;text-align:left"><div class="body"><div class="t">📋 Kopyaladığım görseli yapıştır</div><div class="s">Kırparak eklenir</div></div><span class="chev"></span></button>
           <label class="row" style="position:relative"><div class="body"><div class="t">📷 Fotoğraflardan seç / çek</div><div class="s">Kırparak eklenir</div></div><span class="chev"></span><input type="file" accept="image/*" id="ac-file" style="position:absolute;inset:0;opacity:0"></label>
           <button class="row hidden" data-act="crop" style="width:100%;border:0;background:none;text-align:left"><div class="body"><div class="t">✂️ Mevcut kapağı kırp</div></div><span class="chev"></span></button>
         </div>
         <div class="paste-box" id="ac-pastebox" contenteditable="true" inputmode="none" aria-label="Görseli buraya yapıştır">Yapıştır çalışmazsa buraya uzun basıp <b>Yapıştır</b>'a dokun</div>
-        <p class="muted small"><b>Google, Kitapyurdu ya da 1000Kitap'tan eklemek için:</b> istediğin kapağı aç, görsele <b>uzun bas → Kopyala</b>. Sonra uygulamaya dönüp <b>📋 Kopyaladığım görseli yapıştır</b>'a dokun.</p>`,
+        <p class="muted small"><b>Google ya da Kitapyurdu'ndan eklemek için:</b> istediğin kapağı aç, görsele <b>uzun bas → Kopyala</b>. Sonra uygulamaya dönüp <b>📋 Kopyaladığım görseli yapıştır</b>'a dokun.</p>`,
       onMount: (el, close) => {
         currentBlob(which).then(bl => { if (bl) $('[data-act="crop"]', el).classList.remove('hidden'); });
         $('[data-act="find"]', el).addEventListener('click', () => {
@@ -349,7 +348,6 @@ export async function renderEdit(view, [id], query) {
       title: 'Özet / tanıtım yazısı ekle',
       body: `<div class="list">
           <button class="row" data-s="auto" style="width:100%;border:0;background:none;text-align:left"><div class="body"><div class="t">🔍 Otomatik bul</div><div class="s">Google Books'ta ara, seç</div></div><span class="chev"></span></button>
-          <a class="row" href="https://1000kitap.com/ara?q=${encodeURIComponent(name)}" target="_blank" rel="noopener"><div class="body"><div class="t">📚 1000Kitap'ta aç</div><div class="s">Safari'de açılır</div></div><span class="chev"></span></a>
           <a class="row" href="https://www.kitapyurdu.com/index.php?route=product/search&filter_name=${encodeURIComponent(name)}" target="_blank" rel="noopener"><div class="body"><div class="t">🛒 Kitapyurdu'nda aç</div><div class="s">Safari'de açılır</div></div><span class="chev"></span></a>
           <a class="row" href="https://www.google.com/search?q=${q}%20konusu" target="_blank" rel="noopener"><div class="body"><div class="t">🌐 Google'da ara</div><div class="s">Safari'de açılır</div></div><span class="chev"></span></a>
           <button class="row" data-s="paste" style="width:100%;border:0;background:none;text-align:left"><div class="body"><div class="t">📋 Kopyaladığım yazıyı yapıştır</div><div class="s">Book Love veya herhangi bir uygulamadan</div></div><span class="chev"></span></button>

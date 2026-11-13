@@ -1,6 +1,6 @@
 // Çevrimdışı çalışma: uygulama dosyalarını telefona önbelleğe al.
 // Yeni sürüm yayınlarken VERSION değerini artır.
-const VERSION = 'v1.8.1';
+const VERSION = 'v1.8.2';
 const IMG_CACHE = 'kitapligim-kapaklar';
 const CACHE = `kitapligim-${VERSION}`;
 const FILES = [
