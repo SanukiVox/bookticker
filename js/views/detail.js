@@ -1,5 +1,5 @@
 // Kitap detay sayfası.
-import { goodreadsUrl, formatVotes } from '../store.js';
+import { goodreadsUrl, formatVotes, formatPubDate, isUpcoming } from '../store.js';
 import { state, getBook, saveBook, computeScore, CRITERIA, SPICY_LABELS, statusInfo, displayTitle, booksInSeries, booksByAuthor } from '../store.js';
 import { esc, enc, ICON, coverHTML, bookCard, hydrateCovers, peppers, toast, sheet, $, $$ } from '../ui.js';
 import { fileSectionShell, fillFileSection } from './bookfile.js';
@@ -48,6 +48,8 @@ export async function renderDetail(view, [id]) {
     ['Tür', esc(b.genre)],
     ['Türkçe çeviri', esc(b.translation)],
     ['Yayınevi', esc(b.publisher)],
+    ['Yayın yılı', b.pubYear ? esc(b.pubYear) : ''],
+    ['Türkçe çıkış', b.trDate ? `${esc(formatPubDate(b.trDate))}${isUpcoming(b) ? ' · 🗓️ yakında' : ''}` : ''],
     ['Spicy', b.spicy !== null && b.spicy !== undefined ? `<span class="peppers" title="${esc(SPICY_LABELS[b.spicy] || '')}">${peppers(b.spicy)}</span>` : ''],
     ['Güven', esc(b.confidence)],
     ['Görsellerde var mı', esc(b.inVisuals)],

@@ -37,8 +37,9 @@ async function openLibrary(title, author, lang) {
   const res = await fetch(url);
   if (!res.ok) return [];
   const data = await res.json();
-  return (data.docs || []).filter(d => d.cover_i && (!lang || !d.language || d.language.includes(lang === 'tr' ? 'tur' : 'eng')))
-    .map(d => ({ source: 'Open Library', title: d.title, authors: d.author_name || [], lang: (d.language || [])[0], year: d.first_publish_year || '', publisher: (d.publisher || [])[0] || '', img: `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg?default=false`, description: '' }));
+  // Kapağı olmayan kayıtlar da alınır (yayın yılı için); kapak seçiminde img olmayanlar zaten atlanır.
+  return (data.docs || []).filter(d => !lang || !d.language || d.language.includes(lang === 'tr' ? 'tur' : 'eng'))
+    .map(d => ({ source: 'Open Library', title: d.title, authors: d.author_name || [], lang: (d.language || [])[0], year: d.first_publish_year || '', publisher: (d.publisher || [])[0] || '', img: d.cover_i ? `https://covers.openlibrary.org/b/id/${d.cover_i}-L.jpg?default=false` : null, description: '' }));
 }
 
 // Kapak / özet adayları. which: 'tr' (Türkçe baskı) | 'orig' (orijinal baskı)

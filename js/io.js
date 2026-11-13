@@ -26,6 +26,8 @@ const COLUMNS = [
   ['genre', 'Tür'],
   ['translation', 'Türkçe çeviri'],
   ['publisher', 'Türkçe yayınevi'],
+  ['pubYear', 'Yayın yılı'],
+  ['trDate', 'Türkçe çıkış tarihi'],
   ['status', 'Okuma durumu'],
   ...CRITERIA.map(c => [`score:${c.key}`, c.label]),
   ['spicy', 'Spicy / +18'],
@@ -83,7 +85,8 @@ export async function readExcel(file) {
       const v = r[c];
       if (v === null || v === undefined || v === '') return;
       if (field.startsWith('score:')) { const n = num(v); if (n !== null) b.scores[field.slice(6)] = n; }
-      else if (['priority', 'seriesOrder', 'spicy', 'myRating', 'goodreadsVotes'].includes(field)) b[field] = num(v);
+      else if (['priority', 'seriesOrder', 'spicy', 'myRating', 'goodreadsVotes', 'pubYear'].includes(field)) b[field] = num(v);
+      else if (field === 'trDate') b.trDate = v instanceof Date ? dateStr(v) : String(v).trim();
       else if (field === 'goodreads') b.goodreads = num(String(v).replace(',', '.'));
       else if (field === 'warnings' || field === 'tags') b[field] = list(v);
       else if (field === 'favorite') b.favorite = ['evet', 'true', '1', 'x', '❤️'].includes(norm(v));

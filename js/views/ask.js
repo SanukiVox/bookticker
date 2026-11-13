@@ -31,6 +31,8 @@ function bookLine(b, withNotes) {
     sc !== null ? `uyum ${sc.toFixed(1)}` : '',
     b.spicy != null ? `spicy ${b.spicy}` : '',
     b.goodreads ? `GR ${b.goodreads}` : '',
+    b.pubYear ? `yıl ${b.pubYear}` : '',
+    b.trDate ? `TR çıkış ${b.trDate}` : '',
     b.myRating ? `puanım ${b.myRating}/5` : '',
     b.favorite ? 'favori' : '',
     (b.tags || []).length ? `etiket: ${b.tags.join(', ')}` : '',

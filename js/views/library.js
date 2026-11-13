@@ -10,6 +10,7 @@ export const SORTS = {
   title: ['Kitap adı', (a, b) => collator.compare(displayTitle(a), displayTitle(b))],
   author: ['Yazar', (a, b) => collator.compare(a.author || '', b.author || '') || collator.compare(a.series || '', b.series || '') || (a.seriesOrder ?? 99) - (b.seriesOrder ?? 99)],
   score: ['Uyum puanı', (a, b) => (computeScore(b) ?? -1) - (computeScore(a) ?? -1)],
+  year: ['Çıkış yılı (yeni → eski)', (a, b) => (b.pubYear ?? -1) - (a.pubYear ?? -1)],
   goodreads: ['Goodreads puanı', (a, b) => (b.goodreads ?? -1) - (a.goodreads ?? -1)],
   spicy: ['Spicy', (a, b) => (b.spicy ?? -1) - (a.spicy ?? -1)],
   updated: ['Son değişen', (a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)],

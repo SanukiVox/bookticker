@@ -87,6 +87,17 @@ export async function load() {
   state.options = { ...structuredClone(DEFAULT_OPTIONS), ...(options || {}) };
   state.settings = { ...structuredClone(DEFAULT_SETTINGS), ...(settings || {}) };
   state.settings.weights = { ...DEFAULT_SETTINGS.weights, ...(state.settings.weights || {}) };
+  // Tek seferlik: değerlendirme notuna yazılmış yayın yılını kendi alanına taşı
+  const moved = [];
+  for (const b of state.books) {
+    if (b.pubYear || !b.review) continue;
+    const m = b.review.match(/\s*Yayın yılı: (\d{4})\.\s*/);
+    if (!m) continue;
+    b.pubYear = Number(m[1]);
+    b.review = b.review.replace(m[0], ' ').trim();
+    moved.push(b);
+  }
+  if (moved.length) await db.putBooks(moved);
 }
 
 export const saveOptions = () => db.putMeta('options', state.options).then(emit);
@@ -120,6 +131,16 @@ export function computeScore(book) {
   return Math.round((sum / wsum) * 10) / 10;
 }
 
+// "2025" ya da "2025-06-20" → okunur Türkçe tarih
+export function formatPubDate(v) {
+  const s = String(v ?? '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return new Date(s + 'T00:00').toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+  if (/^\d{4}-\d{2}$/.test(s)) return new Date(s + '-01T00:00').toLocaleDateString('tr-TR', { month: 'long', year: 'numeric' });
+  return s;
+}
+const upcoming = v => /^\d{4}(-\d{2}(-\d{2})?)?$/.test(String(v || '')) && String(v) > today();
+export const isUpcoming = b => upcoming(b.trDate);
+
 export const displayTitle = b => b.title || b.originalTitle || 'Adsız kitap';
 
 export function statusInfo(name) {
@@ -147,7 +168,7 @@ export function newBook(partial = {}) {
     id: uid(),
     title: '', originalTitle: '', author: '', series: '', seriesOrder: null,
     genre: '', translation: '', publisher: '', status: 'Okunacak', priority: null,
-    scores: {}, spicy: null, goodreads: null, goodreadsVotes: null, confidence: '', review: '', summary: '',
+    scores: {}, spicy: null, goodreads: null, goodreadsVotes: null, pubYear: null, trDate: '', confidence: '', review: '', summary: '',
     warnings: [], tags: [], inVisuals: '', favorite: false,
     coverTr: null, coverOrig: null,
     startDate: '', endDate: '', myRating: null, notes: '', quotes: '',

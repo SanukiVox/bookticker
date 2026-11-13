@@ -74,6 +74,8 @@ export async function renderEdit(view, [id], query) {
         <div class="field"><label for="f-author">Yazar</label><input id="f-author" data-field="author" data-suggest="author" value="${esc(b.author)}" placeholder="Yazmaya başla…"></div>
         <div class="field"><label for="f-series">Seri</label><input id="f-series" data-field="series" data-suggest="series" value="${esc(b.series)}" placeholder="Seri değilse boş bırak"></div>
         <div class="field inline"><label for="f-seriesOrder">Serideki sırası</label><input id="f-seriesOrder" data-field="seriesOrder" type="number" inputmode="decimal" min="0" step="0.5" value="${b.seriesOrder ?? ''}"></div>
+        <div class="field inline"><label for="f-pubYear">Yayın yılı (orijinal)</label><input id="f-pubYear" data-field="pubYear" type="number" inputmode="numeric" min="1000" max="2100" placeholder="örn. 2019" value="${b.pubYear ?? ''}"></div>
+        <div class="field inline"><label for="f-trDate">Türkçe çıkış tarihi</label><input id="f-trDate" data-field="trDate" inputmode="numeric" placeholder="2025 ya da 2025-06-20" value="${esc(b.trDate || '')}" style="width:150px;text-align:right"></div>
       </div>
 
       <div class="form-group-title">Durum ve sınıflandırma</div>
@@ -126,7 +128,8 @@ export async function renderEdit(view, [id], query) {
   $$('[data-field]', form).forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => {
     const f = el.dataset.field;
     let v = el.value;
-    if (['seriesOrder', 'priority', 'goodreadsVotes'].includes(f)) v = v === '' ? null : Number(v);
+    if (['seriesOrder', 'priority', 'goodreadsVotes', 'pubYear'].includes(f)) v = v === '' ? null : Number(v);
+    if (f === 'trDate') v = v.trim();
     if (f === 'goodreads') v = v === '' ? null : Math.max(0, Math.min(5, Number(String(v).replace(',', '.'))));
     if (['title', 'originalTitle', 'author'].includes(f)) setTimeout(() => { const a = $('#gr-open', form); if (a) a.href = goodreadsUrl(b); });
     b[f] = v; dirty = true;
