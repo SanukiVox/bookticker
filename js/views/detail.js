@@ -1,7 +1,7 @@
 // Kitap detay sayfası.
 import { goodreadsUrl, formatVotes, formatPubDate, isUpcoming } from '../store.js';
 import { state, getBook, saveBook, computeScore, CRITERIA, SPICY_LABELS, statusInfo, displayTitle, booksInSeries, booksByAuthor } from '../store.js';
-import { esc, enc, ICON, coverHTML, bookCard, hydrateCovers, peppers, toast, sheet, $, $$ } from '../ui.js';
+import { esc, enc, ICON, coverHTML, bookCard, hydrateCovers, peppers, toast, sheet, $, $$, coverKeyOf } from '../ui.js';
 import { fileSectionShell, fillFileSection } from './bookfile.js';
 import { similarTo } from '../similar.js';
 
@@ -25,9 +25,9 @@ export async function renderDetail(view, [id]) {
   const hasTr = !!b.coverTr, hasOrig = !!b.coverOrig;
   const both = hasTr && hasOrig;
   const hero = both
-    ? `<div class="hero"><div class="cv" data-zoom="${esc(b.coverTr)}">${coverHTML(b, { key: b.coverTr, badge: false })}<div class="lbl">Türkçe</div></div>
-        <div class="cv" data-zoom="${esc(b.coverOrig)}">${coverHTML(b, { key: b.coverOrig, badge: false })}<div class="lbl">Orijinal</div></div></div>`
-    : `<div class="hero single"><div class="cv" ${hasTr || hasOrig ? `data-zoom="${esc(b.coverTr || b.coverOrig)}"` : ''}>${coverHTML(b, { badge: false })}
+    ? `<div class="hero">${(state.settings.coverPref === 'orig' ? [[b.coverOrig, 'Orijinal'], [b.coverTr, 'Türkçe']] : [[b.coverTr, 'Türkçe'], [b.coverOrig, 'Orijinal']])
+        .map(([k, l]) => `<div class="cv" data-zoom="${esc(k)}">${coverHTML(b, { key: k, badge: false })}<div class="lbl">${l}</div></div>`).join('')}</div>`
+    : `<div class="hero single"><div class="cv" ${hasTr || hasOrig ? `data-zoom="${esc(coverKeyOf(b))}"` : ''}>${coverHTML(b, { badge: false })}
         <div class="lbl">${hasTr ? 'Türkçe kapak' : hasOrig ? 'Orijinal kapak' : `<a href="#/edit/${enc(b.id)}?find=tr" style="color:var(--accent)">🔍 Kapak bul</a>`}</div></div></div>`;
 
   const seriesBooks = b.series ? booksInSeries(b.series) : [];

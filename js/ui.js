@@ -36,7 +36,8 @@ export function forgetCover(key) {
   urlCache.delete(key);
 }
 
-export function coverKeyOf(book, prefer = 'tr') {
+// Ayarlar → Kapak olarak göster (tr | orig); seçilen yoksa diğeri.
+export function coverKeyOf(book, prefer = state.settings.coverPref || 'tr') {
   return prefer === 'orig' ? (book.coverOrig || book.coverTr) : (book.coverTr || book.coverOrig);
 }
 

@@ -1,6 +1,6 @@
 // Kitaplık: Kitaplar / Yazarlar / Seriler sekmeleri.
 import { state, authors, seriesList, collator, displayTitle, computeScore, saveSettings, colorFor } from '../store.js';
-import { esc, enc, ICON, booksView, hydrateCovers, $, $$ } from '../ui.js';
+import { esc, enc, ICON, booksView, hydrateCovers, $, $$, coverKeyOf } from '../ui.js';
 
 let statusFilter = '';
 let sortBy = 'recent';
@@ -96,7 +96,7 @@ function seriesTab() {
     const pct = Math.round((read / s.books.length) * 100);
     const first = s.books[0];
     return `<a class="row" href="#/series/${enc(s.name)}">
-      <div class="cover" style="width:44px;flex:0 0 44px;box-shadow:none;border-radius:4px" ${first.coverTr || first.coverOrig ? `data-cover="${esc(first.coverTr || first.coverOrig)}"` : ''}>
+      <div class="cover" style="width:44px;flex:0 0 44px;box-shadow:none;border-radius:4px" ${coverKeyOf(first) ? `data-cover="${esc(coverKeyOf(first))}"` : ''}>
         <div class="ph" style="background:${colorFor(s.name)}"><b style="font-size:7px">${esc(s.name)}</b></div></div>
       <div class="body"><div class="t">${esc(s.name)}</div>
         <div class="s">${esc(first.author || '')} · ${read}/${s.books.length} okundu${reading ? ' · 📖' : ''}</div>
