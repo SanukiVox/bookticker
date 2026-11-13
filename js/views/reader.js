@@ -42,6 +42,7 @@ export async function renderReader(view, [id], query) {
       <div class="r-top">
         <button class="icon-btn" id="r-close" aria-label="Kapat">${ICON.back}</button>
         <div class="r-title">${esc(displayTitle(book))}</div>
+        <button class="icon-btn" id="r-ai" aria-label="Yapay zekâya gönder" style="font-size:20px">🤖</button>
         <button class="icon-btn" id="r-toc" aria-label="İçindekiler"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
         <button class="icon-btn" id="r-bm" aria-label="Yer imi"><svg viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"/></svg></button>
         <button class="icon-btn" id="r-set" aria-label="Görünüm" style="font-weight:700;font-family:var(--serif)">Aa</button>
@@ -197,6 +198,12 @@ export async function renderReader(view, [id], query) {
         $('#goto-go', el)?.addEventListener('click', () => { const n = Number($('#goto-p', el).value); if (n) { ctrl.goto(n); close(); } });
       },
     });
+  });
+
+  // ---------- Yapay zekâya gönder (önce ilerlemeyi kaydet ki "okuduğum yere kadar" güncel olsun) ----------
+  $('#r-ai', root).addEventListener('click', async () => {
+    await persist();
+    (await import('./sendbook.js')).openSendBook(book);
   });
 
   // ---------- Bitirme ----------

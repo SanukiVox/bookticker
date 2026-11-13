@@ -26,6 +26,7 @@ export async function fillFileSection(view, b) {
     html += `
       <div class="read-cta"><a class="btn primary" href="#/read/${enc(b.id)}">📖 ${b.status === 'Okundu' && pct >= 100 ? 'Yeniden oku' : pct ? `Okumaya devam et · %${Math.floor(pct)}` : 'Okumaya başla'}</a></div>
       ${progressLine}${time}
+      <button class="btn block" id="send-ai">🤖 Kitabı yapay zekâya gönder (ücretsiz)</button>
       <div class="file-chip">📄 <b>${esc(b.file.name)}</b><span>${b.file.type.toUpperCase()} · ${formatSize(b.file.size)}</span></div>
       <div class="btn-row">${filePick('Dosyayı değiştir', 'mini-btn')}<button class="mini-btn" id="file-rm" style="color:var(--danger);background:transparent">Dosyayı kaldır</button></div>`;
   } else if (b.file) {
@@ -51,6 +52,7 @@ export async function fillFileSection(view, b) {
     await detachFile(b); toast('Dosya kaldırıldı');
   });
   $('#manual', sec)?.addEventListener('click', () => manualProgress(b));
+  $('#send-ai', sec)?.addEventListener('click', async () => (await import('./sendbook.js')).openSendBook(b));
 }
 
 function manualProgress(b) {
