@@ -82,8 +82,12 @@ export function hydrateCovers(root = document) {
 }
 
 // ---------- Kitap kartı ve satırı ----------
+// Orijinal ad Türkçe addan farklıysa (ve ayar açıksa) gösterilir.
+const origOf = b => (state.settings.showOriginal !== false && b.title && b.originalTitle && b.originalTitle !== b.title ? b.originalTitle : '');
+
 export function bookCard(b, extra = '', note = '') {
-  return `<a class="card ${extra}" href="#/book/${enc(b.id)}">${coverHTML(b)}<div class="t">${esc(displayTitle(b))}</div><div class="a">${esc(b.author || '')}</div>${note ? `<div class="why-note">${esc(note)}</div>` : ''}</a>`;
+  const o = origOf(b);
+  return `<a class="card ${extra}" href="#/book/${enc(b.id)}">${coverHTML(b)}<div class="t">${esc(displayTitle(b))}</div>${o ? `<div class="o">${esc(o)}</div>` : ''}<div class="a">${esc(b.author || '')}</div>${note ? `<div class="why-note">${esc(note)}</div>` : ''}</a>`;
 }
 
 export function bookRow(b, { sub } = {}) {
@@ -91,7 +95,7 @@ export function bookRow(b, { sub } = {}) {
   const st = statusInfo(b.status);
   const subline = sub ?? [b.author, b.series ? `${b.series}${b.seriesOrder ? ' #' + b.seriesOrder : ''}` : ''].filter(Boolean).join(' · ');
   return `<a class="row" href="#/book/${enc(b.id)}">${coverHTML(b, { badge: false })}
-    <div class="body"><div class="t">${b.favorite ? '❤️ ' : ''}${esc(displayTitle(b))}</div><div class="s">${esc(subline)}</div>
+    <div class="body"><div class="t">${b.favorite ? '❤️ ' : ''}${esc(displayTitle(b))}</div>${origOf(b) ? `<div class="o">${esc(origOf(b))}</div>` : ''}<div class="s">${esc(subline)}</div>
     <div class="s">${st.emoji} ${esc(st.name)}${typeof b.progress?.percent === 'number' && b.status === 'Okunuyor' ? ` · %${Math.floor(b.progress.percent)}` : ''}${b.file ? ' · 📄' : ''}</div></div>
     <div class="end">${s !== null ? `<span class="score">${s.toFixed(1)}</span>` : ''}${b.goodreads ? `<div class="small" style="margin-top:4px">★ ${b.goodreads.toFixed(2).replace('.', ',')}</div>` : ''}</div></a>`;
 }

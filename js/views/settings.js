@@ -6,7 +6,7 @@ import { backButton, wireBack } from './detail.js';
 import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 
-export const APP_VERSION = '1.8.0';
+export const APP_VERSION = '1.8.1';
 
 export async function renderSettings(view) {
   const s = state.settings;
@@ -40,6 +40,7 @@ export async function renderSettings(view) {
     <div class="form-group-title">Görünüm</div>
     <div class="form-group">
       <div class="set-row"><span>Tema</span><select id="theme">${[['auto', 'Telefona göre'], ['light', 'Açık'], ['dark', 'Koyu']].map(([v, l]) => `<option value="${v}" ${s.theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="set-row"><span>Orijinal adları göster</span><span class="toggle"><input type="checkbox" id="showorig" ${s.showOriginal !== false ? 'checked' : ''}><span></span></span></div>
       <div class="set-row"><span>Kitap görünümü</span><select id="viewmode">${[['grid', 'Kapaklar'], ['list', 'Liste']].map(([v, l]) => `<option value="${v}" ${s.view === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="set-row"><span>${new Date().getFullYear()} okuma hedefi</span><input type="number" id="goal" inputmode="numeric" min="0" value="${esc(s.yearlyGoal)}"></div>
     </div>
@@ -74,6 +75,7 @@ export async function renderSettings(view) {
   });
   $('#autofill', view).addEventListener('click', async () => (await import('./autofill.js')).openAutofill());
   $('#theme', view).addEventListener('change', async e => { s.theme = e.target.value; applyTheme(); await saveSettings(); });
+  $('#showorig', view).addEventListener('change', async e => { s.showOriginal = e.target.checked; await saveSettings(); });
   $('#viewmode', view).addEventListener('change', async e => { s.view = e.target.value; await saveSettings(); });
   $('#goal', view).addEventListener('change', async e => { s.yearlyGoal = Number(e.target.value) || 0; await saveSettings(); toast('Hedef kaydedildi'); });
   $$('[data-w]', view).forEach(inp => inp.addEventListener('change', async () => {
