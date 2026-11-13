@@ -3,6 +3,7 @@ import { goodreadsUrl, formatVotes } from '../store.js';
 import { state, getBook, saveBook, computeScore, CRITERIA, SPICY_LABELS, statusInfo, displayTitle, booksInSeries, booksByAuthor } from '../store.js';
 import { esc, enc, ICON, coverHTML, bookCard, hydrateCovers, peppers, toast, sheet, $, $$ } from '../ui.js';
 import { fileSectionShell, fillFileSection } from './bookfile.js';
+import { similarTo } from '../similar.js';
 
 export function backButton(fallback = '#/') {
   return `<button class="icon-btn" data-back="${fallback}" aria-label="Geri">${ICON.back}</button>`;
@@ -30,6 +31,7 @@ export async function renderDetail(view, [id]) {
         <div class="lbl">${hasTr ? 'Türkçe kapak' : hasOrig ? 'Orijinal kapak' : `<a href="#/edit/${enc(b.id)}?find=tr" style="color:var(--accent)">🔍 Kapak bul</a>`}</div></div></div>`;
 
   const seriesBooks = b.series ? booksInSeries(b.series) : [];
+  const similar = similarTo(b, 10);
   const authorBooks = b.author ? booksByAuthor(b.author).filter(x => x.id !== b.id && (!b.series || x.series !== b.series)) : [];
 
   // Seri devam uyarısı: sonraki kitabın Türkçesi yoksa.
@@ -89,10 +91,13 @@ export async function renderDetail(view, [id]) {
     ${seriesBooks.length > 1 ? `<div class="section"><h3>Serinin kitapları · ${seriesBooks.filter(x => x.status === 'Okundu').length}/${seriesBooks.length}</h3>
       <div class="strip">${seriesBooks.map(x => bookCard(x, x.id === b.id ? 'current' : '')).join('')}</div></div>` : ''}
     ${authorBooks.length ? `<div class="section"><h3>Yazarın diğer kitapları</h3><div class="strip">${authorBooks.map(x => bookCard(x)).join('')}</div></div>` : ''}
+    <button class="section" id="ask-book" style="display:flex;align-items:center;gap:10px;width:100%;border:0;text-align:left;color:inherit"><span style="font-size:22px">🤖</span><span style="flex:1"><b>Bu kitap hakkında asistana sor</b><br><span class="muted small">Benzer kitaplar, bana uygun mu, notlarımın özeti…</span></span></button>
+    ${similar.length ? `<div class="section"><h3>Buna benzer kitaplar</h3><div class="strip">${similar.map(r => bookCard(r.b, '', r.why.slice(0, 2).join(' · '))).join('')}</div></div>` : ''}
   `;
 
   wireBack(view);
   hydrateCovers(view);
+  $('#ask-book', view).addEventListener('click', async () => (await import('./ask.js')).openAsk({ book: b }));
   $('#gr-edit', view).addEventListener('click', () => sheet({
     title: 'Goodreads puanı',
     body: `<a class="btn block" href="${goodreadsUrl(b)}" target="_blank" rel="noopener" style="margin-bottom:14px">📗 Goodreads'te aç</a>

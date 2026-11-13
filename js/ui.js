@@ -82,8 +82,8 @@ export function hydrateCovers(root = document) {
 }
 
 // ---------- Kitap kartı ve satırı ----------
-export function bookCard(b, extra = '') {
-  return `<a class="card ${extra}" href="#/book/${enc(b.id)}">${coverHTML(b)}<div class="t">${esc(displayTitle(b))}</div><div class="a">${esc(b.author || '')}</div></a>`;
+export function bookCard(b, extra = '', note = '') {
+  return `<a class="card ${extra}" href="#/book/${enc(b.id)}">${coverHTML(b)}<div class="t">${esc(displayTitle(b))}</div><div class="a">${esc(b.author || '')}</div>${note ? `<div class="why-note">${esc(note)}</div>` : ''}</a>`;
 }
 
 export function bookRow(b, { sub } = {}) {

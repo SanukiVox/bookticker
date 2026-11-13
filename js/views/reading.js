@@ -2,6 +2,7 @@
 import { state, computeScore, booksInSeries, displayTitle, statusInfo, genreColor, saveBooks, saveSettings, norm } from '../store.js';
 import { esc, enc, coverHTML, bookCard, hydrateCovers, sheet, toast, $, $$ } from '../ui.js';
 import { readingStats, formatDuration, progressOf } from '../files.js';
+import { tasteRecommendations } from '../similar.js';
 
 const DONE = new Set(['Okundu', 'Elendi', 'Yarım bırakıldı']);
 const hasTurkish = b => !b.translation || b.translation === 'Var';
@@ -34,6 +35,7 @@ export function suggestions(limit = 5) {
 export async function renderReading(view) {
   const reading = state.books.filter(b => b.status === 'Okunuyor');
   const sugg = suggestions(6);
+  const taste = tasteRecommendations(10).filter(t => !sugg.some(s => s.b.id === t.b.id));
   const queue = state.books.filter(b => b.priority && !DONE.has(b.status)).sort((a, b) => a.priority - b.priority);
   const year = new Date().getFullYear();
   const readThisYear = state.books.filter(b => b.status === 'Okundu' && (b.endDate || '').startsWith(String(year)));
@@ -57,6 +59,9 @@ export async function renderReading(view) {
   const top = sugg[0];
   view.innerHTML = `
     <div class="page-head"><h1>Okuma</h1></div>
+    <div class="tip" style="margin-bottom:18px"><span style="font-size:26px">🤖</span>
+      <button id="ask-open" style="border:0;background:none;text-align:left;padding:0;flex:1"><b>Asistana sor</b><br><span class="small">Kitaplığın ve notlarınla Claude, ChatGPT ya da Gemini'ye sor →</span></button>
+      <button class="mini-btn" id="ask-import-btn" title="Asistanın önerilerini listeye ekle">📥</button></div>
     ${reading.length ? `<h3 style="margin-bottom:8px">Şu an okuduğun</h3><div class="list" style="margin-bottom:18px">${reading.map(b => {
       const pct = progressOf(b);
       return `<div class="row"><a href="#/book/${enc(b.id)}" style="display:contents">${coverHTML(b, { badge: false })}
@@ -67,6 +72,7 @@ export async function renderReading(view) {
     ${top ? `<a class="next-card" href="#/book/${enc(top.b.id)}">${coverHTML(top.b, { badge: false })}
       <div><div class="lbl">Sıradaki kitap önerisi</div><div class="t">${esc(displayTitle(top.b))}</div><div class="small">${esc(top.b.author || '')}</div><div class="why">${esc(top.why)}</div></div></a>` : ''}
     ${sugg.length > 1 ? `<h3 style="margin-bottom:8px">Diğer öneriler</h3><div class="strip" style="margin:0 -16px 20px;padding:2px 16px 4px">${sugg.slice(1).map(s => bookCard(s.b)).join('')}</div>` : ''}
+    ${taste.length ? `<h3 style="margin-bottom:8px">Zevkine göre</h3><div class="strip" style="margin:0 -16px 20px;padding:2px 16px 4px">${taste.map(t => bookCard(t.b, '', `${displayTitle(t.because)} sevdiğin için`)).join('')}</div>` : ''}
 
     <div class="section"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">Öncelik sıram</h3><button class="mini-btn" id="add-q">＋ Ekle</button></div>
       ${queue.length ? `<div class="list" id="queue" style="box-shadow:none;margin:0 -14px -14px">${queue.map((b, i) => `
@@ -109,6 +115,8 @@ export async function renderReading(view) {
       <a class="hbar" href="#/search?genre=${enc(g)}"><span>${esc(g)}</span><b>${n}</b><div class="track"><span style="width:${(n / maxG) * 100}%;background:${genreColor(g)}"></span></div></a>`).join('')}</div>
   `;
   hydrateCovers(view);
+  $('#ask-open', view)?.addEventListener('click', async () => (await import('./ask.js')).openAsk());
+  $('#ask-import-btn', view)?.addEventListener('click', async () => (await import('./ask.js')).openImportSuggestions());
 
   $$('[data-unq]', view).forEach(btn => btn.addEventListener('click', async e => {
     e.preventDefault();
