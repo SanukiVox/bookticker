@@ -42,48 +42,56 @@ function bookLine(b, withNotes) {
   return '- ' + parts.filter(Boolean).join(' | ');
 }
 
+// Sıra her zaman aynı olmalı: metin değişmezse Claude önbelleği tutar, sohbet ucuzlar.
+const stableOrder = books => [...books].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+
 function pickBooks(scope) {
-  if (scope === 'all') return state.books;
+  if (scope === 'all') return stableOrder(state.books);
   // Kısa liste: okuduğum/okuduğum/beğendiğim + en uyumlu 60 okunacak
   const core = state.books.filter(b => b.status !== 'Okunacak' || b.favorite || b.myRating || b.notes);
   const rest = state.books.filter(b => !core.includes(b)).sort((a, b) => (computeScore(b) ?? 0) - (computeScore(a) ?? 0)).slice(0, 60);
-  return [...core, ...rest];
+  return stableOrder([...core, ...rest]);
 }
 
-export function buildPrompt({ question, book, scope = 'all', withNotes = true }) {
+// Kitaplığın sabit kısmı (sohbette önbelleğe alınır; her mesajda tekrar ücretlendirilmez).
+export function libraryContext({ scope = 'all', withNotes = true } = {}) {
   const w = state.settings.weights;
   const books = pickBooks(scope);
-  const lines = [
-    'Sen benim kişisel kitap asistanımsın. Aşağıda kişisel kitaplığımın listesi var. Türkçe ve samimi cevap ver.',
+  return [
+    'Sen benim kişisel kitap asistanımsın. Aşağıda kişisel kitaplığımın listesi var. Türkçe ve samimi cevap ver; kısa ve öz yaz, gerekirse madde işaretleri kullan.',
+    'Kitaplardan uzun bölümler ya da metinler aktarma; özetle, yorumla ve öner.',
     '',
     `Puanlama: ${CRITERIA.map(c => c.label).join(', ')} kriterleri 1–5 arası. "Uyum" bu kriterlerin ağırlıklı ortalaması (ağırlıklar: ${CRITERIA.map(c => `${c.label} ${w[c.key]}`).join(', ')}). Spicy 0–5 (${SPICY_LABELS[0].split(':')[0]} … ${SPICY_LABELS[5].split(':')[0]}). GR = Goodreads puanı. "Puanım" kitabı okuduktan sonra verdiğim puan.`,
     state.settings.rules?.length ? `Okuma kurallarım: ${state.settings.rules.map((r, i) => `${i + 1}) ${r}`).join(' ')}` : '',
-    '',
-    `Kitaplığım (${books.length} kitap${scope === 'all' ? '' : `, toplam ${state.books.length} kitaptan seçilmiş kısa liste`}):`,
-    ...books.map(b => bookLine(b, withNotes)),
-  ];
-  if (book) {
-    lines.push('', `Şu an bu kitap hakkında konuşuyoruz: ${displayTitle(book)}${book.author ? ' — ' + book.author : ''}`);
-    if (book.summary) lines.push(`Özeti: ${clip(book.summary, 1200)}`);
-    if (book.notes && withNotes) lines.push(`Bu kitaptaki notlarım: ${clip(book.notes, 1200)}`);
-    if (book.quotes && withNotes) lines.push(`Sevdiğim alıntılar: ${clip(book.quotes, 600)}`);
-  }
-  lines.push(
     '',
     'Listemde OLMAYAN bir kitap önerirsen cevabının en sonuna, uygulamama aktarabilmem için şu biçimde bir blok ekle (her satıra bir kitap, bilmediğin alanı boş bırak):',
     'ÖNERİLER',
     '- Türkçe adı | Orijinal adı | Yazar | Tür',
     'Türkçe çevirisinin yayımlanıp yayımlanmadığından emin değilsen bunu açıkça söyle.',
     '',
-    `Sorum: ${question}`,
-  );
-  return lines.filter(l => l !== null).join('\n');
+    `Kitaplığım (${books.length} kitap${scope === 'all' ? '' : `, toplam ${state.books.length} kitaptan seçilmiş kısa liste`}):`,
+    ...books.map(b => bookLine(b, withNotes)),
+  ].join('\n');
+}
+
+export function bookContext(book, withNotes = true) {
+  const lines = [`Şu an bu kitap hakkında konuşuyoruz: ${displayTitle(book)}${book.author ? ' — ' + book.author : ''}`];
+  if (book.summary) lines.push(`Özeti: ${clip(book.summary, 1200)}`);
+  if (book.notes && withNotes) lines.push(`Bu kitaptaki notlarım: ${clip(book.notes, 1200)}`);
+  if (book.quotes && withNotes) lines.push(`Sevdiğim alıntılar: ${clip(book.quotes, 600)}`);
+  return lines.join('\n');
+}
+
+export const quickQuestions = book => (book
+  ? [`"${displayTitle(book)}" kitabına benzeyen kitaplar öner (listemdekiler ve listemde olmayanlar ayrı ayrı).`, `"${displayTitle(book)}" bana uygun mu? Notlarıma ve zevkime göre değerlendir.`, `"${displayTitle(book)}" hakkındaki notlarımı özetle, öne çıkan temaları söyle.`]
+  : QUICK);
+
+export function buildPrompt({ question, book, scope = 'all', withNotes = true }) {
+  return [libraryContext({ scope, withNotes }), book ? '\n' + bookContext(book, withNotes) : '', '', `Sorum: ${question}`].join('\n');
 }
 
 export function openAsk({ book } = {}) {
-  const quick = book
-    ? [`"${displayTitle(book)}" kitabına benzeyen kitaplar öner (listemdekiler ve listemde olmayanlar ayrı ayrı).`, `"${displayTitle(book)}" bana uygun mu? Notlarıma ve zevkime göre değerlendir.`, `"${displayTitle(book)}" hakkındaki notlarımı özetle, öne çıkan temaları söyle.`]
-    : QUICK;
+  const quick = quickQuestions(book);
   sheet({
     title: book ? `Asistana sor · ${displayTitle(book)}` : 'Asistana sor',
     body: `
@@ -96,7 +104,8 @@ export function openAsk({ book } = {}) {
       <div class="btn-row" style="margin-bottom:10px">${APPS.map(([k, l, u]) => `<a class="btn" data-app="${k}" href="${u}" target="_blank" rel="noopener" style="flex:1">${l}</a>`).join('')}</div>
       ${navigator.share ? '<button class="btn block" id="ask-share">📤 Paylaş… (Claude/ChatGPT uygulamasına gönder)</button>' : ''}
       <p class="muted small" style="margin-top:12px">Soru ve kitaplığın kopyalanır, seçtiğin uygulama açılır: sohbete <b>uzun bas → Yapıştır → Gönder</b>. Asistan listende olmayan kitap önerirse cevabı kopyalayıp burada <b>Önerileri listeme ekle</b>'yi kullan.</p>
-      <button class="btn block" id="ask-import" style="margin-top:6px">📥 Önerileri listeme ekle</button>`,
+      <button class="btn block" id="ask-import" style="margin-top:6px">📥 Önerileri listeme ekle</button>
+      <p class="muted small" style="margin-top:12px">💡 Sohbeti uygulamanın içinde yapmak için <a href="#/settings" style="color:var(--accent)">Ayarlar → Asistan</a> bölümüne Claude API anahtarını ekle.</p>`,
     onMount: (el, close) => {
       const q = $('#ask-q', el);
       const text = () => buildPrompt({ question: q.value.trim() || quick[0], book, scope: $('#ask-scope', el).value, withNotes: $('#ask-notes', el).checked });

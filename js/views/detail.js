@@ -97,7 +97,7 @@ export async function renderDetail(view, [id]) {
 
   wireBack(view);
   hydrateCovers(view);
-  $('#ask-book', view).addEventListener('click', async () => (await import('./ask.js')).openAsk({ book: b }));
+  $('#ask-book', view).addEventListener('click', async () => { if (await (await import('../ai.js')).hasKey()) location.hash = `#/chat?book=${enc(b.id)}`; else (await import('./ask.js')).openAsk({ book: b }); });
   $('#gr-edit', view).addEventListener('click', () => sheet({
     title: 'Goodreads puanı',
     body: `<a class="btn block" href="${goodreadsUrl(b)}" target="_blank" rel="noopener" style="margin-bottom:14px">📗 Goodreads'te aç</a>

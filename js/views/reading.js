@@ -60,7 +60,7 @@ export async function renderReading(view) {
   view.innerHTML = `
     <div class="page-head"><h1>Okuma</h1></div>
     <div class="tip" style="margin-bottom:18px"><span style="font-size:26px">🤖</span>
-      <button id="ask-open" style="border:0;background:none;text-align:left;padding:0;flex:1"><b>Asistana sor</b><br><span class="small">Kitaplığın ve notlarınla Claude, ChatGPT ya da Gemini'ye sor →</span></button>
+      <button id="ask-open" style="border:0;background:none;text-align:left;padding:0;flex:1"><b>Asistana sor</b><br><span class="small">Kitaplığını ve notlarını bilen asistanla sohbet et →</span></button>
       <button class="mini-btn" id="ask-import-btn" title="Asistanın önerilerini listeye ekle">📥</button></div>
     ${reading.length ? `<h3 style="margin-bottom:8px">Şu an okuduğun</h3><div class="list" style="margin-bottom:18px">${reading.map(b => {
       const pct = progressOf(b);
@@ -115,7 +115,7 @@ export async function renderReading(view) {
       <a class="hbar" href="#/search?genre=${enc(g)}"><span>${esc(g)}</span><b>${n}</b><div class="track"><span style="width:${(n / maxG) * 100}%;background:${genreColor(g)}"></span></div></a>`).join('')}</div>
   `;
   hydrateCovers(view);
-  $('#ask-open', view)?.addEventListener('click', async () => (await import('./ask.js')).openAsk());
+  $('#ask-open', view)?.addEventListener('click', async () => { if (await (await import('../ai.js')).hasKey()) location.hash = '#/chat'; else (await import('./ask.js')).openAsk(); });
   $('#ask-import-btn', view)?.addEventListener('click', async () => (await import('./ask.js')).openImportSuggestions());
 
   $$('[data-unq]', view).forEach(btn => btn.addEventListener('click', async e => {

@@ -6,7 +6,7 @@ import { backButton, wireBack } from './detail.js';
 import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 
-export const APP_VERSION = '1.7.0';
+export const APP_VERSION = '1.8.0';
 
 export async function renderSettings(view) {
   const s = state.settings;
@@ -24,6 +24,9 @@ export async function renderSettings(view) {
   view.innerHTML = `
     <div class="page-head"><h1>Ayarlar</h1></div>
     ${!standalone ? `<div class="warn">📲 <span>Uygulama gibi kullanmak için Safari'de <b>Paylaş</b> düğmesine, sonra <b>Ana Ekrana Ekle</b>'ye dokun.</span></div>` : ''}
+
+    <div class="form-group-title">🤖 Asistan (Claude)</div>
+    <div class="form-group" id="ai-sec"><div class="set-row muted small">…</div></div>
 
     <div class="form-group-title">Kapak ve özetler</div>
     <div class="form-group"><button class="set-row" id="autofill" style="width:100%;border:0;background:none;text-align:left">🖼️ Eksik kapak ve özetleri internetten bul<span class="chev"></span></button>
@@ -60,6 +63,7 @@ export async function renderSettings(view) {
     <p class="muted small" style="text-align:center">Kitaplığım ${APP_VERSION} · ${state.books.length} kitap<br><button class="mini-btn" id="check-upd" style="margin-top:8px">🔄 Güncellemeleri denetle</button></p>`;
 
   wireGithub(view);
+  (await import('./aisettings.js')).fillAiSection(view);
   $('#check-upd', view)?.addEventListener('click', async () => {
     const reg = await navigator.serviceWorker?.getRegistration();
     if (!reg) { toast('Güncelleme denetlenemedi'); return; }
