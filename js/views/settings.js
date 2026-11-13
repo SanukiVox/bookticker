@@ -6,7 +6,7 @@ import { backButton, wireBack } from './detail.js';
 import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 
-export const APP_VERSION = '1.3.0';
+export const APP_VERSION = '1.3.1';
 
 export async function renderSettings(view) {
   const s = state.settings;
@@ -24,6 +24,10 @@ export async function renderSettings(view) {
   view.innerHTML = `
     <div class="page-head"><h1>Ayarlar</h1></div>
     ${!standalone ? `<div class="warn">📲 <span>Uygulama gibi kullanmak için Safari'de <b>Paylaş</b> düğmesine, sonra <b>Ana Ekrana Ekle</b>'ye dokun.</span></div>` : ''}
+
+    <div class="form-group-title">Kapak ve özetler</div>
+    <div class="form-group"><button class="set-row" id="autofill" style="width:100%;border:0;background:none;text-align:left">🖼️ Eksik kapak ve özetleri internetten bul<span class="chev"></span></button>
+      <div class="set-row muted small" style="display:block">Tek bir kitap için: kitap sayfası → <b>Düzenle</b> → kapağın altındaki <b>🔍 Bul</b>.</div></div>
 
     ${githubSection()}
 
@@ -46,7 +50,6 @@ export async function renderSettings(view) {
     <div class="form-group-title">Verilerim</div>
     <div class="form-group">
       <label class="set-row" style="position:relative">📥 Excel'den içe aktar<span class="chev"></span><input type="file" id="imp" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="position:absolute;inset:0;opacity:0"></label>
-      <button class="set-row" id="autofill" style="width:100%;border:0;background:none;text-align:left">🔍 Eksik kapak ve özetleri internetten bul<span class="chev"></span></button>
       <button class="set-row" id="exp" style="width:100%;border:0;background:none;text-align:left">📤 Excel'e aktar<span class="chev"></span></button>
       <button class="set-row" id="bak" style="width:100%;border:0;background:none;text-align:left">💾 Yedek al (kapaklar dahil)<span class="chev"></span></button>
       <label class="set-row" style="position:relative">♻️ Yedekten geri yükle<span class="chev"></span><input type="file" id="res" accept=".json,application/json" style="position:absolute;inset:0;opacity:0"></label>

@@ -26,7 +26,7 @@ export async function renderDetail(view, [id]) {
     ? `<div class="hero"><div class="cv" data-zoom="${esc(b.coverTr)}">${coverHTML(b, { key: b.coverTr, badge: false })}<div class="lbl">Türkçe</div></div>
         <div class="cv" data-zoom="${esc(b.coverOrig)}">${coverHTML(b, { key: b.coverOrig, badge: false })}<div class="lbl">Orijinal</div></div></div>`
     : `<div class="hero single"><div class="cv" ${hasTr || hasOrig ? `data-zoom="${esc(b.coverTr || b.coverOrig)}"` : ''}>${coverHTML(b, { badge: false })}
-        <div class="lbl">${hasTr ? 'Türkçe kapak' : hasOrig ? 'Orijinal kapak' : `<a href="#/edit/${enc(b.id)}" style="color:var(--accent)">＋ Kapak ekle</a>`}</div></div></div>`;
+        <div class="lbl">${hasTr ? 'Türkçe kapak' : hasOrig ? 'Orijinal kapak' : `<a href="#/edit/${enc(b.id)}?find=tr" style="color:var(--accent)">🔍 Kapak bul</a>`}</div></div></div>`;
 
   const seriesBooks = b.series ? booksInSeries(b.series) : [];
   const authorBooks = b.author ? booksByAuthor(b.author).filter(x => x.id !== b.id && (!b.series || x.series !== b.series)) : [];

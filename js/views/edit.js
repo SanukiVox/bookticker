@@ -296,7 +296,8 @@ export async function renderEdit(view, [id], query) {
     location.replace('#/');
   });
 
-  if (query.get('focus') === 'notes') setTimeout(() => $('#f-notes', form).scrollIntoView({ block: 'center' }), 50);
+  if (query.get('find')) setTimeout(() => $(`[data-find="${query.get('find')}"]`, form)?.click(), 100);
+  else if (query.get('focus') === 'notes') setTimeout(() => $('#f-notes', form).scrollIntoView({ block: 'center' }), 50);
   else if (isNew) setTimeout(() => $('#f-title', form).focus(), 50);
 }
 
