@@ -78,9 +78,11 @@ export function openAutofill() {
               // İlk yayın yılı: adı eşleşen sonuçlar arasındaki en eski yıl
               const pool = (b.originalTitle ? origList : trList).filter(r => r.year && /^\d{4}$/.test(String(r.year)));
               const t = norm(b.originalTitle || b.title);
-              const same = pool.filter(r => norm(r.title) === t || norm(r.title).startsWith(t));
-              const years = (same.length ? same : pool.slice(0, 3)).map(r => Number(r.year)).filter(y => y > 1500 && y <= new Date().getFullYear() + 1);
-              if (years.length) { b.pubYear = Math.min(...years); found.year = (found.year || 0) + 1; changed = true; }
+              // Adı birebir aynı olan, en çok baskısı bulunan ana kaydın yılı (derleme/boyama kitabı gibi kayıtlara takılmaz)
+              const valid = r => { const y = Number(r.year); return y > 1500 && y <= new Date().getFullYear() + 1; };
+              const exact = pool.filter(r => norm(r.title) === t && valid(r)).sort((a, z) => (z.editions || 0) - (a.editions || 0));
+              const best = exact[0] || pool.find(valid);
+              if (best) { b.pubYear = Number(best.year); found.year = (found.year || 0) + 1; changed = true; }
             }
             if (o.sum && !b.summary) {
               const tr = trList.find(r => r.description && (r.lang === 'tr' || r.lang === 'tur'));
