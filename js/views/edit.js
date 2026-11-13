@@ -101,7 +101,7 @@ export async function renderEdit(view, [id], query) {
       <div class="form-group-title">Özet ve değerlendirme</div>
       <div class="form-group">
         <div class="field"><label for="f-summary">Özet</label><textarea id="f-summary" data-field="summary" placeholder="Kitabın konusu…">${esc(b.summary)}</textarea>
-          <button type="button" class="mini-btn" id="find-summary" style="align-self:flex-start">🔍 İnternetten özet bul</button></div>
+          <div class="btn-row"><button type="button" class="mini-btn" id="paste-summary">📋 Yapıştır</button><button type="button" class="mini-btn" id="find-summary">＋ Özet bul</button></div></div>
         <div class="field"><label for="f-review">Kısa değerlendirme</label><textarea id="f-review" data-field="review" placeholder="Neden okumalı / okumamalı?">${esc(b.review)}</textarea></div>
       </div>
 
@@ -327,9 +327,40 @@ export async function renderEdit(view, [id], query) {
     });
   }
 
-  $('#find-summary', form).addEventListener('click', () => findSummary(b, text => {
-    b.summary = text; $('#f-summary', form).value = text; dirty = true;
-  }));
+  const setSummary = text => { b.summary = text; $('#f-summary', form).value = text; dirty = true; };
+  const pasteSummary = async () => {
+    try {
+      const t = (await navigator.clipboard.readText()).trim();
+      if (!t) { toast('Panoda yazı yok. Önce tanıtım yazısını seçip Kopyala de.'); return; }
+      if (b.summary && !(await confirmSheet('Özeti değiştir', 'Mevcut özet, kopyaladığın yazıyla değiştirilsin mi?', 'Değiştir', false))) return;
+      setSummary(cleanBlurb(t)); toast('📋 Özet yapıştırıldı');
+    } catch {
+      toast('Yapıştırma izni verilmedi. Özet kutusuna uzun basıp Yapıştır de.');
+      $('#f-summary', form).focus();
+    }
+  };
+  $('#paste-summary', form).addEventListener('click', pasteSummary);
+  $('#find-summary', form).addEventListener('click', () => openAddSummary());
+
+  function openAddSummary() {
+    const name = b.title || b.originalTitle;
+    const q = encodeURIComponent(`${name} ${b.author || ''}`.trim());
+    sheet({
+      title: 'Özet / tanıtım yazısı ekle',
+      body: `<div class="list">
+          <button class="row" data-s="auto" style="width:100%;border:0;background:none;text-align:left"><div class="body"><div class="t">🔍 Otomatik bul</div><div class="s">Google Books'ta ara, seç</div></div><span class="chev"></span></button>
+          <a class="row" href="https://1000kitap.com/ara?q=${encodeURIComponent(name)}" target="_blank" rel="noopener"><div class="body"><div class="t">📚 1000Kitap'ta aç</div><div class="s">Safari'de açılır</div></div><span class="chev"></span></a>
+          <a class="row" href="https://www.kitapyurdu.com/index.php?route=product/search&filter_name=${encodeURIComponent(name)}" target="_blank" rel="noopener"><div class="body"><div class="t">🛒 Kitapyurdu'nda aç</div><div class="s">Safari'de açılır</div></div><span class="chev"></span></a>
+          <a class="row" href="https://www.google.com/search?q=${q}%20konusu" target="_blank" rel="noopener"><div class="body"><div class="t">🌐 Google'da ara</div><div class="s">Safari'de açılır</div></div><span class="chev"></span></a>
+          <button class="row" data-s="paste" style="width:100%;border:0;background:none;text-align:left"><div class="body"><div class="t">📋 Kopyaladığım yazıyı yapıştır</div><div class="s">Book Love veya herhangi bir uygulamadan</div></div><span class="chev"></span></button>
+        </div>
+        <p class="muted small"><b>Başka bir uygulamadan eklemek için:</b> tanıtım yazısının üstüne uzun bas, seçimi tüm yazıyı kapsayacak şekilde genişlet, <b>Kopyala</b> de. Sonra buraya dönüp <b>📋 Yapıştır</b>'a dokun.</p>`,
+      onMount: (el, close) => {
+        $('[data-s="auto"]', el).addEventListener('click', () => { close(); findSummary(b, setSummary); });
+        $('[data-s="paste"]', el).addEventListener('click', () => { close(); pasteSummary(); });
+      },
+    });
+  }
 
   async function save() {
     b.title = b.title.trim(); b.originalTitle = b.originalTitle.trim(); b.author = b.author.trim(); b.series = b.series.trim();
@@ -362,6 +393,7 @@ export async function renderEdit(view, [id], query) {
   });
 
   if (query.get('find')) setTimeout(() => openAddCover(query.get('find') === 'orig' ? 'orig' : 'tr'), 100);
+  else if (query.get('summary')) setTimeout(() => { $('#f-summary', form).scrollIntoView({ block: 'center' }); openAddSummary(); }, 100);
   else if (query.get('focus') === 'notes') setTimeout(() => $('#f-notes', form).scrollIntoView({ block: 'center' }), 50);
   else if (isNew) setTimeout(() => $('#f-title', form).focus(), 50);
 }
@@ -439,4 +471,12 @@ async function readClipboardImage() {
     if (type) return it.getType(type);
   }
   return null;
+}
+
+function cleanBlurb(t) {
+  return t.replace(/\r/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/(devamını oku|daha fazla göster|devamı|read more)\s*\.*\s*$/i, '')
+    .trim();
 }
