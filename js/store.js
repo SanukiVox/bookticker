@@ -100,8 +100,8 @@ export async function load() {
   if (moved.length) await db.putBooks(moved);
 }
 
-export const saveOptions = () => db.putMeta('options', state.options).then(emit);
-export const saveSettings = () => db.putMeta('settings', state.settings).then(emit);
+export const saveOptions = () => { state.options.updatedAt = Date.now(); return db.putMeta('options', state.options).then(emit); };
+export const saveSettings = () => { state.settings.updatedAt = Date.now(); return db.putMeta('settings', state.settings).then(emit); };
 
 // ---------- Yardımcılar ----------
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -200,7 +200,12 @@ export async function deleteBook(id) {
   await db.deleteBook(id);
   if (b?.coverTr) await db.deleteCover(b.coverTr);
   if (b?.coverOrig) await db.deleteCover(b.coverOrig);
-  if (b?.file?.key) { await db.deleteFile(b.file.key); await db.putMeta(`loc:${b.file.key}`, null); }
+  for (const k of await db.allFileKeys()) {
+    if (k === b?.file?.key || k.startsWith(`${id}-`)) { await db.deleteFile(k); await db.putMeta(`loc:${k}`, null); }
+  }
+  const tomb = (await db.getMeta('deleted')) || {};
+  tomb[id] = Date.now();
+  await db.putMeta('deleted', tomb);
   state.books = state.books.filter(x => x.id !== id);
   emit();
 }

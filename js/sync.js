@@ -95,6 +95,94 @@ export async function testConnection() {
 const coverKeyFromPath = p => p.replace(/^covers\//, '').replace(/\.jpg$/, '');
 const usedCoverKeys = books => new Set(books.flatMap(b => [b.coverTr, b.coverOrig]).filter(k => k && !/^https?:\/\//.test(k)));
 
+
+// ---------- Birleştirme (iki cihazın değişiklikleri birbirini ezmesin) ----------
+// Kitaplar kimlikle eşleşir; aynı kitapta:
+//  - genel bilgiler: daha yeni düzenlenen (updatedAt) kazanır
+//  - okuma ilerlemesi: en son okunan (progress.updatedAt) kazanır
+//  - yer imleri: iki taraf birleşir · okuma süresi: büyük olan
+//  - dosya bilgisi: içerik özeti (hash) olan tercih edilir
+// Silinen kitaplar "silindi" kaydıyla (mezar taşı) diğer cihaza da yayılır.
+const t = v => Number(v) || 0;
+
+function mergeBook(a, b) {
+  const base = t(b.updatedAt) > t(a.updatedAt) ? b : a;
+  const out = { ...base };
+  const pa = a.progress, pb = b.progress;
+  out.progress = !pa ? (pb ?? null) : !pb ? pa : (t(pb.updatedAt) > t(pa.updatedAt) ? pb : pa);
+  const seen = new Set();
+  out.bookmarks = [...(a.bookmarks || []), ...(b.bookmarks || [])]
+    .filter(m => { const k = `${m.loc}|${m.createdAt}`; if (seen.has(k)) return false; seen.add(k); return true; })
+    .sort((x, y) => t(x.createdAt) - t(y.createdAt));
+  out.readingSeconds = Math.max(t(a.readingSeconds), t(b.readingSeconds)) || undefined;
+  if (a.file || b.file) out.file = (a.file?.hash ? a.file : b.file?.hash ? b.file : base.file) || a.file || b.file;
+  return out;
+}
+
+function mergeOptions(a, b) {
+  if (!a) return b; if (!b) return a;
+  const [newer, older] = t(b.updatedAt) > t(a.updatedAt) ? [b, a] : [a, b];
+  const out = { ...older, ...newer };
+  // Listelerde eklenen seçenek kaybolmasın
+  for (const k of Object.keys(out)) {
+    if (!Array.isArray(out[k])) continue;
+    const names = new Set(out[k].map(o => o.name));
+    for (const o of older[k] || []) if (o?.name && !names.has(o.name)) { out[k] = [...out[k], o]; names.add(o.name); }
+  }
+  return out;
+}
+
+function mergeSettings(a, b) {
+  if (!a) return b; if (!b) return a;
+  const [newer, older] = t(b.updatedAt) > t(a.updatedAt) ? [b, a] : [a, b];
+  const out = { ...older, ...newer };
+  const log = { ...(older.readLog || {}) };
+  for (const [d, s] of Object.entries(newer.readLog || {})) log[d] = Math.max(t(log[d]), t(s));
+  out.readLog = log;
+  return out;
+}
+
+export function mergeData(local, remote) {
+  const deleted = { ...(remote.deleted || {}) };
+  for (const [id, ts] of Object.entries(local.deleted || {})) deleted[id] = Math.max(t(deleted[id]), t(ts));
+  const map = new Map();
+  for (const b of remote.books || []) map.set(b.id, b);
+  for (const b of local.books || []) map.set(b.id, map.has(b.id) ? mergeBook(b, map.get(b.id)) : b);
+  const books = [...map.values()].filter(b => !(deleted[b.id] && t(deleted[b.id]) >= t(b.updatedAt)));
+  return { books, options: mergeOptions(local.options, remote.options), settings: mergeSettings(local.settings, remote.settings), deleted };
+}
+
+async function localData() {
+  return { books: state.books, options: state.options, settings: state.settings, deleted: (await db.getMeta('deleted')) || {} };
+}
+
+async function readRemote(head) {
+  if (!head?.tree.has(DATA_FILE)) return null;
+  const blob = await gh(`/git/blobs/${head.tree.get(DATA_FILE)}`);
+  const data = JSON.parse(textFromB64(blob.content));
+  if (data?.app !== 'kitapligim' || !Array.isArray(data.books)) throw new Error('Depodaki veri dosyası tanınmadı');
+  return data;
+}
+
+// Birleşik veriyi bu cihaza uygula (eksik kapakları indir, kullanılmayanları sil)
+async function applyLocal(merged, head) {
+  const used = usedCoverKeys(merged.books);
+  const local = new Set(await db.allCoverKeys());
+  for (const key of used) {
+    if (local.has(key)) continue;
+    const sha = head.tree.get(`covers/${key}.jpg`);
+    if (!sha) continue;
+    const cb = await gh(`/git/blobs/${sha}`);
+    await db.putCover(key, new Blob([bytesFromB64(cb.content)], { type: 'image/jpeg' }));
+  }
+  for (const key of local) if (!used.has(key)) await db.deleteCover(key);
+  await db.putMeta('deleted', merged.deleted);
+  suppress = true;
+  try { await replaceAll(merged.books, merged.options, merged.settings); } finally { suppress = false; }
+}
+
+const fingerprint = d => JSON.stringify([d.books.map(b => [b.id, b.updatedAt, b.progress?.updatedAt, (b.bookmarks || []).length, b.readingSeconds]).sort(), d.options?.updatedAt, d.settings?.updatedAt, Object.keys(d.deleted || {}).length]);
+
 // ---------- Gönder ----------
 export async function push({ force = false } = {}) {
   if (!isConfigured()) throw new Error('GitHub bağlantısı kurulmamış');
@@ -102,10 +190,10 @@ export async function push({ force = false } = {}) {
   sync.busy = true; notify();
   try {
     let head = await remoteHead();
-    // GitHub'da bu telefonun bilmediği veri varsa üzerine yazma (önce sor).
-    if (head && !force && head.commit !== sync.cfg.lastRemoteCommit && head.tree.has(DATA_FILE)) {
-      sync.cfg.conflict = true;
-      throw new Error('GitHub\'da başka bir yerden kaydedilmiş daha yeni veri var');
+    // GitHub'da bu cihazın bilmediği değişiklik varsa önce birleştir (ezme yok)
+    if (head && head.commit !== sync.cfg.lastRemoteCommit && head.tree.has(DATA_FILE)) {
+      const remote = await readRemote(head);
+      await applyLocal(mergeData(await localData(), remote), head);
     }
     if (!head) {
       // Boş depo: ilk commit'i Contents API ile oluştur.
@@ -128,13 +216,19 @@ export async function push({ force = false } = {}) {
     for (const path of head.tree.keys()) {
       if (path.startsWith('covers/') && !used.has(coverKeyFromPath(path))) entries.push({ path, mode: '100644', type: 'blob', sha: null });
     }
-    const data = { app: 'kitapligim', version: 1, savedAt: new Date().toISOString(), books: state.books, options: state.options, settings: state.settings };
+    const data = { app: 'kitapligim', version: 2, savedAt: new Date().toISOString(), books: state.books, options: state.options, settings: state.settings, deleted: (await db.getMeta('deleted')) || {} };
     entries.push({ path: DATA_FILE, mode: '100644', type: 'blob', content: JSON.stringify(data, null, 1) });
 
     const tree = await gh('/git/trees', { method: 'POST', body: { base_tree: head.treeSha, tree: entries } });
     const n = state.books.length;
     const commit = await gh('/git/commits', { method: 'POST', body: { message: `Kitaplığım: ${n} kitap · ${new Date().toLocaleString('tr-TR')}`, tree: tree.sha, parents: [head.commit] } });
-    await gh(`/git/refs/heads/${encodeURIComponent(sync.cfg.branch)}`, { method: 'PATCH', body: { sha: commit.sha, force } });
+    try {
+      await gh(`/git/refs/heads/${encodeURIComponent(sync.cfg.branch)}`, { method: 'PATCH', body: { sha: commit.sha, force: false } });
+    } catch (e) {
+      // Bu arada başka cihaz göndermiş: bir kez daha birleştirip dene
+      if (e.status === 422 && !force) { sync.busy = false; return push({ force: true }); }
+      throw e;
+    }
 
     Object.assign(sync.cfg, { lastRemoteCommit: commit.sha, lastPush: Date.now(), dirty: false, error: null, conflict: false });
     await saveCfg();
@@ -155,26 +249,15 @@ export async function pull() {
   try {
     const head = await remoteHead();
     if (!head || !head.tree.has(DATA_FILE)) throw new Error('GitHub deposunda henüz veri yok. Önce "GitHub\'a gönder" ile kaydet.');
-    const blob = await gh(`/git/blobs/${head.tree.get(DATA_FILE)}`);
-    const data = JSON.parse(textFromB64(blob.content));
-    if (data?.app !== 'kitapligim' || !Array.isArray(data.books)) throw new Error('Depodaki veri dosyası tanınmadı');
-
-    const used = usedCoverKeys(data.books);
-    const local = new Set(await db.allCoverKeys());
-    for (const key of used) {
-      if (local.has(key)) continue;
-      const sha = head.tree.get(`covers/${key}.jpg`);
-      if (!sha) continue;
-      const cb = await gh(`/git/blobs/${sha}`);
-      await db.putCover(key, new Blob([bytesFromB64(cb.content)], { type: 'image/jpeg' }));
-    }
-    for (const key of local) if (!used.has(key)) await db.deleteCover(key);
-
-    suppress = true;
-    try { await replaceAll(data.books, data.options, data.settings); } finally { suppress = false; }
-    Object.assign(sync.cfg, { lastRemoteCommit: head.commit, lastPull: Date.now(), dirty: false, error: null, conflict: false });
+    const remote = await readRemote(head);
+    const merged = mergeData(await localData(), remote);
+    // Bu cihazda GitHub'da olmayan bir şey var mı? Varsa birleşik hâl geri gönderilmeli.
+    const hasLocalExtra = fingerprint({ ...merged }) !== fingerprint({ books: remote.books, options: remote.options, settings: remote.settings, deleted: remote.deleted || {} });
+    await applyLocal(merged, head);
+    Object.assign(sync.cfg, { lastRemoteCommit: head.commit, lastPull: Date.now(), dirty: hasLocalExtra, error: null, conflict: false });
     await saveCfg();
-    return data.books.length;
+    if (hasLocalExtra) schedulePush(1500);
+    return merged.books.length;
   } catch (e) {
     if (sync.cfg) { sync.cfg.error = e.message; await saveCfg(); }
     throw e;
@@ -198,7 +281,7 @@ export const onAutoPush = fn => { onAutoResult = fn; };
 function schedulePush(delay = 4000) {
   clearTimeout(timer);
   timer = setTimeout(async () => {
-    if (!isConfigured() || !sync.cfg.auto || !sync.cfg.dirty || sync.cfg.conflict) return;
+    if (!isConfigured() || !sync.cfg.auto || !sync.cfg.dirty) return;
     if (!navigator.onLine) return;
     if (sync.busy) { schedulePush(3000); return; }
     try { await push(); onAutoResult?.(null); } catch (e) { onAutoResult?.(e); }
@@ -211,7 +294,22 @@ export function startAutoSync() {
     if (!sync.cfg.dirty) { sync.cfg.dirty = true; await saveCfg(); }
     schedulePush();
   });
-  window.addEventListener('online', () => schedulePush(1000));
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') schedulePush(1500); });
+  window.addEventListener('online', () => { autoPull(); schedulePush(1000); });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { autoPull(); schedulePush(1500); } });
   if (sync.cfg?.dirty) schedulePush(2000);
+  setTimeout(autoPull, 800);
+}
+
+// Diğer cihazdaki değişiklikleri kendiliğinden al (okuma/düzenleme sırasında değil)
+let pulling = false, onPulled = null;
+export const onAutoPull = fn => { onPulled = fn; };
+async function autoPull() {
+  if (pulling || sync.busy || !isConfigured() || !sync.cfg.auto || !navigator.onLine) return;
+  const path = location.hash.replace(/^#/, '');
+  if (path.startsWith('/read/') || path.startsWith('/edit/')) return;
+  pulling = true;
+  try {
+    if (await remoteChanged()) { await pull(); onPulled?.(); }
+  } catch { /* sessiz: bir sonraki açılışta tekrar dener */ }
+  finally { pulling = false; }
 }

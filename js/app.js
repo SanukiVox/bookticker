@@ -2,7 +2,7 @@
 import { load, state, onChange } from './store.js';
 import { requestPersistence } from './db.js';
 import { $, $$, applyTheme, toast } from './ui.js';
-import { loadSync, startAutoSync, onSyncChange, onAutoPush, isConfigured, remoteChanged, sync } from './sync.js';
+import { loadSync, startAutoSync, onSyncChange, onAutoPush, onAutoPull } from './sync.js';
 import { renderLibrary } from './views/library.js';
 import { renderSearch } from './views/search.js';
 import { renderDetail } from './views/detail.js';
@@ -90,10 +90,7 @@ async function start() {
   requestPersistence();
   startAutoSync();
   onAutoPush(err => toast(err ? `☁️ GitHub'a gönderilemedi: ${err.message}` : '☁️ GitHub\'a kaydedildi'));
-  // Başka bir cihazdan GitHub'a daha yeni veri gönderildiyse haber ver.
-  if (isConfigured() && navigator.onLine && !sync.cfg.dirty) {
-    remoteChanged().then(changed => { if (changed) toast('☁️ GitHub\'da daha yeni veri var · Ayarlar → GitHub\'dan çek'); }).catch(() => {});
-  }
+  onAutoPull(() => toast('☁️ Diğer cihazdaki değişiklikler alındı'));
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     // Yeni sürüm yayınlanınca uygulama kendini bir kez yeniler (eski sürümde takılı kalmaz).
     const hadController = !!navigator.serviceWorker.controller;

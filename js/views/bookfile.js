@@ -44,7 +44,7 @@ export async function fillFileSection(view, b) {
     e.target.value = '';
     if (!f) return;
     toast('Dosya ekleniyor…');
-    try { await attachFile(b, f); toast('📎 Dosya eklendi'); }
+    try { const r = await attachFile(b, f); toast(r?.sameFile ? '📎 Dosya eklendi · ilerlemen korundu' : '📎 Dosya eklendi'); }
     catch (err) { toast(err.message); }
   });
   $('#file-rm', sec)?.addEventListener('click', async () => {

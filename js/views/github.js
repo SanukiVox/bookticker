@@ -47,7 +47,7 @@ export function wireGithub(view) {
     doPush(true);
   });
   const pullHandler = async () => {
-    if (!(await confirmSheet('GitHub\'dan çek', 'Bu telefondaki kitaplar, GitHub\'daki verilerle değiştirilecek.', 'Çek', false))) return;
+    if (!(await confirmSheet('GitHub\'dan çek', 'GitHub\'daki veriler bu cihazdakilerle birleştirilecek; hiçbir taraftaki değişiklik silinmez.', 'Çek', false))) return;
     try { const n = await pull(); applyTheme(); toast(`⬇️ ${n} kitap GitHub'dan alındı`); } catch (e) { toast(e.message); }
   };
   $('#gh-pull', view)?.addEventListener('click', pullHandler);

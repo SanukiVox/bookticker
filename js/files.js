@@ -1,5 +1,6 @@
 // Kitap dosyaları (PDF/EPUB): sadece bu telefonda saklanır, GitHub'a gönderilmez.
-// Kitapta yalnızca bilgisi tutulur: book.file = { key, name, type, size, addedAt }
+// Kitapta yalnızca bilgisi tutulur: book.file = { key, hash, name, type, size, addedAt }
+// Dosya içeriğine göre tanınır (SHA-256): aynı PDF hangi cihaza eklenirse eklensin aynı anahtarı alır.
 import { state, saveBook, saveSettings, today } from './store.js';
 import { db } from './db.js';
 
@@ -19,14 +20,24 @@ export async function attachFile(book, file) {
   if (type === 'pdf' && !sig.startsWith('%PDF')) throw new Error('Bu dosya geçerli bir PDF değil');
   if (type === 'epub' && !(head[0] === 0x50 && head[1] === 0x4b)) throw new Error('Bu dosya geçerli bir EPUB değil');
   const blob = new Blob([await file.arrayBuffer()], { type: type === 'pdf' ? 'application/pdf' : 'application/epub+zip' });
-  const key = `${book.id}-${Date.now().toString(36)}`;
+  const hash = await sha256(blob);
+  const key = `h-${hash.slice(0, 32)}`;
+  // Aynı dosya mı? (başka cihazda eklenmiş ya da yeniden eklenen) → ilerleme, yer imleri korunur
+  const prev = book.file;
+  const sameFile = !!prev && (prev.hash ? prev.hash === hash : (prev.size === blob.size && prev.type === type));
   await db.putFile(key, blob);
-  if (book.file?.key) await removeFileData(book.file.key);
-  book.file = { key, name: file.name, type, size: blob.size, addedAt: Date.now() };
-  // Yeni dosya = yeni konum bilgisi
-  book.progress = book.progress && book.progress.manual ? book.progress : null;
-  book.bookmarks = [];
+  // Bu kitap için bu cihazdaki eski kopyaları temizle
+  for (const k of await db.allFileKeys()) {
+    if (k !== key && (k.startsWith(`${book.id}-`) || k === prev?.key)) await removeFileData(k);
+  }
+  book.file = { key, hash, name: file.name, type, size: blob.size, addedAt: sameFile ? (prev.addedAt || Date.now()) : Date.now() };
+  if (!sameFile) {
+    // Farklı dosya = farklı sayfa düzeni: konum bilgisi sıfırlanır
+    book.progress = book.progress && book.progress.manual ? book.progress : null;
+    book.bookmarks = [];
+  }
   await saveBook(book);
+  return { sameFile };
 }
 
 async function removeFileData(key) {
@@ -34,19 +45,38 @@ async function removeFileData(key) {
   await db.putMeta(`loc:${key}`, null);
 }
 
+async function sha256(blob) {
+  const buf = await crypto.subtle.digest('SHA-256', await blob.arrayBuffer());
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Bu cihazda kitabın dosyası hangi anahtarda? (eşitlemeden gelen anahtar, içerik özeti ya da eski kayıt)
+export async function resolveLocalKey(book) {
+  if (!book.file) return null;
+  const keys = await db.allFileKeys();
+  if (book.file.key && keys.includes(book.file.key)) return book.file.key;
+  if (book.file.hash && keys.includes(`h-${book.file.hash.slice(0, 32)}`)) return `h-${book.file.hash.slice(0, 32)}`;
+  // Eski sürümde eklenen dosyalar: anahtar kitabın kimliğiyle başlar
+  const legacy = keys.filter(k => k.startsWith(`${book.id}-`)).sort();
+  return legacy.length ? legacy[legacy.length - 1] : null;
+}
+
 export async function detachFile(book) {
-  if (book.file?.key) await removeFileData(book.file.key);
+  const local = await resolveLocalKey(book);
+  if (local) await removeFileData(local);
+  if (book.file?.key && book.file.key !== local) await removeFileData(book.file.key);
   book.file = null;
   await saveBook(book);
 }
 
 export async function hasLocalFile(book) {
-  if (!book.file?.key) return false;
-  const keys = await db.allFileKeys();
-  return keys.includes(book.file.key);
+  return !!(await resolveLocalKey(book));
 }
 
-export const getFileBlob = book => db.getFile(book.file.key);
+export async function getFileBlob(book) {
+  const k = await resolveLocalKey(book);
+  return k ? db.getFile(k) : null;
+}
 
 export async function filesUsage() {
   const keys = new Set(await db.allFileKeys());
