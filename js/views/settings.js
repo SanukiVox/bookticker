@@ -6,7 +6,7 @@ import { backButton, wireBack } from './detail.js';
 import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '1.2.0';
 
 export async function renderSettings(view) {
   const s = state.settings;
@@ -44,6 +44,7 @@ export async function renderSettings(view) {
     <div class="form-group-title">Verilerim</div>
     <div class="form-group">
       <label class="set-row" style="position:relative">📥 Excel'den içe aktar<span class="chev"></span><input type="file" id="imp" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="position:absolute;inset:0;opacity:0"></label>
+      <button class="set-row" id="autofill" style="width:100%;border:0;background:none;text-align:left">🔍 Eksik kapak ve özetleri internetten bul<span class="chev"></span></button>
       <button class="set-row" id="exp" style="width:100%;border:0;background:none;text-align:left">📤 Excel'e aktar<span class="chev"></span></button>
       <button class="set-row" id="bak" style="width:100%;border:0;background:none;text-align:left">💾 Yedek al (kapaklar dahil)<span class="chev"></span></button>
       <label class="set-row" style="position:relative">♻️ Yedekten geri yükle<span class="chev"></span><input type="file" id="res" accept=".json,application/json" style="position:absolute;inset:0;opacity:0"></label>
@@ -54,6 +55,7 @@ export async function renderSettings(view) {
     <p class="muted small" style="text-align:center">Kitaplığım ${APP_VERSION} · ${state.books.length} kitap</p>`;
 
   wireGithub(view);
+  $('#autofill', view).addEventListener('click', async () => (await import('./autofill.js')).openAutofill());
   $('#theme', view).addEventListener('change', async e => { s.theme = e.target.value; applyTheme(); await saveSettings(); });
   $('#viewmode', view).addEventListener('change', async e => { s.view = e.target.value; await saveSettings(); });
   $('#goal', view).addEventListener('change', async e => { s.yearlyGoal = Number(e.target.value) || 0; await saveSettings(); toast('Hedef kaydedildi'); });

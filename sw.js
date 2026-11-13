@@ -1,12 +1,13 @@
 // Çevrimdışı çalışma: uygulama dosyalarını telefona önbelleğe al.
 // Yeni sürüm yayınlarken VERSION değerini artır.
-const VERSION = 'v1.1.0';
+const VERSION = 'v1.2.0';
+const IMG_CACHE = 'kitapligim-kapaklar';
 const CACHE = `kitapligim-${VERSION}`;
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
-  'js/app.js', 'js/db.js', 'js/store.js', 'js/ui.js', 'js/io.js', 'js/sync.js',
+  'js/app.js', 'js/db.js', 'js/store.js', 'js/ui.js', 'js/io.js', 'js/sync.js', 'js/lookup.js',
   'js/views/library.js', 'js/views/search.js', 'js/views/detail.js', 'js/views/edit.js',
-  'js/views/group.js', 'js/views/reading.js', 'js/views/settings.js', 'js/views/github.js',
+  'js/views/group.js', 'js/views/reading.js', 'js/views/settings.js', 'js/views/github.js', 'js/views/autofill.js',
   'vendor/xlsx.full.min.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
@@ -17,14 +18,23 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k.startsWith('kitapligim-') && k !== CACHE).map(k => caches.delete(k))))
+    .then(keys => Promise.all(keys.filter(k => k.startsWith('kitapligim-') && k !== CACHE && k !== IMG_CACHE).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
 // Önce önbellek (hızlı ve internetsiz), yoksa ağ.
 self.addEventListener('fetch', e => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+  if (req.method !== 'GET') return;
+  // İnternetten bulunan kapak görsellerini çevrimdışı için sakla.
+  if (new URL(req.url).origin !== location.origin) {
+    if (req.destination !== 'image') return;
+    e.respondWith(caches.open(IMG_CACHE).then(c => c.match(req).then(hit => hit || fetch(req).then(res => {
+      if (res.ok || res.type === 'opaque') c.put(req, res.clone());
+      return res;
+    }))));
+    return;
+  }
   e.respondWith(
     caches.match(req, { ignoreSearch: true }).then(hit => hit || fetch(req).then(res => {
       if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(req, copy)); }

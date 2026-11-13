@@ -11,6 +11,7 @@ Bütün veriler (kitaplar, kapaklar, notlar) **sadece telefonunda** saklanır.
 - **Kitap sayfası:** Türkçe + orijinal kapak, özet, puanlar, serinin ve yazarın diğer kitapları
 - **Ekleme formu:** Açılır seçenekler (listeleri kendin düzenlersin), yazar/seri otomatik tamamlama, kameradan/galeriden kapak
 - **Okuma:** Sıradaki kitap önerisi, sürükle-bırak öncelik sırası, okuma kuralları, istatistik, yıllık hedef
+- **Kapak ve özet bulma:** Google Books ve Open Library'den — kitap formunda tek tek seçerek ya da Ayarlar'dan toplu
 - **Veriler:** Excel'den içe aktarma, Excel'e dışa aktarma, kapaklar dahil yedek alma/geri yükleme
 
 ## iPhone'a kurulum

@@ -1,7 +1,8 @@
 // Kitap ekleme / düzenleme formu.
 import { state, getBook, newBook, saveBook, deleteBook, CRITERIA, SPICY_LABELS, OPTION_LISTS, computeScore, authors, seriesList, norm, displayTitle, saveOptions } from '../store.js';
 import { db } from '../db.js';
-import { esc, enc, coverHTML, forgetCover, toast, confirmSheet, promptSheet, $, $$ } from '../ui.js';
+import { candidates, summaryCandidates, isUrl, imageOk } from '../lookup.js';
+import { esc, enc, coverHTML, forgetCover, toast, confirmSheet, promptSheet, sheet, $, $$ } from '../ui.js';
 
 // Fotoğrafı küçültüp JPEG'e çevir (telefonda yer kaplamasın).
 export async function shrinkImage(file, maxH = 900) {
@@ -56,6 +57,7 @@ export async function renderEdit(view, [id], query) {
     <div class="slot" data-slot="${which}"><div class="cover-holder">${coverHTML(b, { key: which === 'tr' ? b.coverTr : b.coverOrig, badge: false })}</div>
       <div class="small muted" style="margin-bottom:6px">${label}</div>
       <div class="btn-row"><label class="mini-btn" style="position:relative;overflow:hidden">📷 Seç<input type="file" accept="image/*" data-pick="${which}" style="position:absolute;inset:0;opacity:0"></label>
+      <button type="button" class="mini-btn" data-find="${which}">🔍 Bul</button>
       <button type="button" class="mini-btn" data-rmcover="${which}" style="color:var(--danger);background:transparent">Kaldır</button></div></div>`;
 
   view.innerHTML = `
@@ -94,7 +96,8 @@ export async function renderEdit(view, [id], query) {
 
       <div class="form-group-title">Özet ve değerlendirme</div>
       <div class="form-group">
-        <div class="field"><label for="f-summary">Özet</label><textarea id="f-summary" data-field="summary" placeholder="Kitabın konusu…">${esc(b.summary)}</textarea></div>
+        <div class="field"><label for="f-summary">Özet</label><textarea id="f-summary" data-field="summary" placeholder="Kitabın konusu…">${esc(b.summary)}</textarea>
+          <button type="button" class="mini-btn" id="find-summary" style="align-self:flex-start">🔍 İnternetten özet bul</button></div>
         <div class="field"><label for="f-review">Kısa değerlendirme</label><textarea id="f-review" data-field="review" placeholder="Neden okumalı / okumamalı?">${esc(b.review)}</textarea></div>
       </div>
 
@@ -241,11 +244,27 @@ export async function renderEdit(view, [id], query) {
   // Var olan kapakları göster
   for (const [which, key] of [['tr', b.coverTr], ['orig', b.coverOrig]]) {
     if (!key) continue;
+    if (isUrl(key)) { $(`[data-slot="${which}"] .cover-holder`, form).innerHTML = `<div class="cover"><img src="${esc(key)}" alt=""></div>`; continue; }
     db.getCover(key).then(blob => {
       if (!blob || covers[which].blob !== undefined) return;
       $(`[data-slot="${which}"] .cover-holder`, form).innerHTML = `<div class="cover"><img src="${URL.createObjectURL(blob)}" alt=""></div>`;
     });
   }
+
+  // İnternetten kapak bul
+  $$('[data-find]', form).forEach(btn => btn.addEventListener('click', () => {
+    const which = btn.dataset.find;
+    findCover(b, which, async url => {
+      const blob = await fetchAsBlob(url);
+      if (covers[which].url?.startsWith('blob:')) URL.revokeObjectURL(covers[which].url);
+      covers[which] = blob ? { blob, url: URL.createObjectURL(blob) } : { blob: null, remote: url, url };
+      $(`[data-slot="${which}"] .cover-holder`, form).innerHTML = `<div class="cover"><img src="${esc(covers[which].url)}" alt=""></div>`;
+      dirty = true;
+    });
+  }));
+  $('#find-summary', form).addEventListener('click', () => findSummary(b, text => {
+    b.summary = text; $('#f-summary', form).value = text; dirty = true;
+  }));
 
   async function save() {
     b.title = b.title.trim(); b.originalTitle = b.originalTitle.trim(); b.author = b.author.trim(); b.series = b.series.trim();
@@ -255,7 +274,8 @@ export async function renderEdit(view, [id], query) {
       const c = covers[which];
       if (c.blob === undefined) continue;
       if (b[prop]) { await db.deleteCover(b[prop]); forgetCover(b[prop]); }
-      if (c.blob) { const key = `${b.id}-${which}-${Date.now().toString(36)}`; await db.putCover(key, c.blob); b[prop] = key; }
+      if (c.remote) b[prop] = c.remote;
+      else if (c.blob) { const key = `${b.id}-${which}-${Date.now().toString(36)}`; await db.putCover(key, c.blob); b[prop] = key; }
       else b[prop] = null;
     }
     await saveBook(b);
@@ -278,4 +298,68 @@ export async function renderEdit(view, [id], query) {
 
   if (query.get('focus') === 'notes') setTimeout(() => $('#f-notes', form).scrollIntoView({ block: 'center' }), 50);
   else if (isNew) setTimeout(() => $('#f-title', form).focus(), 50);
+}
+
+// Görseli indirip küçült (site izin vermezse null → adres olarak saklanır).
+export async function fetchAsBlob(url) {
+  try {
+    const res = await fetch(url, { mode: 'cors' });
+    if (!res.ok) return null;
+    const raw = await res.blob();
+    if (!raw.type.startsWith('image/') || raw.size < 1500) return null;
+    return await shrinkImage(raw);
+  } catch { return null; }
+}
+
+const offlineMsg = '<div class="empty">İnternet bağlantısı gerekiyor.</div>';
+
+function findCover(book, which, onPick) {
+  const t0 = which === 'tr' ? book.title : (book.originalTitle || book.title);
+  sheet({
+    title: which === 'tr' ? 'Türkçe kapak bul' : 'Orijinal kapak bul',
+    body: `<div class="form-group"><div class="field"><label>Kitap adı</label><input id="lk-t" value="${esc(t0)}"></div>
+      <div class="field"><label>Yazar</label><input id="lk-a" value="${esc(book.author)}"></div></div>
+      <button class="btn block" id="lk-go" style="margin-bottom:14px">🔍 Ara</button><div id="lk-res"></div>
+      <p class="muted small">Kaynak: Google Books ve Open Library. Doğru kapağa dokun.</p>`,
+    onMount: (el, close) => {
+      const run = async () => {
+        const box = $('#lk-res', el);
+        if (!navigator.onLine) { box.innerHTML = offlineMsg; return; }
+        box.innerHTML = '<div class="empty">Aranıyor…</div>';
+        let list = [];
+        try { list = (await candidates(book, which, { title: $('#lk-t', el).value.trim(), author: $('#lk-a', el).value.trim() })).filter(r => r.img).slice(0, 18); }
+        catch { box.innerHTML = '<div class="empty">Arama yapılamadı.</div>'; return; }
+        if (!list.length) { box.innerHTML = '<div class="empty">Kapak bulunamadı. Adı ya da yazarı değiştirip tekrar dene.</div>'; return; }
+        box.innerHTML = `<div class="grid">${list.map((r, i) => `<button type="button" class="card" data-i="${i}" style="border:0;background:none;padding:0;text-align:left">
+          <div class="cover"><img src="${esc(r.img)}" alt="" loading="lazy"></div>
+          <div class="a">${esc([r.lang, r.year, r.publisher].filter(Boolean).join(' · '))}</div></button>`).join('')}</div>`;
+        // Yüklenemeyen (kapaksız) sonuçları gizle
+        list.forEach((r, i) => imageOk(r.img).then(ok => { const c = $(`[data-i="${i}"]`, box); if (!ok && c) c.style.display = 'none'; }));
+        box.querySelectorAll('[data-i]').forEach(c => c.addEventListener('click', async () => {
+          close(); toast('Kapak ekleniyor…');
+          await onPick(list[Number(c.dataset.i)].img);
+        }));
+      };
+      $('#lk-go', el).addEventListener('click', run);
+      run();
+    },
+  });
+}
+
+function findSummary(book, onPick) {
+  sheet({
+    title: 'Özet bul',
+    body: '<div id="sm-res"><div class="empty">Aranıyor…</div></div><p class="muted small">Kaynak: Google Books. Kullanmak istediğin özete dokun; sonra düzenleyebilirsin.</p>',
+    onMount: async (el, close) => {
+      const box = $('#sm-res', el);
+      if (!navigator.onLine) { box.innerHTML = offlineMsg; return; }
+      let list = [];
+      try { list = await summaryCandidates(book); } catch { /* yok */ }
+      if (!list.length) { box.innerHTML = '<div class="empty">Özet bulunamadı.</div>'; return; }
+      box.innerHTML = list.slice(0, 8).map((r, i) => `<button type="button" class="section" data-i="${i}" style="display:block;width:100%;text-align:left;border:0">
+        <div class="small muted" style="margin-bottom:4px">${esc([r.title, r.lang === 'tr' ? 'Türkçe' : r.lang, r.publisher].filter(Boolean).join(' · '))}</div>
+        <div class="prose" style="font-size:14px;max-height:9em;overflow:hidden">${esc(r.description)}</div></button>`).join('');
+      box.querySelectorAll('[data-i]').forEach(c => c.addEventListener('click', () => { onPick(list[Number(c.dataset.i)].description); close(); }));
+    },
+  });
 }

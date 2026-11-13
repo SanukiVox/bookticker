@@ -23,6 +23,7 @@ export const ICON = {
 // ---------- Kapaklar ----------
 const urlCache = new Map();
 async function coverUrl(key) {
+  if (/^https?:\/\//.test(key)) return key; // internetten bulunan kapak (adres olarak saklanır)
   if (urlCache.has(key)) return urlCache.get(key);
   const blob = await db.getCover(key);
   const url = blob ? URL.createObjectURL(blob) : null;
@@ -63,9 +64,12 @@ async function fillCover(el) {
   const img = new Image();
   img.alt = '';
   img.decoding = 'async';
-  img.src = url;
-  const ph = el.querySelector('.ph');
-  if (ph) ph.replaceWith(img); else el.prepend(img);
+  img.onload = () => {
+    if (el.querySelector('img')) return;
+    const ph = el.querySelector('.ph');
+    if (ph) ph.replaceWith(img); else el.prepend(img);
+  };
+  img.src = url; // yüklenemezse yer tutucu kalır
 }
 
 export function hydrateCovers(root = document) {

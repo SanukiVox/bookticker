@@ -93,7 +93,7 @@ export async function testConnection() {
 }
 
 const coverKeyFromPath = p => p.replace(/^covers\//, '').replace(/\.jpg$/, '');
-const usedCoverKeys = books => new Set(books.flatMap(b => [b.coverTr, b.coverOrig]).filter(Boolean));
+const usedCoverKeys = books => new Set(books.flatMap(b => [b.coverTr, b.coverOrig]).filter(k => k && !/^https?:\/\//.test(k)));
 
 // ---------- Gönder ----------
 export async function push({ force = false } = {}) {

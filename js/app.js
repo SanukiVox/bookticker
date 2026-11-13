@@ -73,7 +73,12 @@ onSyncChange(() => {
 async function start() {
   await Promise.all([load(), loadSync()]);
   applyTheme();
-  window.addEventListener('hashchange', route);
+  window.addEventListener('hashchange', () => {
+    // Sayfa değişince açık panelleri kapat
+    const sheets = $('#sheet-root');
+    if (sheets.children.length) { sheets.replaceChildren(); document.body.style.overflow = ''; }
+    route();
+  });
   await route();
   requestPersistence();
   startAutoSync();
