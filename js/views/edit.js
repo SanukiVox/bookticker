@@ -1,4 +1,5 @@
 // Kitap ekleme / düzenleme formu.
+import { goodreadsUrl } from '../store.js';
 import { state, getBook, newBook, saveBook, deleteBook, CRITERIA, SPICY_LABELS, OPTION_LISTS, computeScore, authors, seriesList, norm, displayTitle, saveOptions } from '../store.js';
 import { db } from '../db.js';
 import { candidates, summaryCandidates, isUrl, imageOk } from '../lookup.js';
@@ -92,6 +93,9 @@ export async function renderEdit(view, [id], query) {
         ${CRITERIA.map(c => scoreRow(c.key, c.label, b.scores[c.key])).join('')}
         ${scoreRow('spicy', 'Spicy / +18 (0–5)', b.spicy, 0)}
         <div class="small muted" id="spicy-hint" style="padding:0 14px 10px">${b.spicy !== null && b.spicy !== undefined ? esc(SPICY_LABELS[b.spicy]) : ''}</div>
+        <div class="field inline"><label for="f-goodreads">⭐ Goodreads puanı</label><input id="f-goodreads" data-field="goodreads" type="number" inputmode="decimal" min="0" max="5" step="0.01" placeholder="örn. 4,21" value="${b.goodreads ?? ''}"></div>
+        <div class="field inline"><label for="f-goodreadsVotes">Goodreads oy sayısı</label><input id="f-goodreadsVotes" data-field="goodreadsVotes" type="number" inputmode="numeric" min="0" placeholder="isteğe bağlı" value="${b.goodreadsVotes ?? ''}"></div>
+        <div style="padding:4px 14px 12px"><a class="mini-btn" id="gr-open" href="${goodreadsUrl(b)}" target="_blank" rel="noopener" style="display:inline-block">📗 Goodreads'te aç</a></div>
       </div>
 
       <div class="form-group-title">Özet ve değerlendirme</div>
@@ -122,7 +126,9 @@ export async function renderEdit(view, [id], query) {
   $$('[data-field]', form).forEach(el => el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', () => {
     const f = el.dataset.field;
     let v = el.value;
-    if (['seriesOrder', 'priority'].includes(f)) v = v === '' ? null : Number(v);
+    if (['seriesOrder', 'priority', 'goodreadsVotes'].includes(f)) v = v === '' ? null : Number(v);
+    if (f === 'goodreads') v = v === '' ? null : Math.max(0, Math.min(5, Number(String(v).replace(',', '.'))));
+    if (['title', 'originalTitle', 'author'].includes(f)) setTimeout(() => { const a = $('#gr-open', form); if (a) a.href = goodreadsUrl(b); });
     b[f] = v; dirty = true;
     if (f === 'title' || f === 'originalTitle') checkDup();
   }));

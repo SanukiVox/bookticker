@@ -136,6 +136,10 @@ export function colorFor(str) {
   return PALETTE[h % PALETTE.length];
 }
 
+// Goodreads: puan otomatik çekilemez; kitap Goodreads'te aranır, kullanıcı puanı girer.
+export const goodreadsUrl = b => `https://www.goodreads.com/search?q=${encodeURIComponent([b.originalTitle || b.title, b.author].filter(Boolean).join(' '))}`;
+export const formatVotes = n => (!n ? '' : n >= 1e6 ? `${(n / 1e6).toFixed(1).replace('.', ',')} M oy` : n >= 1e3 ? `${Math.round(n / 1e3)} B oy` : `${n} oy`);
+
 export const getBook = id => state.books.find(b => b.id === id);
 
 export function newBook(partial = {}) {
@@ -143,7 +147,7 @@ export function newBook(partial = {}) {
     id: uid(),
     title: '', originalTitle: '', author: '', series: '', seriesOrder: null,
     genre: '', translation: '', publisher: '', status: 'Okunacak', priority: null,
-    scores: {}, spicy: null, confidence: '', review: '', summary: '',
+    scores: {}, spicy: null, goodreads: null, goodreadsVotes: null, confidence: '', review: '', summary: '',
     warnings: [], tags: [], inVisuals: '', favorite: false,
     coverTr: null, coverOrig: null,
     startDate: '', endDate: '', myRating: null, notes: '', quotes: '',

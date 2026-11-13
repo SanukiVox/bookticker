@@ -1,4 +1,5 @@
 // Kitap detay sayfası.
+import { goodreadsUrl, formatVotes } from '../store.js';
 import { state, getBook, saveBook, computeScore, CRITERIA, SPICY_LABELS, statusInfo, displayTitle, booksInSeries, booksByAuthor } from '../store.js';
 import { esc, enc, ICON, coverHTML, bookCard, hydrateCovers, peppers, toast, sheet, $, $$ } from '../ui.js';
 import { fileSectionShell, fillFileSection } from './bookfile.js';
@@ -65,6 +66,10 @@ export async function renderDetail(view, [id]) {
     <div class="status-pick">${state.options.statuses.map(s => `<button class="chip ${b.status === s.name ? 'on' : ''}" data-st="${esc(s.name)}">${s.emoji} ${esc(s.name)}</button>`).join('')}</div>
     ${seriesWarn}
     ${fileSectionShell()}
+    <div class="section gr-row"><span class="gr-badge">g</span>
+      ${b.goodreads ? `<div style="flex:1"><b style="font-size:20px">★ ${String(b.goodreads.toFixed(2)).replace('.', ',')}</b> <span class="muted small">Goodreads${b.goodreadsVotes ? ` · ${formatVotes(b.goodreadsVotes)}` : ''}</span></div>`
+        : '<div style="flex:1" class="muted">Goodreads puanı girilmemiş</div>'}
+      <button class="mini-btn" id="gr-edit">${b.goodreads ? 'Güncelle' : '＋ Ekle'}</button></div>
     ${score !== null || scored.length ? `<div class="section"><div class="bigscore"><div class="n">${score !== null ? score.toFixed(1) : '—'}</div><div><b>Genel uyum puanı</b><div class="muted small">5 üzerinden, ağırlıklı ortalama</div></div></div>
       <div class="bars">${scored.map(c => `<div class="bar"><span>${c.label}</span><div class="track"><span style="width:${(Number(b.scores[c.key]) / 5) * 100}%"></span></div><b>${b.scores[c.key]}</b></div>`).join('')}</div></div>` : ''}
     ${b.summary ? `<div class="section"><h3>Özet</h3><div class="prose">${esc(b.summary)}</div></div>` : ''}
@@ -87,6 +92,22 @@ export async function renderDetail(view, [id]) {
 
   wireBack(view);
   hydrateCovers(view);
+  $('#gr-edit', view).addEventListener('click', () => sheet({
+    title: 'Goodreads puanı',
+    body: `<a class="btn block" href="${goodreadsUrl(b)}" target="_blank" rel="noopener" style="margin-bottom:14px">📗 Goodreads'te aç</a>
+      <p class="muted small">Goodreads'te kitabın puanına bakıp buraya yaz, sonra uygulamaya dön.</p>
+      <div class="form-group"><div class="field inline"><label for="gr-v">Puan (0–5)</label><input id="gr-v" type="number" inputmode="decimal" step="0.01" min="0" max="5" placeholder="4,21" value="${b.goodreads ?? ''}"></div>
+      <div class="field inline"><label for="gr-c">Oy sayısı</label><input id="gr-c" type="number" inputmode="numeric" min="0" placeholder="isteğe bağlı" value="${b.goodreadsVotes ?? ''}"></div></div>`,
+    foot: '<button class="btn" data-close>Vazgeç</button><button class="btn primary" id="gr-save">Kaydet</button>',
+    onMount: (el, close) => $('#gr-save', el).addEventListener('click', async () => {
+      const raw = $('#gr-v', el).value.trim().replace(',', '.');
+      const v = raw === '' ? null : Number(raw);
+      if (v !== null && (isNaN(v) || v < 0 || v > 5)) { toast('Puan 0 ile 5 arasında olmalı'); return; }
+      const c = $('#gr-c', el).value.trim();
+      b.goodreads = v; b.goodreadsVotes = c === '' ? null : Number(c);
+      close(); await saveBook(b); toast('⭐ Goodreads puanı kaydedildi');
+    }),
+  }));
   fillFileSection(view, b);
   $$('[data-st]', view).forEach(c => c.addEventListener('click', async () => {
     if (b.status === c.dataset.st) return;

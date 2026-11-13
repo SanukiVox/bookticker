@@ -14,7 +14,7 @@ const SCOPES = [
 
 const emptyFilters = () => ({
   status: [], genre: [], translation: [], publisher: [], confidence: [], tags: [], noWarnings: [],
-  spicyMin: '', spicyMax: '', scoreMin: '', favorite: false, cover: '',
+  spicyMin: '', spicyMax: '', scoreMin: '', grMin: '', favorite: false, cover: '',
 });
 
 const S = {
@@ -38,7 +38,7 @@ function fieldsFor(b, scope) {
 function activeCount(f) {
   let n = 0;
   for (const k of ['status', 'genre', 'translation', 'publisher', 'confidence', 'tags', 'noWarnings']) n += f[k].length;
-  for (const k of ['spicyMin', 'spicyMax', 'scoreMin', 'cover']) if (f[k] !== '') n++;
+  for (const k of ['spicyMin', 'spicyMax', 'scoreMin', 'grMin', 'cover']) if (f[k] !== '') n++;
   if (f.favorite) n++;
   return n;
 }
@@ -60,6 +60,8 @@ export function applyFilters(books, f, q = '', scope = 'all') {
     if (f.noWarnings.length && f.noWarnings.some(t => (b.warnings || []).includes(t))) return false;
     if (f.spicyMin !== '' && (b.spicy ?? -1) < Number(f.spicyMin)) return false;
     if (f.spicyMax !== '' && (b.spicy === null || b.spicy === undefined || b.spicy > Number(f.spicyMax))) return false;
+    if (f.grMin === 'none') { if (b.goodreads) return false; }
+    else if (f.grMin !== '' && (b.goodreads ?? -1) < Number(f.grMin)) return false;
     if (f.scoreMin !== '') { const s = computeScore(b); if (s === null || s < Number(f.scoreMin)) return false; }
     if (f.favorite && !b.favorite) return false;
     if (f.cover === 'yes' && !(b.coverTr || b.coverOrig)) return false;
@@ -106,6 +108,7 @@ function renderFilterBar(view) {
   if (S.f.spicyMin !== '') pills.push(['spicyMin', '', `Spicy ≥ ${S.f.spicyMin}`]);
   if (S.f.spicyMax !== '') pills.push(['spicyMax', '', `Spicy ≤ ${S.f.spicyMax}`]);
   if (S.f.scoreMin !== '') pills.push(['scoreMin', '', `Uyum ≥ ${S.f.scoreMin}`]);
+  if (S.f.grMin !== '') pills.push(['grMin', '', S.f.grMin === 'none' ? 'Goodreads puanı yok' : `Goodreads ≥ ${S.f.grMin}`]);
   if (S.f.favorite) pills.push(['favorite', '', '❤️ Favori']);
   if (S.f.cover) pills.push(['cover', '', S.f.cover === 'yes' ? 'Kapaklı' : 'Kapaksız']);
 
@@ -176,6 +179,7 @@ function openFilterSheet(view) {
     ${multi('translation', 'Türkçe çeviri')}
     <div class="f-block"><h3>Spicy (0–5)</h3><div class="range-row">En az ${num('spicyMin', 0, 5)} En çok ${num('spicyMax', 0, 5)}</div></div>
     <div class="f-block"><h3>Genel uyum puanı</h3><div class="range-row">En az ${num('scoreMin', 1, 5, 0.5)}</div></div>
+    <div class="f-block"><h3>Goodreads puanı</h3><div class="range-row"><select data-num="grMin"><option value="">Farketmez</option>${['3.5', '3.75', '4', '4.25', '4.5'].map(v => `<option value="${v}" ${f.grMin === v ? 'selected' : ''}>En az ${v.replace('.', ',')}</option>`).join('')}<option value="none" ${f.grMin === 'none' ? 'selected' : ''}>Puanı girilmemiş</option></select></div></div>
     ${multi('publisher', 'Yayınevi')}
     ${multi('confidence', 'Güven')}
     ${multi('tags', 'Etiketler')}

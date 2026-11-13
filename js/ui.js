@@ -93,7 +93,7 @@ export function bookRow(b, { sub } = {}) {
   return `<a class="row" href="#/book/${enc(b.id)}">${coverHTML(b, { badge: false })}
     <div class="body"><div class="t">${b.favorite ? '❤️ ' : ''}${esc(displayTitle(b))}</div><div class="s">${esc(subline)}</div>
     <div class="s">${st.emoji} ${esc(st.name)}${typeof b.progress?.percent === 'number' && b.status === 'Okunuyor' ? ` · %${Math.floor(b.progress.percent)}` : ''}${b.file ? ' · 📄' : ''}</div></div>
-    <div class="end">${s !== null ? `<span class="score">${s.toFixed(1)}</span>` : ''}</div></a>`;
+    <div class="end">${s !== null ? `<span class="score">${s.toFixed(1)}</span>` : ''}${b.goodreads ? `<div class="small" style="margin-top:4px">★ ${b.goodreads.toFixed(2).replace('.', ',')}</div>` : ''}</div></a>`;
 }
 
 export function booksView(books, view) {

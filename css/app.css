@@ -147,6 +147,8 @@ html, body { overflow-x: hidden; }
 .tip { display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-bottom: 14px; border-radius: 14px; background: var(--accent-soft); color: var(--text); }
 .tip .x { margin-left: auto; border: 0; background: none; color: var(--text-3); font-size: 18px; padding: 4px; }
 .tip b { color: var(--accent); }
+.gr-row { display: flex; align-items: center; gap: 12px; }
+.gr-badge { width: 34px; height: 34px; flex: 0 0 34px; border-radius: 8px; background: #e9e5cd; color: #382110; display: flex; align-items: center; justify-content: center; font: 700 20px/1 Georgia, serif; }
 .empty { text-align: center; padding: 48px 16px; color: var(--text-2); }
 .empty .big { font-size: 46px; margin-bottom: 8px; }
 .empty h2 { color: var(--text); margin-bottom: 6px; }
