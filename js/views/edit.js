@@ -22,10 +22,10 @@ export async function shrinkImage(file, maxH = 900) {
 
 // 1–5 (spicy 0–5) ve ½: önce tam sayıyı seç, ½ ile yarım ekle (4 → 4,5)
 const hasVal = v => v !== null && v !== '' && v !== undefined;
-const scoreRow = (key, label, val, min = 1) => `
+const scoreRow = (key, label, val, min = 1, half = true) => `
   <div class="field"><span class="lbl">${label} <b class="rate-val" data-val="${key}">${hasVal(val) ? fmtScore(val) : ''}</b></span>
     <div class="rating" data-rate="${key}" data-min="${min}">${Array.from({ length: 6 - min }, (_, i) => i + min).map(n => `<button type="button" class="${hasVal(val) && Math.floor(Number(val)) === n ? 'on' : ''}" data-n="${n}">${n}</button>`).join('')}
-    <button type="button" class="half ${hasVal(val) && Number(val) % 1 ? 'on' : ''}" data-half aria-label="Yarım puan">½</button>
+    ${half ? `<button type="button" class="half ${hasVal(val) && Number(val) % 1 ? 'on' : ''}" data-half aria-label="Yarım puan">½</button>` : ''}
     <button type="button" class="clear" data-n="" aria-label="Temizle">✕</button></div></div>`;
 
 export async function renderEdit(view, [id], query) {
@@ -96,7 +96,7 @@ export async function renderEdit(view, [id], query) {
       <div class="form-group-title">Puanlar (1–5) · Genel uyum: <b id="live-score">${computeScore(b)?.toFixed(1) ?? '—'}</b></div>
       <div class="form-group">
         ${CRITERIA.map(c => scoreRow(c.key, c.label, b.scores[c.key])).join('')}
-        ${scoreRow('spicy', 'Spicy / +18 (0–5)', b.spicy, 0)}
+        ${scoreRow('spicy', 'Spicy / +18 (0–5)', b.spicy, 0, false)}
         <div class="small muted" id="spicy-hint" style="padding:0 14px 10px">${b.spicy !== null && b.spicy !== undefined ? esc(SPICY_LABELS[Math.floor(b.spicy)]) : ''}</div>
         <div class="field inline"><label for="f-goodreads">⭐ Goodreads puanı</label><input id="f-goodreads" data-field="goodreads" type="number" inputmode="decimal" min="0" max="5" step="0.01" placeholder="örn. 4,21" value="${b.goodreads ?? ''}"></div>
         <div class="field inline"><label for="f-goodreadsVotes">Goodreads oy sayısı</label><input id="f-goodreadsVotes" data-field="goodreadsVotes" type="number" inputmode="numeric" min="0" placeholder="isteğe bağlı" value="${b.goodreadsVotes ?? ''}"></div>
@@ -161,13 +161,13 @@ export async function renderEdit(view, [id], query) {
     } else {
       n = btn.dataset.n === '' ? null : Number(btn.dataset.n);
       // Tam sayıya basınca varsa yarımı koru (3,5 iken 4'e basınca 4,5)
-      if (n !== null && hasVal(cur) && Number(cur) % 1 && n < 5) n += 0.5;
+      if (n !== null && hasVal(cur) && Number(cur) % 1 && n < 5 && key !== 'spicy') n += 0.5;
     }
     if (key === 'spicy') { b.spicy = n; $('#spicy-hint', form).textContent = n === null ? '' : SPICY_LABELS[Math.floor(n)]; }
     else if (key === 'myRating') b.myRating = n;
     else { if (n === null) delete b.scores[key]; else b.scores[key] = n; }
     $$('button[data-n]', row).forEach(x => x.classList.toggle('on', x.dataset.n !== '' && n !== null && Math.floor(n) === Number(x.dataset.n)));
-    $('button[data-half]', row).classList.toggle('on', n !== null && n % 1 !== 0);
+    $('button[data-half]', row)?.classList.toggle('on', n !== null && n % 1 !== 0);
     $(`[data-val="${key}"]`, form).textContent = n === null ? '' : fmtScore(n);
     $('#live-score', view).textContent = computeScore(b)?.toFixed(1) ?? '—';
     dirty = true;
