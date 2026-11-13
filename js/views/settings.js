@@ -6,7 +6,7 @@ import { backButton, wireBack } from './detail.js';
 import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 
-export const APP_VERSION = '1.3.1';
+export const APP_VERSION = '1.4.0';
 
 export async function renderSettings(view) {
   const s = state.settings;
@@ -57,9 +57,17 @@ export async function renderSettings(view) {
     </div>
 
     <div class="form-group"><button class="set-row" id="wipe" style="width:100%;border:0;background:none;color:var(--danger)">Tüm verileri sil</button></div>
-    <p class="muted small" style="text-align:center">Kitaplığım ${APP_VERSION} · ${state.books.length} kitap</p>`;
+    <p class="muted small" style="text-align:center">Kitaplığım ${APP_VERSION} · ${state.books.length} kitap<br><button class="mini-btn" id="check-upd" style="margin-top:8px">🔄 Güncellemeleri denetle</button></p>`;
 
   wireGithub(view);
+  $('#check-upd', view)?.addEventListener('click', async () => {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    if (!reg) { toast('Güncelleme denetlenemedi'); return; }
+    toast('Denetleniyor…');
+    try { await reg.update(); } catch { toast('İnternet bağlantısı gerekiyor'); return; }
+    if (reg.installing || reg.waiting) toast('Yeni sürüm yükleniyor, uygulama birazdan yenilenecek…');
+    else toast(`En güncel sürümdesin (${APP_VERSION})`);
+  });
   $('#autofill', view).addEventListener('click', async () => (await import('./autofill.js')).openAutofill());
   $('#theme', view).addEventListener('change', async e => { s.theme = e.target.value; applyTheme(); await saveSettings(); });
   $('#viewmode', view).addEventListener('change', async e => { s.view = e.target.value; await saveSettings(); });

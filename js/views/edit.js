@@ -2,6 +2,7 @@
 import { state, getBook, newBook, saveBook, deleteBook, CRITERIA, SPICY_LABELS, OPTION_LISTS, computeScore, authors, seriesList, norm, displayTitle, saveOptions } from '../store.js';
 import { db } from '../db.js';
 import { candidates, summaryCandidates, isUrl, imageOk } from '../lookup.js';
+import { cropImage } from './cropper.js';
 import { esc, enc, coverHTML, forgetCover, toast, confirmSheet, promptSheet, sheet, $, $$ } from '../ui.js';
 
 // Fotoğrafı küçültüp JPEG'e çevir (telefonda yer kaplamasın).
@@ -56,8 +57,7 @@ export async function renderEdit(view, [id], query) {
   const coverSlot = (which, label) => `
     <div class="slot" data-slot="${which}"><div class="cover-holder">${coverHTML(b, { key: which === 'tr' ? b.coverTr : b.coverOrig, badge: false })}</div>
       <div class="small muted" style="margin-bottom:6px">${label}</div>
-      <div class="btn-row"><label class="mini-btn" style="position:relative;overflow:hidden">📷 Seç<input type="file" accept="image/*" data-pick="${which}" style="position:absolute;inset:0;opacity:0"></label>
-      <button type="button" class="mini-btn" data-find="${which}">🔍 Bul</button>
+      <div class="btn-row"><button type="button" class="mini-btn" data-add="${which}">＋ Kapak</button>
       <button type="button" class="mini-btn" data-rmcover="${which}" style="color:var(--danger);background:transparent">Kaldır</button></div></div>`;
 
   view.innerHTML = `
@@ -220,20 +220,89 @@ export async function renderEdit(view, [id], query) {
     if (b.seriesOrder === null || b.seriesOrder === undefined) { b.seriesOrder = Math.max(0, ...sib.map(x => Number(x.seriesOrder) || 0)) + 1; $('#f-seriesOrder', form).value = b.seriesOrder; }
   }
 
-  // Kapak seçme / kaldırma
-  $$('[data-pick]', form).forEach(inp => inp.addEventListener('change', async () => {
-    const file = inp.files?.[0];
-    if (!file) return;
-    const which = inp.dataset.pick;
-    try {
-      const blob = await shrinkImage(file);
-      if (covers[which].url) URL.revokeObjectURL(covers[which].url);
-      covers[which] = { blob, url: URL.createObjectURL(blob) };
-      $(`[data-slot="${which}"] .cover-holder`, form).innerHTML = `<div class="cover"><img src="${covers[which].url}" alt=""></div>`;
-      dirty = true;
-    } catch (err) { toast(err.message); }
-    inp.value = '';
-  }));
+  // Kapak ekleme menüsü
+  const setCover = (which, c) => {
+    if (covers[which].url?.startsWith('blob:')) URL.revokeObjectURL(covers[which].url);
+    covers[which] = c;
+    $(`[data-slot="${which}"] .cover-holder`, form).innerHTML = `<div class="cover"><img src="${esc(c.url)}" alt=""></div>`;
+    dirty = true;
+  };
+  const useBlob = async (which, raw, crop = true) => {
+    const cropped = crop ? await cropImage(raw) : raw;
+    if (!cropped) return;
+    const blob = crop ? cropped : await shrinkImage(cropped);
+    setCover(which, { blob, url: URL.createObjectURL(blob) });
+  };
+  const currentBlob = async which => {
+    const c = covers[which];
+    if (c.blob) return c.blob;
+    if (c.blob === null) return null;
+    const key = which === 'tr' ? b.coverTr : b.coverOrig;
+    return key && !isUrl(key) ? db.getCover(key) : null;
+  };
+  $$('[data-add]', form).forEach(btn => btn.addEventListener('click', () => openAddCover(btn.dataset.add)));
+
+  function openAddCover(which) {
+    const tr = which === 'tr';
+    const name = tr ? (b.title || b.originalTitle) : (b.originalTitle || b.title);
+    const q = encodeURIComponent(`${name} ${b.author || ''} ${tr ? 'kitap kapağı' : 'book cover'}`.trim());
+    const shop = tr
+      ? ['🛒 Kitapyurdu\'nda ara', `https://www.kitapyurdu.com/index.php?route=product/search&filter_name=${encodeURIComponent(name)}`]
+      : ['📗 Goodreads\'te ara', `https://www.goodreads.com/search?q=${encodeURIComponent(`${name} ${b.author || ''}`.trim())}`];
+    sheet({
+      title: tr ? 'Türkçe kapak ekle' : 'Orijinal kapak ekle',
+      body: `<div class="list">
+          <button class="row" data-act="find" style="width:100%;border:0;background:none;text-align:left"><div class="body"><div class="t">🔍 Otomatik bul</div><div class="s">Google Books ve Open Library'de ara, seç</div></div><span class="chev"></span></button>
+          <a class="row" href="https://www.google.com/search?tbm=isch&q=${q}" target="_blank" rel="noopener"><div class="body"><div class="t">🌐 Google Görseller'de ara</div><div class="s">Safari'de açılır</div></div><span class="chev"></span></a>
+          <a class="row" href="${shop[1]}" target="_blank" rel="noopener"><div class="body"><div class="t">${shop[0]}</div><div class="s">Safari'de açılır</div></div><span class="chev"></span></a>
+          <button class="row" data-act="paste" style="width:100%;border:0;background:none;text-align:left"><div class="body"><div class="t">📋 Kopyaladığım görseli yapıştır</div><div class="s">Kırparak eklenir</div></div><span class="chev"></span></button>
+          <label class="row" style="position:relative"><div class="body"><div class="t">📷 Fotoğraflardan seç / çek</div><div class="s">Kırparak eklenir</div></div><span class="chev"></span><input type="file" accept="image/*" id="ac-file" style="position:absolute;inset:0;opacity:0"></label>
+          <button class="row hidden" data-act="crop" style="width:100%;border:0;background:none;text-align:left"><div class="body"><div class="t">✂️ Mevcut kapağı kırp</div></div><span class="chev"></span></button>
+        </div>
+        <div class="paste-box" id="ac-pastebox" contenteditable="true" inputmode="none" aria-label="Görseli buraya yapıştır">Yapıştır çalışmazsa buraya uzun basıp <b>Yapıştır</b>'a dokun</div>
+        <p class="muted small"><b>Google'dan eklemek için:</b> Google Görseller'de istediğin kapağa dokun, büyük hâline <b>uzun bas → Kopyala</b>. Sonra uygulamaya dönüp <b>📋 Kopyaladığım görseli yapıştır</b>'a dokun.</p>`,
+      onMount: (el, close) => {
+        currentBlob(which).then(bl => { if (bl) $('[data-act="crop"]', el).classList.remove('hidden'); });
+        $('[data-act="find"]', el).addEventListener('click', () => {
+          close();
+          findCover(b, which, async url => {
+            const blob = await fetchAsBlob(url);
+            setCover(which, blob ? { blob, url: URL.createObjectURL(blob) } : { blob: null, remote: url, url });
+          });
+        });
+        $('[data-act="crop"]', el).addEventListener('click', async () => {
+          const bl = await currentBlob(which);
+          close();
+          if (bl) await useBlob(which, bl);
+        });
+        $('#ac-file', el).addEventListener('change', async e => {
+          const f = e.target.files?.[0];
+          if (!f) return;
+          close();
+          await useBlob(which, f);
+        });
+        const fromPaste = async img => { close(); await useBlob(which, img); };
+        $('[data-act="paste"]', el).addEventListener('click', async () => {
+          try {
+            const img = await readClipboardImage();
+            if (img) return fromPaste(img);
+            toast('Panoda görsel yok. Önce görsele uzun basıp Kopyala de.');
+          } catch {
+            toast('Yapıştırma izni verilmedi. Aşağıdaki kutuya uzun basıp Yapıştır\'ı dene.');
+            $('#ac-pastebox', el).focus();
+          }
+        });
+        $('#ac-pastebox', el).addEventListener('paste', async e => {
+          e.preventDefault();
+          const item = [...(e.clipboardData?.items || [])].find(i => i.type.startsWith('image/'));
+          const file = item?.getAsFile();
+          if (file) return fromPaste(file);
+          toast('Panoda görsel yok. Önce görsele uzun basıp Kopyala de.');
+        });
+      },
+    });
+  }
+
   $$('[data-rmcover]', form).forEach(btn => btn.addEventListener('click', () => {
     const which = btn.dataset.rmcover;
     covers[which] = { blob: null, url: null };
@@ -251,17 +320,6 @@ export async function renderEdit(view, [id], query) {
     });
   }
 
-  // İnternetten kapak bul
-  $$('[data-find]', form).forEach(btn => btn.addEventListener('click', () => {
-    const which = btn.dataset.find;
-    findCover(b, which, async url => {
-      const blob = await fetchAsBlob(url);
-      if (covers[which].url?.startsWith('blob:')) URL.revokeObjectURL(covers[which].url);
-      covers[which] = blob ? { blob, url: URL.createObjectURL(blob) } : { blob: null, remote: url, url };
-      $(`[data-slot="${which}"] .cover-holder`, form).innerHTML = `<div class="cover"><img src="${esc(covers[which].url)}" alt=""></div>`;
-      dirty = true;
-    });
-  }));
   $('#find-summary', form).addEventListener('click', () => findSummary(b, text => {
     b.summary = text; $('#f-summary', form).value = text; dirty = true;
   }));
@@ -296,7 +354,7 @@ export async function renderEdit(view, [id], query) {
     location.replace('#/');
   });
 
-  if (query.get('find')) setTimeout(() => $(`[data-find="${query.get('find')}"]`, form)?.click(), 100);
+  if (query.get('find')) setTimeout(() => openAddCover(query.get('find') === 'orig' ? 'orig' : 'tr'), 100);
   else if (query.get('focus') === 'notes') setTimeout(() => $('#f-notes', form).scrollIntoView({ block: 'center' }), 50);
   else if (isNew) setTimeout(() => $('#f-title', form).focus(), 50);
 }
@@ -363,4 +421,15 @@ function findSummary(book, onPick) {
       box.querySelectorAll('[data-i]').forEach(c => c.addEventListener('click', () => { onPick(list[Number(c.dataset.i)].description); close(); }));
     },
   });
+}
+
+// Panodaki görseli oku (iPhone'da "Yapıştır" onayı çıkar).
+async function readClipboardImage() {
+  if (!navigator.clipboard?.read) throw new Error('desteklenmiyor');
+  const items = await navigator.clipboard.read();
+  for (const it of items) {
+    const type = it.types.find(t => t.startsWith('image/'));
+    if (type) return it.getType(type);
+  }
+  return null;
 }

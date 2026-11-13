@@ -93,7 +93,17 @@ async function start() {
     remoteChanged().then(changed => { if (changed) toast('☁️ GitHub\'da daha yeni veri var · Ayarlar → GitHub\'dan çek'); }).catch(() => {});
   }
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    // Yeni sürüm yayınlanınca uygulama kendini bir kez yeniler (eski sürümde takılı kalmaz).
+    const hadController = !!navigator.serviceWorker.controller;
+    let reloading = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController || reloading || parse().path.startsWith('/edit/') || parse().path.startsWith('/read/')) return;
+      reloading = true;
+      location.reload();
+    });
+    navigator.serviceWorker.register('sw.js').then(reg => {
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+    }).catch(() => {});
   }
 }
 

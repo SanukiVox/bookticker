@@ -1,6 +1,6 @@
 // Çevrimdışı çalışma: uygulama dosyalarını telefona önbelleğe al.
 // Yeni sürüm yayınlarken VERSION değerini artır.
-const VERSION = 'v1.3.1';
+const VERSION = 'v1.4.0';
 const IMG_CACHE = 'kitapligim-kapaklar';
 const CACHE = `kitapligim-${VERSION}`;
 const FILES = [
@@ -8,7 +8,7 @@ const FILES = [
   'js/app.js', 'js/db.js', 'js/store.js', 'js/ui.js', 'js/io.js', 'js/sync.js', 'js/lookup.js',
   'js/views/library.js', 'js/views/search.js', 'js/views/detail.js', 'js/views/edit.js',
   'js/views/group.js', 'js/views/reading.js', 'js/views/settings.js', 'js/views/github.js', 'js/views/autofill.js',
-  'js/files.js', 'js/views/reader.js', 'js/views/bookfile.js',
+  'js/files.js', 'js/views/reader.js', 'js/views/bookfile.js', 'js/views/cropper.js',
   'vendor/xlsx.full.min.js', 'vendor/jszip.min.js', 'vendor/epub.min.js',
   'vendor/pdfjs/pdf.min.mjs', 'vendor/pdfjs/pdf.worker.min.mjs',
   ...['FoxitDingbats.pfb', 'FoxitFixed.pfb', 'FoxitFixedBold.pfb', 'FoxitFixedBoldItalic.pfb', 'FoxitFixedItalic.pfb',
