@@ -1,7 +1,8 @@
 // Uygulamanın giriş noktası: yönlendirme, tema, çevrimdışı çalışma.
 import { load, state, onChange } from './store.js';
 import { requestPersistence } from './db.js';
-import { $, $$, applyTheme } from './ui.js';
+import { $, $$, applyTheme, toast } from './ui.js';
+import { loadSync, startAutoSync, onSyncChange, onAutoPush, isConfigured, remoteChanged, sync } from './sync.js';
 import { renderLibrary } from './views/library.js';
 import { renderSearch } from './views/search.js';
 import { renderDetail } from './views/detail.js';
@@ -64,12 +65,23 @@ onChange(() => {
   });
 });
 
+// Eşitleme durumu değişince Ayarlar ekranını yenile.
+onSyncChange(() => {
+  if (parse().path === '/settings') { const y = window.scrollY; route().then(() => window.scrollTo(0, y)); }
+});
+
 async function start() {
-  await load();
+  await Promise.all([load(), loadSync()]);
   applyTheme();
   window.addEventListener('hashchange', route);
   await route();
   requestPersistence();
+  startAutoSync();
+  onAutoPush(err => toast(err ? `☁️ GitHub'a gönderilemedi: ${err.message}` : '☁️ GitHub\'a kaydedildi'));
+  // Başka bir cihazdan GitHub'a daha yeni veri gönderildiyse haber ver.
+  if (isConfigured() && navigator.onLine && !sync.cfg.dirty) {
+    remoteChanged().then(changed => { if (changed) toast('☁️ GitHub\'da daha yeni veri var · Ayarlar → GitHub\'dan çek'); }).catch(() => {});
+  }
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }

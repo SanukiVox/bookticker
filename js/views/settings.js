@@ -4,8 +4,9 @@ import { db } from '../db.js';
 import { esc, toast, sheet, confirmSheet, promptSheet, $, $$ } from '../ui.js';
 import { backButton, wireBack } from './detail.js';
 import { applyTheme } from '../ui.js';
+import { githubSection, wireGithub } from './github.js';
 
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 
 export async function renderSettings(view) {
   const s = state.settings;
@@ -21,6 +22,8 @@ export async function renderSettings(view) {
   view.innerHTML = `
     <div class="page-head"><h1>Ayarlar</h1></div>
     ${!standalone ? `<div class="warn">📲 <span>Uygulama gibi kullanmak için Safari'de <b>Paylaş</b> düğmesine, sonra <b>Ana Ekrana Ekle</b>'ye dokun.</span></div>` : ''}
+
+    ${githubSection()}
 
     <div class="form-group-title">Seçenek listelerim</div>
     <div class="form-group">${Object.entries(OPTION_LISTS).map(([k, d]) => `<a class="set-row" href="#/options/${k}"><span>${d.label}</span><span class="muted small" style="margin-left:auto">${state.options[k].length}</span><span class="chev"></span></a>`).join('')}</div>
@@ -50,6 +53,7 @@ export async function renderSettings(view) {
     <div class="form-group"><button class="set-row" id="wipe" style="width:100%;border:0;background:none;color:var(--danger)">Tüm verileri sil</button></div>
     <p class="muted small" style="text-align:center">Kitaplığım ${APP_VERSION} · ${state.books.length} kitap</p>`;
 
+  wireGithub(view);
   $('#theme', view).addEventListener('change', async e => { s.theme = e.target.value; applyTheme(); await saveSettings(); });
   $('#viewmode', view).addEventListener('change', async e => { s.view = e.target.value; await saveSettings(); });
   $('#goal', view).addEventListener('change', async e => { s.yearlyGoal = Number(e.target.value) || 0; await saveSettings(); toast('Hedef kaydedildi'); });

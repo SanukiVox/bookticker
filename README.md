@@ -24,6 +24,16 @@ Bütün veriler (kitaplar, kapaklar, notlar) **sadece telefonunda** saklanır.
 > ⚠️ Uygulamayı her zaman ana ekrandaki ikondan aç. Safari sekmesindeki kopya ayrı bir depolama kullanır.
 > Ara sıra **Ayarlar → Yedek al** ile yedeği iCloud Drive'a kaydetmeni öneririm.
 
+## GitHub eşitleme (gizli veri deposu)
+
+Veriler isteğe bağlı olarak **gizli** bir GitHub deposuna da kaydedilir (`kitapligim.json` + `covers/`).
+Her değişiklikten birkaç saniye sonra otomatik gönderilir; internet yoksa bekler, gelince gönderir.
+**Ayarlar → GitHub'dan çek** ile veriler telefona geri alınır. Başka bir yerden daha yeni veri
+gönderilmişse uygulama üzerine yazmadan önce sorar.
+
+Kurulum: gizli bir depo oluştur (ör. `bookticker-data`), yalnızca o depoya **Contents: Read and write**
+izni olan bir *fine-grained* erişim anahtarı oluştur, **Ayarlar → GitHub'a bağlan** ekranına gir.
+
 ## Yayınlama (GitHub Pages)
 
 1. GitHub'da depo → **Settings → General → Danger Zone → Change visibility → Public**

@@ -1,12 +1,12 @@
 // Çevrimdışı çalışma: uygulama dosyalarını telefona önbelleğe al.
 // Yeni sürüm yayınlarken VERSION değerini artır.
-const VERSION = 'v1.0.0';
+const VERSION = 'v1.1.0';
 const CACHE = `kitapligim-${VERSION}`;
 const FILES = [
   './', 'index.html', 'manifest.webmanifest', 'css/app.css',
-  'js/app.js', 'js/db.js', 'js/store.js', 'js/ui.js', 'js/io.js',
+  'js/app.js', 'js/db.js', 'js/store.js', 'js/ui.js', 'js/io.js', 'js/sync.js',
   'js/views/library.js', 'js/views/search.js', 'js/views/detail.js', 'js/views/edit.js',
-  'js/views/group.js', 'js/views/reading.js', 'js/views/settings.js',
+  'js/views/group.js', 'js/views/reading.js', 'js/views/settings.js', 'js/views/github.js',
   'vendor/xlsx.full.min.js',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png',
 ];
