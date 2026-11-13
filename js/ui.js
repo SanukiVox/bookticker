@@ -179,3 +179,17 @@ export function applyTheme() {
   const dark = t === 'dark' || (t === 'auto' && matchMedia('(prefers-color-scheme: dark)').matches);
   $$('meta[name="theme-color"]').forEach(m => m.setAttribute('content', dark ? '#16131a' : '#f7f3ee'));
 }
+
+// 📏 Puanlama rehberi (DEGERLENDIRME_SISTEMI.md ile aynı içerik)
+export async function openGuide() {
+  const { CRITERIA, SPICY_LABELS, GUIDE_FIT } = await import('./store.js');
+  sheet({
+    title: 'Puanlama rehberi',
+    body: `<p class="muted small">Her kriter 1–5 (buçuklu verilebilir) ve birbirinden bağımsızdır.</p>
+      ${CRITERIA.map((c, i) => `<div class="section" style="margin-bottom:10px"><b>${i + 1}. ${esc(c.title || c.label)}</b><div class="small muted" style="margin-top:4px">${esc(c.desc || '')}</div></div>`).join('')}
+      <div class="section" style="margin-bottom:10px"><b>🌶️ Spicy / +18 (0–5)</b>
+        <div class="small muted" style="margin:4px 0 6px">Sadece açık yetişkin içeriğin yoğunluğunu ölçer; ilişkinin kalitesini ya da kitabın başarısını göstermez.</div>
+        ${SPICY_LABELS.map((l, i) => `<div class="small"><b>${i}</b> — ${esc(l)}</div>`).join('')}</div>
+      <div class="section"><b>Genel okuyucu uyumu</b><div class="small muted" style="margin-top:4px">${esc(GUIDE_FIT)}</div></div>`,
+  });
+}

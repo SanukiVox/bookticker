@@ -53,6 +53,19 @@ function matchColumn(header) {
   if (!h) return null;
   const exact = COLUMNS.find(([, l]) => norm(l) === h);
   if (exact) return exact[0];
+  // Değerlendirme sistemindeki ve dış kaynaklardaki başlık adları
+  const ALIAS = {
+    'kimya': 'score:chemistry', 'romantik kimya': 'score:chemistry',
+    'erkek': 'score:male', 'kadin': 'score:female',
+    'evren': 'score:world', 'fantastik dunya ve evren': 'score:world', 'fantastik dunya evren': 'score:world',
+    'aksiyon ve olay orgusu': 'score:action', 'aksiyon olay orgusu': 'score:action',
+    'romantizm yogunlugu': 'score:romance',
+    'edebiyat': 'score:literary', 'edebi derinlik': 'score:literary',
+    'akicilik': 'score:pace', 'okunabilirlik': 'score:pace', 'surukleyicilik ve okunabilirlik': 'score:pace',
+    'spice': 'spicy', 'goodreads': 'goodreads',
+  };
+  const hc = h.replace(/\s*\(.*?\)\s*/g, ' ').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (ALIAS[hc]) return ALIAS[hc];
   if (h.startsWith('orijinal')) return 'originalTitle';
   if (h.startsWith('spicy')) return 'spicy';
   if (h.includes('yayinevi')) return 'publisher';

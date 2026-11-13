@@ -4,7 +4,7 @@ import { state, getBook, newBook, saveBook, deleteBook, CRITERIA, SPICY_LABELS, 
 import { db } from '../db.js';
 import { candidates, summaryCandidates, isUrl, imageOk } from '../lookup.js';
 import { cropImage } from './cropper.js';
-import { esc, enc, coverHTML, forgetCover, toast, confirmSheet, promptSheet, sheet, $, $$, fmtScore } from '../ui.js';
+import { esc, enc, coverHTML, forgetCover, toast, confirmSheet, promptSheet, sheet, $, $$, fmtScore, openGuide } from '../ui.js';
 
 // Fotoğrafı küçültüp JPEG'e çevir (telefonda yer kaplamasın).
 export async function shrinkImage(file, maxH = 900) {
@@ -93,9 +93,9 @@ export async function renderEdit(view, [id], query) {
         <div class="field inline"><label>❤️ Favori</label><span class="toggle"><input type="checkbox" id="f-favorite" ${b.favorite ? 'checked' : ''}><span></span></span></div>
       </div>
 
-      <div class="form-group-title">Puanlar (1–5) · Genel uyum: <b id="live-score">${computeScore(b)?.toFixed(1) ?? '—'}</b></div>
+      <div class="form-group-title" style="display:flex;align-items:center;gap:8px"><span style="flex:1">Puanlar (1–5) · Genel uyum: <b id="live-score">${computeScore(b)?.toFixed(1) ?? '—'}</b></span><button type="button" class="mini-btn" id="open-guide">📏 Rehber</button></div>
       <div class="form-group">
-        ${CRITERIA.map(c => scoreRow(c.key, c.label, b.scores[c.key])).join('')}
+        ${CRITERIA.map(c => scoreRow(c.key, c.title || c.label, b.scores[c.key])).join('')}
         ${scoreRow('spicy', 'Spicy / +18 (0–5)', b.spicy, 0, false)}
         <div class="small muted" id="spicy-hint" style="padding:0 14px 10px">${b.spicy !== null && b.spicy !== undefined ? esc(SPICY_LABELS[Math.floor(b.spicy)]) : ''}</div>
         <div class="field inline"><label for="f-goodreads">⭐ Goodreads puanı</label><input id="f-goodreads" data-field="goodreads" type="number" inputmode="decimal" min="0" max="5" step="0.01" placeholder="örn. 4,21" value="${b.goodreads ?? ''}"></div>
@@ -147,6 +147,7 @@ export async function renderEdit(view, [id], query) {
   }
 
   // Puan butonları
+  $('#open-guide', form).addEventListener('click', () => openGuide());
   $$('[data-rate]', form).forEach(row => row.addEventListener('click', e => {
     const btn = e.target.closest('button[data-n], button[data-half]');
     if (!btn) return;

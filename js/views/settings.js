@@ -6,7 +6,7 @@ import { backButton, wireBack } from './detail.js';
 import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 
-export const APP_VERSION = '1.13.3';
+export const APP_VERSION = '1.14.0';
 
 export async function renderSettings(view) {
   const s = state.settings;
@@ -27,6 +27,8 @@ export async function renderSettings(view) {
 
     <div class="form-group-title">🤖 Asistan (Claude)</div>
     <div class="form-group" id="ai-sec"><div class="set-row muted small">…</div></div>
+
+    <div class="form-group"><button class="set-row" id="guide" style="width:100%;border:0;background:none;text-align:left">📏 Puanlama rehberi<span class="chev"></span></button></div>
 
     <div class="form-group-title">Kapak ve özetler</div>
     <div class="form-group"><button class="set-row" id="autofill" style="width:100%;border:0;background:none;text-align:left">🖼️ Eksik kapak ve özetleri internetten bul<span class="chev"></span></button>
@@ -65,6 +67,7 @@ export async function renderSettings(view) {
     <p class="muted small" style="text-align:center">Kitaplığım ${APP_VERSION} · ${state.books.length} kitap<br><button class="mini-btn" id="check-upd" style="margin-top:8px">🔄 Güncellemeleri denetle</button></p>`;
 
   wireGithub(view);
+  $('#guide', view).addEventListener('click', async () => (await import('../ui.js')).openGuide());
   (await import('./aisettings.js')).fillAiSection(view);
   $('#check-upd', view)?.addEventListener('click', () => checkForUpdate());
   $('#autofill', view).addEventListener('click', async () => (await import('./autofill.js')).openAutofill());

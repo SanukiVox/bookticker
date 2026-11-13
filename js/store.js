@@ -1,25 +1,37 @@
 // Uygulamanın hafızadaki durumu: kitaplar, seçenek listeleri ve ayarlar.
 import { db } from './db.js';
 
+// Değerlendirme sistemi: DEGERLENDIRME_SISTEMI.md. label = Excel sütun adı (değiştirme), title/desc = rehber.
 export const CRITERIA = [
-  { key: 'chemistry', label: 'Romantik kimya', weight: 30 },
-  { key: 'male', label: 'Erkek karakter', weight: 10 },
-  { key: 'female', label: 'Kadın karakter', weight: 10 },
-  { key: 'world', label: 'Fantastik dünya', weight: 5 },
-  { key: 'action', label: 'Aksiyon', weight: 5 },
-  { key: 'romance', label: 'Romantizm', weight: 20 },
-  { key: 'literary', label: 'Edebi derinlik', weight: 5 },
-  { key: 'pace', label: 'Sürükleyicilik', weight: 15 },
+  { key: 'chemistry', label: 'Romantik kimya', title: 'Romantik kimya', weight: 30,
+    desc: 'Ana karakterler arasındaki çekim ve elektrik; duygusal ve fiziksel uyum, ilişkinin doğal gelişimi, karşılıklı etkileşim ve gerilim, okura romantik heyecan hissettirme.' },
+  { key: 'male', label: 'Erkek karakter', title: 'Erkek karakter', weight: 10,
+    desc: 'Kişilik ve özgünlük, karizma ve çekicilik, duygusal derinlik, gelişim ve geçmiş hikâyesi, davranış tutarlılığı, romantik ilişkideki tutumu.' },
+  { key: 'female', label: 'Kadın karakter', title: 'Kadın karakter', weight: 10,
+    desc: 'Karakter derinliği, güçlü ve zayıf yönlerin dengesi, bağımsızlık ve karar verme, gelişim, hikâyeye katkı ve tutarlılık, okurla duygusal bağ.' },
+  { key: 'world', label: 'Fantastik dünya', title: 'Fantastik dünya ve evren', weight: 5,
+    desc: 'Dünya inşası, büyü/güç sistemleri, ırklar ve mitolojik unsurlar, evrenin kuralları ve tutarlılığı, atmosfer ve mekân. Fantastik olmayan kitaplarda: geçtiği dünyanın ve atmosferin inandırıcılığı.' },
+  { key: 'action', label: 'Aksiyon', title: 'Aksiyon ve olay örgüsü', weight: 5,
+    desc: 'Olay örgüsünün tutarlılığı, çatışma ve gerilim, aksiyon sahneleri, beklenmedik gelişmeler, tempo, ana hikâyenin okuru içine çekmesi.' },
+  { key: 'romance', label: 'Romantizm', title: 'Romantizm', weight: 20,
+    desc: 'Romantizmin hikâyedeki ağırlığı, ilişkinin gelişim süreci, duygusal yakınlaşma, aşkın hikâyeye etkisi, romantik sahneler. (Kimya çekimi; romantizm ilişkinin gelişimini ve derinliğini ölçer.)' },
+  { key: 'literary', label: 'Edebi derinlik', title: 'Edebî derinlik', weight: 5,
+    desc: 'Yazım ve anlatım kalitesi, karakterlerin psikolojik derinliği, diyalogların doğallığı, betimlemeler, temaların işlenişi, duygusal ve düşünsel derinlik.' },
+  { key: 'pace', label: 'Sürükleyicilik', title: 'Sürükleyicilik ve okunabilirlik', weight: 15,
+    desc: 'Akıcı anlatım, bölüm uzunluğu ve tempo, gereksiz uzatma olmaması, anlaşılır dil, okuma isteğini canlı tutması, hikâyeye kolay adapte olma.' },
 ];
 
+// Spicy yalnızca açık yetişkin içeriğin yoğunluğunu ölçer; ilişkinin kalitesini göstermez.
 export const SPICY_LABELS = [
-  'Yok: öpüşme dışında cinsel içerik yok',
-  'Hafif: ima var, sahneler kapalı kapılar ardında',
-  'Ilımlı: yakınlaşma var, detay sınırlı',
-  'Spicy: açıkça anlatılan +18 sahneler',
-  'Çok spicy: birden fazla ayrıntılı sahne',
-  'Aşırı spicy: çok sık ve çok açık',
+  'Açık yetişkin sahnesi bulunmaz',
+  'Çok hafif, örtük veya ima edilen yetişkin içerik',
+  'Az sayıda, sınırlı detay içeren açık sahne',
+  'Orta yoğunlukta, belirgin ve detaylı yetişkin sahneler',
+  'Sık karşılaşılan, açık ve detaylı yetişkin sahneler',
+  'Çok yoğun, sık ve oldukça açık yetişkin içerik',
 ];
+
+export const GUIDE_FIT = 'Genel okuyucu uyumu: kitabın bu özellikleriyle beklentiler arasındaki uyum — güçlü romantik ilişki ve kimya, etkileyici ana karakterler, romantizmin yeterli ağırlığı, varsa fantastik dünyanın ve olay örgüsünün başarısı, akıcı anlatım ve tercih edilen yetişkin içerik yoğunluğu. Uygulamada 8 kriterin ağırlıklı ortalaması olarak hesaplanır (spicy hariç).';
 
 // Kullanıcının düzenleyebildiği seçenek listeleri.
 export const OPTION_LISTS = {
