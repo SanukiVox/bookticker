@@ -6,7 +6,7 @@ import { backButton, wireBack } from './detail.js';
 import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 
-export const APP_VERSION = '1.11.1';
+export const APP_VERSION = '1.11.2';
 
 export async function renderSettings(view) {
   const s = state.settings;
@@ -66,14 +66,7 @@ export async function renderSettings(view) {
 
   wireGithub(view);
   (await import('./aisettings.js')).fillAiSection(view);
-  $('#check-upd', view)?.addEventListener('click', async () => {
-    const reg = await navigator.serviceWorker?.getRegistration();
-    if (!reg) { toast('Güncelleme denetlenemedi'); return; }
-    toast('Denetleniyor…');
-    try { await reg.update(); } catch { toast('İnternet bağlantısı gerekiyor'); return; }
-    if (reg.installing || reg.waiting) toast('Yeni sürüm yükleniyor, uygulama birazdan yenilenecek…');
-    else toast(`En güncel sürümdesin (${APP_VERSION})`);
-  });
+  $('#check-upd', view)?.addEventListener('click', () => checkForUpdate());
   $('#autofill', view).addEventListener('click', async () => (await import('./autofill.js')).openAutofill());
   $('#theme', view).addEventListener('change', async e => { s.theme = e.target.value; applyTheme(); await saveSettings(); });
   $('#coverpref', view).addEventListener('change', async e => { s.coverPref = e.target.value; await saveSettings(); toast(e.target.value === 'orig' ? 'Orijinal kapaklar gösterilecek' : 'Türkçe kapaklar gösterilecek'); });
@@ -209,4 +202,32 @@ export async function renderOptions(view, [key]) {
     o.emoji = e.trim();
     await saveOptions(); rerender();
   }));
+}
+
+// Sunucudaki sürümü doğrudan oku; yeniyse güncelle, olmazsa uygulama dosyalarını temizleyip yeniden yükle.
+// Kitaplar, kapaklar, dosyalar ve ayarlar IndexedDB'de durur; bu işlem onlara dokunmaz.
+async function checkForUpdate() {
+  if (!navigator.onLine) { toast('İnternet bağlantısı gerekiyor'); return; }
+  toast('Denetleniyor…');
+  let remote = null;
+  try {
+    const txt = await (await fetch(`sw.js?t=${Date.now()}`, { cache: 'no-store' })).text();
+    remote = (txt.match(/const VERSION = 'v([\d.]+)'/) || [])[1] || null;
+  } catch { toast('Sunucuya ulaşılamadı'); return; }
+  if (!remote || remote === APP_VERSION) { toast(`En güncel sürümdesin (${APP_VERSION})`); return; }
+  toast(`Yeni sürüm ${remote} bulundu, yükleniyor…`);
+  try {
+    const reg = await navigator.serviceWorker?.getRegistration();
+    await reg?.update();
+  } catch { /* aşağıdaki yedek yol çalışır */ }
+  // Normal yol birkaç saniyede sayfayı yeniler; yenilemezse zorla güncelle.
+  setTimeout(async () => {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter(k => k.startsWith('kitapligim-v')).map(k => caches.delete(k)));
+      const regs = await navigator.serviceWorker?.getRegistrations?.() || [];
+      await Promise.all(regs.map(r => r.unregister()));
+    } catch { /* yok */ }
+    location.reload();
+  }, 6000);
 }
