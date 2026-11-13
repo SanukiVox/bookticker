@@ -1,7 +1,7 @@
 // Kitap detay sayfası.
 import { goodreadsUrl, formatVotes, formatPubDate, isUpcoming } from '../store.js';
 import { state, getBook, saveBook, computeScore, CRITERIA, SPICY_LABELS, statusInfo, displayTitle, booksInSeries, booksByAuthor } from '../store.js';
-import { esc, enc, ICON, coverHTML, bookCard, hydrateCovers, peppers, toast, sheet, $, $$, coverKeyOf } from '../ui.js';
+import { esc, enc, ICON, coverHTML, bookCard, hydrateCovers, peppers, toast, sheet, $, $$, coverKeyOf, fmtScore } from '../ui.js';
 import { fileSectionShell, fillFileSection } from './bookfile.js';
 import { similarTo } from '../similar.js';
 
@@ -50,7 +50,7 @@ export async function renderDetail(view, [id]) {
     ['Yayınevi', esc(b.publisher)],
     ['Yayın yılı', b.pubYear ? esc(b.pubYear) : ''],
     ['Türkçe çıkış', b.trDate ? `${esc(formatPubDate(b.trDate))}${isUpcoming(b) ? ' · 🗓️ yakında' : ''}` : ''],
-    ['Spicy', b.spicy !== null && b.spicy !== undefined ? `<span class="peppers" title="${esc(SPICY_LABELS[b.spicy] || '')}">${peppers(b.spicy)}</span>` : ''],
+    ['Spicy', b.spicy !== null && b.spicy !== undefined ? `<span class="peppers" title="${esc(SPICY_LABELS[Math.floor(b.spicy)] || '')}">${peppers(b.spicy)}</span>` : ''],
     ['Güven', esc(b.confidence)],
     ['Görsellerde var mı', esc(b.inVisuals)],
     ['Öncelik sırası', b.priority ? `#${b.priority}` : ''],
@@ -75,7 +75,7 @@ export async function renderDetail(view, [id]) {
         : '<div style="flex:1" class="muted">Goodreads puanı girilmemiş</div>'}
       <button class="mini-btn" id="gr-edit">${b.goodreads ? 'Güncelle' : '＋ Ekle'}</button></div>
     ${score !== null || scored.length ? `<div class="section"><div class="bigscore"><div class="n">${score !== null ? score.toFixed(1) : '—'}</div><div><b>Genel uyum puanı</b><div class="muted small">5 üzerinden, ağırlıklı ortalama</div></div></div>
-      <div class="bars">${scored.map(c => `<div class="bar"><span>${c.label}</span><div class="track"><span style="width:${(Number(b.scores[c.key]) / 5) * 100}%"></span></div><b>${b.scores[c.key]}</b></div>`).join('')}</div></div>` : ''}
+      <div class="bars">${scored.map(c => `<div class="bar"><span>${c.label}</span><div class="track"><span style="width:${(Number(b.scores[c.key]) / 5) * 100}%"></span></div><b>${fmtScore(b.scores[c.key])}</b></div>`).join('')}</div></div>` : ''}
     ${b.summary ? `<div class="section"><h3>Özet</h3><div class="prose">${esc(b.summary)}</div></div>`
       : `<a class="section" href="#/edit/${enc(b.id)}?summary=1" style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">📝</span><span style="flex:1"><b>Özet / tanıtım yazısı ekle</b><br><span class="muted small">İnternetten bul ya da kopyaladığın yazıyı yapıştır</span></span><span class="chev" style="width:8px;height:8px;border-right:2px solid var(--text-3);border-top:2px solid var(--text-3);transform:rotate(45deg)"></span></a>`}
     ${b.review ? `<div class="section"><h3>Kısa değerlendirme</h3><div class="prose">${esc(b.review)}</div></div>` : ''}
@@ -84,7 +84,8 @@ export async function renderDetail(view, [id]) {
     ${(b.tags || []).length ? `<div class="section"><h3>Etiketler</h3><div class="tags">${b.tags.map(w => `<span class="tag"># ${esc(w)}</span>`).join('')}</div></div>` : ''}
     <div class="section"><h3>Benim okumam</h3>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span>Puanım</span>
-        <div class="stars" id="stars">${[1, 2, 3, 4, 5].map(n => `<button class="${(b.myRating || 0) >= n ? 'on' : ''}" data-r="${n}" aria-label="${n} yıldız">★</button>`).join('')}</div></div>
+        <div style="display:flex;align-items:center;gap:8px"><div class="stars" id="stars">${[1, 2, 3, 4, 5].map(n => `<button class="${(b.myRating || 0) >= n ? 'on' : (b.myRating || 0) >= n - 0.5 ? 'half' : ''}" data-r="${n}" aria-label="${n} yıldız">★</button>`).join('')}</div>
+        <b class="small" style="min-width:24px">${b.myRating ? fmtScore(b.myRating) : ''}</b></div></div>
       <dl class="kv">${b.startDate ? `<dt>Başladım</dt><dd>${fmtDate(b.startDate)}</dd>` : ''}${b.endDate ? `<dt>Bitirdim</dt><dd>${fmtDate(b.endDate)}</dd>` : ''}</dl>
       ${b.notes ? `<div style="margin-top:10px"><div class="muted small">Notlarım</div><div class="prose">${esc(b.notes)}</div></div>` : ''}
       ${b.quotes ? `<div style="margin-top:10px"><div class="muted small">Alıntılar</div><div class="prose" style="font-family:var(--serif);font-style:italic">${esc(b.quotes)}</div></div>` : ''}
@@ -124,8 +125,11 @@ export async function renderDetail(view, [id]) {
     toast(`${statusInfo(b.status).emoji} ${b.status}`);
   }));
   $('#fav', view).addEventListener('click', async () => { b.favorite = !b.favorite; await saveBook(b); toast(b.favorite ? '❤️ Favorilere eklendi' : 'Favorilerden çıkarıldı'); });
-  $$('[data-r]', view).forEach(s => s.addEventListener('click', async () => {
-    const r = Number(s.dataset.r);
+  // Yıldızın sol yarısı yarım puan, sağ yarısı tam puan; aynı değere tekrar basınca silinir
+  $$('[data-r]', view).forEach(s => s.addEventListener('click', async e => {
+    const box = s.getBoundingClientRect();
+    const half = e.clientX && e.clientX < box.left + box.width / 2;
+    const r = Number(s.dataset.r) - (half ? 0.5 : 0);
     b.myRating = b.myRating === r ? null : r;
     await saveBook(b);
   }));

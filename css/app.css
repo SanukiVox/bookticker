@@ -218,6 +218,7 @@ html, body { overflow-x: hidden; }
 .stars { display: inline-flex; gap: 4px; }
 .stars button { border: 0; background: none; font-size: 28px; padding: 0; color: var(--line); line-height: 1; }
 .stars button.on { color: #e3a529; }
+.stars button.half { background: linear-gradient(90deg, #e3a529 50%, var(--line) 50%); -webkit-background-clip: text; background-clip: text; color: transparent; }
 
 /* ===== Forms ===== */
 .form-group { background: var(--surface); border-radius: var(--radius); margin-bottom: 18px; box-shadow: var(--shadow); overflow: hidden; }
@@ -242,7 +243,10 @@ html, body { overflow-x: hidden; }
 .rating { display: flex; gap: 6px; }
 .rating button { flex: 1; height: 38px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-weight: 600; font-size: 15px; }
 .rating button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
-.rating button.clear { flex: 0 0 38px; color: var(--text-3); }
+.rating button.clear { flex: 0 0 34px; color: var(--text-3); }
+.rating button.half { flex: 0 0 38px; }
+.rating { gap: 5px; }
+.rate-val { color: var(--accent); margin-left: 4px; }
 .cover-edit { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding: 14px; }
 .cover-edit .slot { text-align: center; }
 .cover-edit .cover { margin-bottom: 8px; }

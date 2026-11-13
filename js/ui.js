@@ -168,7 +168,9 @@ export function promptSheet(title, { value = '', placeholder = '', okLabel = 'Ka
   });
 }
 
-export const peppers = n => (n === null || n === undefined || n === '' ? '—' : n === 0 ? '0 · yok' : '🌶️'.repeat(n));
+export const fmtScore = v => (v === null || v === undefined || v === '' ? '' : String(Math.round(Number(v) * 10) / 10).replace('.', ','));
+export const peppers = n => (n === null || n === undefined || n === '' ? '—' : Number(n) === 0 ? '0 · yok'
+  : `${'🌶️'.repeat(Math.floor(n))}${Number(n) % 1 ? '½' : ''} <span class="muted small">${fmtScore(n)}</span>`);
 
 export function applyTheme() {
   const t = state.settings.theme;

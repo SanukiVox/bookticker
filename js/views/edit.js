@@ -4,7 +4,7 @@ import { state, getBook, newBook, saveBook, deleteBook, CRITERIA, SPICY_LABELS, 
 import { db } from '../db.js';
 import { candidates, summaryCandidates, isUrl, imageOk } from '../lookup.js';
 import { cropImage } from './cropper.js';
-import { esc, enc, coverHTML, forgetCover, toast, confirmSheet, promptSheet, sheet, $, $$ } from '../ui.js';
+import { esc, enc, coverHTML, forgetCover, toast, confirmSheet, promptSheet, sheet, $, $$, fmtScore } from '../ui.js';
 
 // Fotoğrafı küçültüp JPEG'e çevir (telefonda yer kaplamasın).
 export async function shrinkImage(file, maxH = 900) {
@@ -20,9 +20,12 @@ export async function shrinkImage(file, maxH = 900) {
   } finally { URL.revokeObjectURL(url); }
 }
 
+// 1–5 (spicy 0–5) ve ½: önce tam sayıyı seç, ½ ile yarım ekle (4 → 4,5)
+const hasVal = v => v !== null && v !== '' && v !== undefined;
 const scoreRow = (key, label, val, min = 1) => `
-  <div class="field"><span class="lbl">${label}</span>
-    <div class="rating" data-rate="${key}">${Array.from({ length: 6 - min }, (_, i) => i + min).map(n => `<button type="button" class="${Number(val) === n && val !== null && val !== '' && val !== undefined ? 'on' : ''}" data-n="${n}">${n}</button>`).join('')}
+  <div class="field"><span class="lbl">${label} <b class="rate-val" data-val="${key}">${hasVal(val) ? fmtScore(val) : ''}</b></span>
+    <div class="rating" data-rate="${key}" data-min="${min}">${Array.from({ length: 6 - min }, (_, i) => i + min).map(n => `<button type="button" class="${hasVal(val) && Math.floor(Number(val)) === n ? 'on' : ''}" data-n="${n}">${n}</button>`).join('')}
+    <button type="button" class="half ${hasVal(val) && Number(val) % 1 ? 'on' : ''}" data-half aria-label="Yarım puan">½</button>
     <button type="button" class="clear" data-n="" aria-label="Temizle">✕</button></div></div>`;
 
 export async function renderEdit(view, [id], query) {
@@ -94,7 +97,7 @@ export async function renderEdit(view, [id], query) {
       <div class="form-group">
         ${CRITERIA.map(c => scoreRow(c.key, c.label, b.scores[c.key])).join('')}
         ${scoreRow('spicy', 'Spicy / +18 (0–5)', b.spicy, 0)}
-        <div class="small muted" id="spicy-hint" style="padding:0 14px 10px">${b.spicy !== null && b.spicy !== undefined ? esc(SPICY_LABELS[b.spicy]) : ''}</div>
+        <div class="small muted" id="spicy-hint" style="padding:0 14px 10px">${b.spicy !== null && b.spicy !== undefined ? esc(SPICY_LABELS[Math.floor(b.spicy)]) : ''}</div>
         <div class="field inline"><label for="f-goodreads">⭐ Goodreads puanı</label><input id="f-goodreads" data-field="goodreads" type="number" inputmode="decimal" min="0" max="5" step="0.01" placeholder="örn. 4,21" value="${b.goodreads ?? ''}"></div>
         <div class="field inline"><label for="f-goodreadsVotes">Goodreads oy sayısı</label><input id="f-goodreadsVotes" data-field="goodreadsVotes" type="number" inputmode="numeric" min="0" placeholder="isteğe bağlı" value="${b.goodreadsVotes ?? ''}"></div>
         <div style="padding:4px 14px 12px"><a class="mini-btn" id="gr-open" href="${goodreadsUrl(b)}" target="_blank" rel="noopener" style="display:inline-block">📗 Goodreads'te aç</a></div>
@@ -145,14 +148,27 @@ export async function renderEdit(view, [id], query) {
 
   // Puan butonları
   $$('[data-rate]', form).forEach(row => row.addEventListener('click', e => {
-    const btn = e.target.closest('button[data-n]');
+    const btn = e.target.closest('button[data-n], button[data-half]');
     if (!btn) return;
     const key = row.dataset.rate;
-    const n = btn.dataset.n === '' ? null : Number(btn.dataset.n);
-    if (key === 'spicy') { b.spicy = n; $('#spicy-hint', form).textContent = n === null ? '' : SPICY_LABELS[n]; }
+    const cur = key === 'spicy' ? b.spicy : key === 'myRating' ? b.myRating : b.scores[key];
+    let n;
+    if (btn.dataset.half !== undefined) {
+      if (!hasVal(cur)) { toast('Önce bir puan seç, sonra ½ ekle'); return; }
+      const whole = Math.floor(Number(cur));
+      n = Number(cur) % 1 ? whole : (whole >= 5 ? 5 : whole + 0.5); // ½ aç/kapat; 5'in üstüne çıkmaz
+      if (whole >= 5 && !(Number(cur) % 1)) { toast('5 en yüksek puan'); return; }
+    } else {
+      n = btn.dataset.n === '' ? null : Number(btn.dataset.n);
+      // Tam sayıya basınca varsa yarımı koru (3,5 iken 4'e basınca 4,5)
+      if (n !== null && hasVal(cur) && Number(cur) % 1 && n < 5) n += 0.5;
+    }
+    if (key === 'spicy') { b.spicy = n; $('#spicy-hint', form).textContent = n === null ? '' : SPICY_LABELS[Math.floor(n)]; }
     else if (key === 'myRating') b.myRating = n;
     else { if (n === null) delete b.scores[key]; else b.scores[key] = n; }
-    $$('button', row).forEach(x => x.classList.toggle('on', x.dataset.n !== '' && Number(x.dataset.n) === n));
+    $$('button[data-n]', row).forEach(x => x.classList.toggle('on', x.dataset.n !== '' && n !== null && Math.floor(n) === Number(x.dataset.n)));
+    $('button[data-half]', row).classList.toggle('on', n !== null && n % 1 !== 0);
+    $(`[data-val="${key}"]`, form).textContent = n === null ? '' : fmtScore(n);
     $('#live-score', view).textContent = computeScore(b)?.toFixed(1) ?? '—';
     dirty = true;
   }));
