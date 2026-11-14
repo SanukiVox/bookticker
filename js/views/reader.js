@@ -3,6 +3,7 @@ import { state, getBook, saveBook, saveSettings, displayTitle, statusInfo } from
 import { db } from '../db.js';
 import { esc, ICON, sheet, toast, $, $$ } from '../ui.js';
 import { getFileBlob, addReadingTime, formatDuration, slotBook, slotFile, langLabel, realBook } from '../files.js';
+import { attachWordPicker, openTranslate } from './wordpick.js';
 
 const loaded = {};
 function loadScript(src) {
@@ -62,8 +63,17 @@ export async function renderReader(view, [id], query) {
       <div class="r-finish hidden" id="r-finish"><div>🎉 <b>Kitabı bitirdin mi?</b></div>
         <div class="btn-row"><button class="btn" id="r-fin-no">Henüz değil</button><button class="btn primary" id="r-fin-yes">✅ Okundu olarak işaretle</button></div></div>
       <div class="r-loading" id="r-loading">Kitap açılıyor…</div>
+      <button class="wp-fab hidden" id="r-tr">🔤 Çevir</button>
     </div>`;
   const root = $('#reader', view);
+  // Kaydırma modunda tarayıcının kendi seçimi çalışır: seçilince "Çevir" düğmesi çıkar
+  let selText = '', selT = null;
+  const onSelect = t => {
+    selText = String(t || '').trim();
+    const fab = $('#r-tr', root);
+    fab.classList.toggle('hidden', !selText);
+    clearTimeout(selT); selT = setTimeout(() => fab.classList.add('hidden'), 8000);
+  };
   const stage = $('#stage', root);
 
   // ---------- Okuma süresi ----------
@@ -104,7 +114,7 @@ export async function renderReader(view, [id], query) {
   let ctrl;
   try {
     ctrl = book.file.type === 'epub'
-      ? await openEpub(stage, blob, book, { onLocation, onTap: zone => tap(zone), start: query.get('loc') || book.progress?.loc, onStuck: () => switchFlow('scroll', true) })
+      ? await openEpub(stage, blob, book, { onLocation, onTap: zone => tap(zone), start: query.get('loc') || book.progress?.loc, onStuck: () => switchFlow('scroll', true), onSelect })
       : await openPdf(stage, blob, book, { onLocation, onTap: () => toggleChrome(), start: query.get('loc') || book.progress?.loc, onActivity: activity });
   } catch (e) {
     clearInterval(tick);
@@ -140,8 +150,11 @@ export async function renderReader(view, [id], query) {
   chromeT = setTimeout(() => toggleChrome(false), 2500);
   $('#r-status', root).addEventListener('click', () => toggleChrome());
 
+  $('#r-tr', root).addEventListener('click', () => { $('#r-tr', root).classList.add('hidden'); openTranslate(selText, { lang: book.file.lang }); });
   const tapLayer = $('#r-tap', root);
   if (tapLayer) {
+    // Basılı tut → kelimeyi seç ve çevir (önce eklenir ki sayfa çevirmeyi durdurabilsin)
+    attachWordPicker(tapLayer, stage, { lang: () => book.file.lang });
     let t0 = null, swiped = false, wheelAt = 0;
     tapLayer.addEventListener('touchstart', e => { const t = e.changedTouches[0]; t0 = { x: t.clientX, y: t.clientY }; swiped = false; }, { passive: true });
     tapLayer.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
@@ -290,7 +303,7 @@ export async function renderReader(view, [id], query) {
 // =====================================================================
 // EPUB
 // =====================================================================
-async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck }) {
+async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck, onSelect }) {
   const scroll = rs().flow === 'scroll';
   await loadScript('vendor/jszip.min.js');
   await loadScript('vendor/epub.min.js');
@@ -301,6 +314,7 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck }
     ? { width: '100%', height: '100%', manager: 'continuous', flow: 'scrolled', allowScriptedContent: false }
     : { width: '100%', height: '100%', flow: 'paginated', spread: 'none', allowScriptedContent: false });
   // Kaydırma modunda dokunma katmanı yok: ortaya dokunmak menüyü açsın
+  rendition.on('selected', (cfi, contents) => { try { onSelect?.(contents.window.getSelection().toString()); } catch { /* yok */ } });
   if (scroll) rendition.on('click', e => { const sel = e.view?.getSelection?.(); if (!(sel && String(sel).length)) onTap('center'); });
   const locKey = `loc:${book.file.key}`;
   let locationsReady = false;
@@ -619,6 +633,7 @@ async function renderSplit(view, id) {
           <div class="r-loading" id="sp-load-${i}">Açılıyor…</div>
         </div>`).join('')}
       </div>
+      <button class="wp-fab hidden" id="sp-tr">🔤 Çevir</button>
     </div>`;
   const root = $('#reader', view);
 
@@ -632,6 +647,8 @@ async function renderSplit(view, id) {
 
   let saveT = null;
   const persist = () => db.putBook(real);
+  let selText = '', selLang = 'orig', selT = null;
+  $('#sp-tr', root).addEventListener('click', () => { $('#sp-tr', root).classList.add('hidden'); openTranslate(selText, { lang: selLang }); });
   const panes = await Promise.all(order.map(async (sl, i) => {
     const book = slotBook(real, sl);
     const pane = { slot: sl, book, last: null, ctrl: null, i };
@@ -648,7 +665,8 @@ async function renderSplit(view, id) {
     try {
       const stage = $(`#sp-stage-${i}`, root);
       pane.ctrl = book.file.type === 'epub'
-        ? await openEpub(stage, blob, book, { onLocation, onTap: () => {}, start: book.progress?.loc, onStuck: () => toast('Sayfa çevrilemedi: Aa → "Kaydırarak oku"yu dene') })
+        ? await openEpub(stage, blob, book, { onLocation, onTap: () => {}, start: book.progress?.loc, onStuck: () => toast('Sayfa çevrilemedi: Aa → "Kaydırarak oku"yu dene'),
+          onSelect: t => { selText = String(t || '').trim(); selLang = book.file.lang; const fab = $('#sp-tr', root); fab.classList.toggle('hidden', !selText); clearTimeout(selT); selT = setTimeout(() => fab.classList.add('hidden'), 8000); } })
         : await openPdf(stage, blob, book, { onLocation, onTap: () => {}, start: book.progress?.loc, onActivity: activity });
       $(`#sp-load-${i}`, root).remove();
     } catch (e) {
@@ -660,6 +678,7 @@ async function renderSplit(view, id) {
   // Bölme başına dokunma: sol kenar geri, sağ kenar ileri, kaydırma da çevirir
   $$('.sp-tap', root).forEach(layer => {
     const pane = panes[Number(layer.dataset.i)];
+    attachWordPicker(layer, $(`#sp-stage-${layer.dataset.i}`, root), { lang: () => pane.book.file.lang });
     let t0 = null, swiped = false;
     const go = d => { activity(); if (pane.ctrl) (d > 0 ? pane.ctrl.next() : pane.ctrl.prev()); };
     layer.addEventListener('touchstart', e => { const t = e.changedTouches[0]; t0 = { x: t.clientX, y: t.clientY }; swiped = false; }, { passive: true });
