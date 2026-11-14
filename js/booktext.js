@@ -22,7 +22,8 @@ async function epubText(book, blob, upTo, onProgress) {
   await loadScript('vendor/jszip.min.js');
   await loadScript('vendor/epub.min.js');
   const ePub = window.ePub;
-  const eb = ePub(await blob.arrayBuffer());
+  const { checkEpub } = await import('./views/reader.js');
+  const eb = ePub(await checkEpub(await blob.arrayBuffer()));
   await eb.ready;
   const nav = await eb.loaded.navigation;
   const labels = new Map();

@@ -6,7 +6,7 @@ import { backButton, wireBack } from './detail.js';
 import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 
-export const APP_VERSION = '1.14.3';
+export const APP_VERSION = '1.14.4';
 
 export async function renderSettings(view) {
   const s = state.settings;

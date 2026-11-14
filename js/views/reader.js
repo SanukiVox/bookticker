@@ -279,8 +279,7 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck }
   await loadScript('vendor/jszip.min.js');
   await loadScript('vendor/epub.min.js');
   const ePub = window.ePub;
-  const buf = await blob.arrayBuffer();
-  await checkEpub(buf);
+  const buf = await checkEpub(await blob.arrayBuffer());
   const eb = ePub(buf);
   const rendition = eb.renderTo(stage, scroll
     ? { width: '100%', height: '100%', manager: 'continuous', flow: 'scrolled', allowScriptedContent: false }
@@ -521,13 +520,51 @@ async function openPdf(stage, blob, book, { onLocation, onTap, start, onActivity
 }
 
 // DRM'li (mağazadan alınmış, şifreli) EPUB'ları baştan tanı: kapak açılır ama metin şifreli olduğu için okunamaz.
-async function checkEpub(buf) {
+export async function checkEpub(buf) {
   let zip;
   try { zip = await window.JSZip.loadAsync(buf); } catch { throw new Error('Dosya geçerli bir EPUB değil (zip açılamadı)'); }
   const enc = zip.file('META-INF/encryption.xml');
-  if (!enc) return;
-  const xml = await enc.async('string');
-  const algs = [...xml.matchAll(/Algorithm="([^"]+)"/g)].map(m => m[1]);
-  const fontOnly = algs.every(a => /idpf\.org\/2008\/embedding|ns\.adobe\.com\/pdf\/enc#RC/.test(a));
-  if (!fontOnly || zip.file('META-INF/rights.xml')) throw new Error('Bu EPUB DRM ile korumalı (şifreli). Kapak açılır ama metin okunamaz. DRM\'siz bir EPUB kopyası gerekiyor.');
+  if (enc) {
+    const xml = await enc.async('string');
+    const algs = [...xml.matchAll(/Algorithm="([^"]+)"/g)].map(m => m[1]);
+    const fontOnly = algs.every(a => /idpf\.org\/2008\/embedding|ns\.adobe\.com\/pdf\/enc#RC/.test(a));
+    if (!fontOnly || zip.file('META-INF/rights.xml')) throw new Error('Bu EPUB DRM ile korumalı (şifreli). Kapak açılır ama metin okunamaz. DRM\'siz bir EPUB kopyası gerekiyor.');
+  }
+  return (await fixMissing(zip)) || buf;
+}
+
+// Okuma sırasında olup dosyası EPUB'da bulunmayan sayfalar (ör. Calibre'nin düşürdüğü titlepage.xhtml)
+// okuyucuyu takabiliyor. Eksik sayfaları yerine koy: başlık sayfasıysa kapak resmi, değilse boş sayfa.
+async function fixMissing(zip) {
+  try {
+    const container = await zip.file('META-INF/container.xml')?.async('string');
+    const opfPath = container?.match(/full-path="([^"]+)"/)?.[1];
+    const opf = opfPath && await zip.file(opfPath)?.async('string');
+    if (!opf) return null;
+    const dir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
+    const attr = (tag, n) => tag.match(new RegExp(`\\s${n}\\s*=\\s*["']([^"']*)["']`))?.[1];
+    const items = [...opf.matchAll(/<item\b[^>]*>/g)].map(m => ({ id: attr(m[0], 'id'), href: attr(m[0], 'href'), type: attr(m[0], 'media-type'), props: attr(m[0], 'properties') || '' }));
+    const spine = [...opf.matchAll(/<itemref\b[^>]*>/g)].map(m => attr(m[0], 'idref'));
+    const norm = h => { const out = []; for (const seg of (dir + decodeURIComponent(h || '')).split('/')) { if (seg === '..') out.pop(); else if (seg && seg !== '.') out.push(seg); } return out.join('/'); };
+    const has = path => zip.file(path) || zip.file(encodeURI(path));
+    const coverId = opf.match(/<meta\b[^>]*name=["']cover["'][^>]*content=["']([^"']+)["']/)?.[1] || opf.match(/<meta\b[^>]*content=["']([^"']+)["'][^>]*name=["']cover["']/)?.[1];
+    const cover = items.find(i => /cover-image/.test(i.props)) || items.find(i => i.id === coverId && /^image\//.test(i.type || ''))
+      || items.find(i => /^image\//.test(i.type || '') && /cover/i.test(i.href || ''));
+    let fixed = 0;
+    for (const id of spine) {
+      const it = items.find(i => i.id === id);
+      if (!it?.href || has(norm(it.href))) continue;
+      const path = norm(it.href);
+      let body = '';
+      if (cover && /title|cover/i.test(it.id + it.href) && has(norm(cover.href))) {
+        const from = path.split('/').slice(0, -1), to = norm(cover.href).split('/');
+        let k = 0; while (k < from.length && from[k] === to[k]) k++;
+        const rel = [...from.slice(k).map(() => '..'), ...to.slice(k)].join('/');
+        body = `<div style="text-align:center;height:100%"><img src="${rel}" alt="" style="max-width:100%;max-height:100%"/></div>`;
+      }
+      zip.file(path, `<?xml version="1.0" encoding="utf-8"?><html xmlns="http://www.w3.org/1999/xhtml"><head><title></title></head><body>${body}</body></html>`);
+      fixed++;
+    }
+    return fixed ? await zip.generateAsync({ type: 'arraybuffer', compression: 'STORE' }) : null;
+  } catch (e) { console.warn('EPUB onarımı', e); return null; }
 }
