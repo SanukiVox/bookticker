@@ -44,7 +44,7 @@ export async function renderReader(view, [id], query) {
   view.innerHTML = `
     <div class="reader ${book.file.type}${book.file.type === 'epub' && s.flow === 'scroll' ? ' scroll' : ''}" id="reader" data-rtheme="${s.theme}">
       <div class="r-stage" id="stage"></div>
-      ${book.file.type === 'epub' && s.flow !== 'scroll' ? '<div class="r-tap" id="r-tap"></div>' : ''}
+      ${book.file.type === 'epub' ? '<div class="r-tap" id="r-tap"></div>' : ''}
       <div class="r-status" id="r-status"><span id="r-chap"></span><span id="r-pct"></span></div>
       <div class="r-top">
         <button class="icon-btn" id="r-close" aria-label="Kapat">${ICON.back}</button>
@@ -157,6 +157,8 @@ export async function renderReader(view, [id], query) {
   if (tapLayer) {
     // Basılı tut → kelimeyi seç ve çevir (önce eklenir ki sayfa çevirmeyi durdurabilsin)
     attachWordPicker(tapLayer, stage, { lang: () => book.file.lang });
+    if (rs().flow === 'scroll') wireScrollLayer(tapLayer, stage, { onTap: () => tap('center'), onActivity: activity });
+    else {
     let t0 = null, swiped = false, wheelAt = 0;
     tapLayer.addEventListener('touchstart', e => { const t = e.changedTouches[0]; t0 = { x: t.clientX, y: t.clientY }; swiped = false; }, { passive: true });
     tapLayer.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
@@ -178,6 +180,7 @@ export async function renderReader(view, [id], query) {
       wheelAt = Date.now(); activity();
       (e.deltaY || e.deltaX) > 0 ? ctrl.next() : ctrl.prev();
     }, { passive: false });
+    }
     $('#r-prev', root).addEventListener('click', () => { activity(); ctrl.prev(); });
     $('#r-next', root).addEventListener('click', () => { activity(); ctrl.next(); });
   }
@@ -280,7 +283,7 @@ export async function renderReader(view, [id], query) {
   document.addEventListener('keyup', onKey);
   const onHide = () => { if (document.visibilityState === 'hidden') { saveBook(book); saveSettings(); } };
   document.addEventListener('visibilitychange', onHide);
-  $('#r-close', root).addEventListener('click', () => { location.hash = `#/book/${encodeURIComponent(book.id)}`; });
+  $('#r-close', root).addEventListener('click', () => closeReader(book.id));
   $('#r-split', root)?.addEventListener('click', async () => {
     await persist();
     location.replace(`#/read/${encodeURIComponent(book.id)}?split=1`);
@@ -658,7 +661,7 @@ async function renderSplit(view, id) {
       <div class="sp-panes">
         ${order.map((sl, i) => `<div class="sp-pane ${slotFile(real, sl).type}" data-i="${i}">
           <div class="sp-stage" id="sp-stage-${i}"></div>
-          ${slotFile(real, sl).type === 'epub' && s.flow !== 'scroll' ? `<div class="sp-tap" data-i="${i}"></div>` : ''}
+          ${slotFile(real, sl).type === 'epub' ? `<div class="sp-tap" data-i="${i}"></div>` : ''}
           <div class="sp-status"><b>${esc(langLabel(slotFile(real, sl)))}</b><span class="sp-chap" id="sp-chap-${i}"></span><span id="sp-pct-${i}"></span></div>
           <div class="r-loading" id="sp-load-${i}">Açılıyor…</div>
         </div>`).join('')}
@@ -709,6 +712,7 @@ async function renderSplit(view, id) {
   $$('.sp-tap', root).forEach(layer => {
     const pane = panes[Number(layer.dataset.i)];
     attachWordPicker(layer, $(`#sp-stage-${layer.dataset.i}`, root), { lang: () => pane.book.file.lang });
+    if (rs().flow === 'scroll') { wireScrollLayer(layer, $(`#sp-stage-${layer.dataset.i}`, root), { onTap: () => {}, onActivity: activity }); return; }
     let t0 = null, swiped = false;
     const go = d => { activity(); if (pane.ctrl) (d > 0 ? pane.ctrl.next() : pane.ctrl.prev()); };
     layer.addEventListener('touchstart', e => { const t = e.changedTouches[0]; t0 = { x: t.clientX, y: t.clientY }; swiped = false; }, { passive: true });
@@ -793,7 +797,7 @@ async function renderSplit(view, id) {
       },
     });
   });
-  $('#sp-close', root).addEventListener('click', () => { location.hash = `#/book/${encodeURIComponent(id)}`; });
+  $('#sp-close', root).addEventListener('click', () => closeReader(id));
   const onHide = () => { if (document.visibilityState === 'hidden') { saveBook(real); saveSettings(); } };
   document.addEventListener('visibilitychange', onHide);
 
@@ -804,4 +808,59 @@ async function renderSplit(view, id) {
     await saveBook(real);
     await saveSettings();
   };
+}
+
+// Okuyucudan kitap sayfasına dönüş: kitap sayfasından gelindiyse geçmişte geri git
+// (yoksa kitap sayfasındaki "geri" tekrar okuyucuya döner).
+function closeReader(id) {
+  const target = `#/book/${encodeURIComponent(id)}`;
+  if (window.__lastNonRead === target && (window.__navCount || 0) > 1) history.back();
+  else location.replace(target);
+}
+
+// Kaydırma modu için dokunma katmanı. iPhone, kitabın açıldığı (betiksiz, korumalı) çerçevenin içindeki
+// dokunmaları uygulamaya bildirmiyor; bu yüzden kaydırmayı ve dokunmayı katmanda biz yaparız.
+function wireScrollLayer(layer, stage, { onTap, onActivity }) {
+  const box = () => stage.querySelector('.epub-container') || stage;
+  let t0 = null, lastY = 0, lastT = 0, vel = 0, raf = 0, moved = false;
+  const stopInertia = () => { cancelAnimationFrame(raf); raf = 0; };
+  layer.addEventListener('touchstart', e => {
+    stopInertia();
+    if (e.touches.length !== 1) { t0 = null; return; }
+    const t = e.touches[0];
+    t0 = { x: t.clientX, y: t.clientY, at: Date.now() }; lastY = t.clientY; lastT = performance.now(); vel = 0; moved = false;
+  }, { passive: true });
+  layer.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (!t0) return;
+    const t = e.touches[0], now = performance.now();
+    const dy = t.clientY - lastY;
+    if (!moved && Math.hypot(t.clientX - t0.x, t.clientY - t0.y) > 8) moved = true;
+    if (moved) {
+      box().scrollTop -= dy;
+      vel = 0.8 * (dy / Math.max(1, now - lastT)) + 0.2 * vel; // px/ms
+      onActivity?.();
+    }
+    lastY = t.clientY; lastT = now;
+  }, { passive: false });
+  layer.addEventListener('touchend', () => {
+    if (!t0) return;
+    const quick = Date.now() - t0.at < 350;
+    t0 = null;
+    if (!moved) { if (quick) onTap?.(); return; }
+    // Bırakınca kaymaya devam et (yavaşlayarak)
+    if (performance.now() - lastT > 80) vel = 0;
+    let v = vel * 16;
+    const step = () => {
+      if (Math.abs(v) < 0.5) { raf = 0; return; }
+      box().scrollTop -= v; v *= 0.95;
+      raf = requestAnimationFrame(step);
+    };
+    if (Math.abs(v) > 1) raf = requestAnimationFrame(step);
+  });
+  layer.addEventListener('wheel', e => { e.preventDefault(); stopInertia(); box().scrollTop += e.deltaY; onActivity?.(); }, { passive: false });
+  // Fare ile tıklama (dokunmatik olmayan)
+  let lastTouch = 0;
+  layer.addEventListener('touchend', () => { lastTouch = Date.now(); });
+  layer.addEventListener('click', () => { if (Date.now() - lastTouch > 800) onTap?.(); });
 }

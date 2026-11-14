@@ -40,6 +40,7 @@ function parse() {
 
 async function route() {
   window.__navCount = (window.__navCount || 0) + 1;
+  if (!location.hash.startsWith('#/read/')) window.__lastNonRead = location.hash;
   if (current) scrollMemory.set(current, window.scrollY);
   const { path, query, raw } = parse();
   const view = $('#view');
