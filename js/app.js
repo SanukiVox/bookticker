@@ -14,6 +14,7 @@ import { renderReader } from './views/reader.js';
 import { renderChat } from './views/chat.js';
 import { renderVocab } from './views/vocab.js';
 import { renderUpcoming, checkReleases } from './views/upcoming.js';
+import { renderYear } from './views/yearreview.js';
 
 const routes = [
   [/^\/?$/, renderLibrary, 'library'],
@@ -30,6 +31,7 @@ const routes = [
   [/^\/chat$/, renderChat, 'chat'],
   [/^\/vocab(?:\/([^/]+))?$/, renderVocab, 'reading'],
   [/^\/upcoming$/, renderUpcoming, 'reading'],
+  [/^\/year(?:\/(\d{4}))?$/, renderYear, 'reading'],
 ];
 
 const scrollMemory = new Map();

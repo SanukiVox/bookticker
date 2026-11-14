@@ -107,7 +107,8 @@ export async function renderReading(view) {
         ${monthCard(r)}`;
     })()}
     <div class="section"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>${year} hedefi</b><span class="muted small">${readThisYear.length} / ${goal || '—'} kitap</span></div>
-      <div class="progress" style="height:10px;margin-top:8px"><span style="width:${goal ? Math.min(100, (readThisYear.length / goal) * 100) : 0}%"></span></div></div>
+      <div class="progress" style="height:10px;margin-top:8px"><span style="width:${goal ? Math.min(100, (readThisYear.length / goal) * 100) : 0}%"></span></div>
+      <a class="mini-btn" href="#/year/${year}" style="display:inline-block;margin-top:10px">🗓 ${year} özetim</a></div>
     <div class="stat-grid">
       <a class="stat" href="#/search?status=Okundu"><div class="n">${counts['Okundu'] || 0}</div><div class="l">✅ Okundu</div></a>
       <a class="stat" href="#/search?status=Okunacak"><div class="n">${counts['Okunacak'] || 0}</div><div class="l">📚 Okunacak</div></a>
