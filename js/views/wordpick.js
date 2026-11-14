@@ -183,3 +183,51 @@ export function openTranslate(text, { lang = 'orig', onClose } = {}) {
     },
   });
 }
+
+// ---------- iPhone'un kendi seçimiyle çalışan otomatik çeviri kartı ----------
+// Kitap sayfası korumalı bir çerçevede olduğundan iPhone seçim olaylarını bildirmez; seçimi biz yoklarız.
+// Kart ekranı karartmaz, seçimi bozmaz; iPhone'un kendi menüsü (Kopyala, Çeviri → DeepL) çalışmaya devam eder.
+function currentSelection(stage) {
+  for (const f of stage.querySelectorAll('iframe')) {
+    try {
+      const t = String(f.contentDocument?.getSelection?.() || '');
+      if (t.trim()) return t;
+    } catch { /* yok */ }
+  }
+  return '';
+}
+
+export function watchSelection(stage, mount, { lang = () => 'orig' } = {}) {
+  const card = document.createElement('div');
+  card.className = 'sel-card hidden';
+  mount.appendChild(card);
+  let last = '', pending = '', shownFor = '', dismissed = '';
+  const hide = () => { card.classList.add('hidden'); shownFor = ''; };
+  const show = async text => {
+    shownFor = text;
+    const to = lang() === 'tr' ? 'en' : 'tr', from = to === 'tr' ? 'en' : 'tr';
+    const single = !/\s/.test(text) && text.length < 40;
+    const q = encodeURIComponent(text);
+    card.innerHTML = `<div class="sel-row"><div class="sel-src">${esc(text)}</div><button class="sel-x" aria-label="Kapat">✕</button></div>
+      <div class="sel-out"><span class="muted">Çevriliyor…</span></div>
+      <div class="sel-links"><a href="https://www.deepl.com/translator#${from}/${to}/${q}" target="_blank" rel="noopener">DeepL ↗</a><a href="https://translate.google.com/?sl=auto&tl=${to}&text=${q}&op=translate" target="_blank" rel="noopener">Google ↗</a>${single ? `<a href="https://tureng.com/tr/${to === 'tr' ? 'turkce-ingilizce' : 'ingilizce-turkce'}/${q}" target="_blank" rel="noopener">Tureng ↗</a>` : ''}</div>`;
+    card.classList.remove('hidden');
+    card.querySelector('.sel-x').addEventListener('click', () => { dismissed = text; hide(); });
+    const res = await fetchTranslation(text, to);
+    if (shownFor !== text) return;
+    const out = card.querySelector('.sel-out');
+    out.innerHTML = res
+      ? `<b>${esc(res.main)}</b>${single && res.alts.length ? `<div class="small muted">${res.alts.slice(0, 2).map(a => `${esc(POS[a.pos] || a.pos)}: ${esc(a.words.slice(0, 4).join(', '))}`).join(' · ')}</div>` : ''}`
+      : '<span class="muted">Çeviri alınamadı; DeepL ya da Google düğmesini kullan.</span>';
+  };
+  const timer = setInterval(() => {
+    const t = clean(currentSelection(stage));
+    if (!t) { last = pending = ''; dismissed = ''; if (shownFor) hide(); return; }
+    // Seçim parmakla genişletilirken her adımda çevirmesin: iki yoklamada aynı kalınca göster
+    if (t !== pending) { pending = t; return; }
+    if (t === last || t === dismissed) return;
+    last = t;
+    show(t);
+  }, 450);
+  return () => { clearInterval(timer); card.remove(); };
+}

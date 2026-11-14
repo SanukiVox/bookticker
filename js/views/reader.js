@@ -3,7 +3,7 @@ import { state, getBook, saveBook, saveSettings, displayTitle, statusInfo } from
 import { db } from '../db.js';
 import { esc, ICON, sheet, toast, $, $$ } from '../ui.js';
 import { getFileBlob, addReadingTime, formatDuration, slotBook, slotFile, langLabel, realBook } from '../files.js';
-import { attachWordPicker, openTranslate } from './wordpick.js';
+import { watchSelection } from './wordpick.js';
 
 const loaded = {};
 function loadScript(src) {
@@ -44,7 +44,7 @@ export async function renderReader(view, [id], query) {
   view.innerHTML = `
     <div class="reader ${book.file.type}${book.file.type === 'epub' && s.flow === 'scroll' ? ' scroll' : ''}" id="reader" data-rtheme="${s.theme}">
       <div class="r-stage" id="stage"></div>
-      ${book.file.type === 'epub' ? '<div class="r-tap" id="r-tap"></div>' : ''}
+      ${book.file.type === 'epub' && s.flow !== 'scroll' ? '<div class="r-tap r-tap-l" data-zone="left"></div><div class="r-tap r-tap-r" data-zone="right"></div>' : ''}
       <div class="r-status" id="r-status"><span id="r-chap"></span><span id="r-pct"></span></div>
       <div class="r-top">
         <button class="icon-btn" id="r-close" aria-label="Kapat">${ICON.back}</button>
@@ -63,18 +63,9 @@ export async function renderReader(view, [id], query) {
       <div class="r-finish hidden" id="r-finish"><div>🎉 <b>Kitabı bitirdin mi?</b></div>
         <div class="btn-row"><button class="btn" id="r-fin-no">Henüz değil</button><button class="btn primary" id="r-fin-yes">✅ Okundu olarak işaretle</button></div></div>
       <div class="r-loading" id="r-loading">Kitap açılıyor…</div>
-      <button class="wp-fab hidden" id="r-tr">🔤 Çevir</button>
-      ${book.file.type === 'epub' && s.flow === 'scroll' ? '<button class="r-menu-fab" id="r-menu" aria-label="Menü">⋯</button>' : ''}
+      ${book.file.type === 'epub' ? '<button class="r-menu-fab" id="r-menu" aria-label="Menü">⋯</button>' : ''}
     </div>`;
   const root = $('#reader', view);
-  // Kaydırma modunda tarayıcının kendi seçimi çalışır: seçilince "Çevir" düğmesi çıkar
-  let selText = '', selT = null;
-  const onSelect = t => {
-    selText = String(t || '').trim();
-    const fab = $('#r-tr', root);
-    fab.classList.toggle('hidden', !selText);
-    clearTimeout(selT); selT = setTimeout(() => fab.classList.add('hidden'), 8000);
-  };
   const stage = $('#stage', root);
 
   // ---------- Okuma süresi ----------
@@ -115,7 +106,7 @@ export async function renderReader(view, [id], query) {
   let ctrl;
   try {
     ctrl = book.file.type === 'epub'
-      ? await openEpub(stage, blob, book, { onLocation, onTap: zone => tap(zone), start: query.get('loc') || book.progress?.loc, onStuck: () => switchFlow('scroll', true), onSelect })
+      ? await openEpub(stage, blob, book, { onLocation, onTap: zone => tap(zone), start: query.get('loc') || book.progress?.loc, onStuck: () => switchFlow('scroll', true) })
       : await openPdf(stage, blob, book, { onLocation, onTap: () => toggleChrome(), start: query.get('loc') || book.progress?.loc, onActivity: activity });
   } catch (e) {
     clearInterval(tick);
@@ -152,35 +143,33 @@ export async function renderReader(view, [id], query) {
   $('#r-status', root).addEventListener('click', () => toggleChrome());
   $('#r-menu', root)?.addEventListener('click', () => toggleChrome());
 
-  $('#r-tr', root).addEventListener('click', () => { $('#r-tr', root).classList.add('hidden'); openTranslate(selText, { lang: book.file.lang }); });
-  const tapLayer = $('#r-tap', root);
-  if (tapLayer) {
-    // Basılı tut → kelimeyi seç ve çevir (önce eklenir ki sayfa çevirmeyi durdurabilsin)
-    attachWordPicker(tapLayer, stage, { lang: () => book.file.lang });
-    if (rs().flow === 'scroll') wireScrollLayer(tapLayer, stage, { onTap: () => tap('center'), onActivity: activity });
-    else {
-    let t0 = null, swiped = false, wheelAt = 0;
-    tapLayer.addEventListener('touchstart', e => { const t = e.changedTouches[0]; t0 = { x: t.clientX, y: t.clientY }; swiped = false; }, { passive: true });
-    tapLayer.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
-    tapLayer.addEventListener('touchend', e => {
-      if (!t0) return;
-      const t = e.changedTouches[0], dx = t.clientX - t0.x, dy = t.clientY - t0.y;
-      t0 = null;
-      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { swiped = true; activity(); dx < 0 ? ctrl.next() : ctrl.prev(); }
-      else if (Math.abs(dy) > 60) { swiped = true; activity(); dy < 0 ? ctrl.next() : ctrl.prev(); }
+  // iPhone, kitabın açıldığı korumalı çerçevedeki dokunmaları bildirmiyor. Bu yüzden:
+  //  - metin seçimi iPhone'un kendisine bırakılır (büyüteç, Kopyala, Çeviri → DeepL); seçimi yoklayıp çeviri kartı gösteririz
+  //  - sayfa sayfa modunda sayfayı sol/sağ kenardaki şeritler çevirir; menüyü ⋯ açar
+  //  - kaydırma modunda yukarı kaydırınca menü açılır, aşağı okurken kapanır
+  let stopSel = null;
+  if (book.file.type === 'epub') {
+    stopSel = watchSelection(stage, root, { lang: () => book.file.lang });
+    $$('.r-tap', root).forEach(strip => {
+      let t0 = null, swiped = false, wheelAt = 0;
+      strip.addEventListener('touchstart', e => { const t = e.changedTouches[0]; t0 = { x: t.clientX, y: t.clientY }; swiped = false; }, { passive: true });
+      strip.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+      strip.addEventListener('touchend', e => {
+        if (!t0) return;
+        const t = e.changedTouches[0], dx = t.clientX - t0.x, dy = t.clientY - t0.y;
+        t0 = null;
+        if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy)) { swiped = true; activity(); dx < 0 ? ctrl.next() : ctrl.prev(); }
+        else if (Math.abs(dy) > 50) { swiped = true; activity(); dy < 0 ? ctrl.next() : ctrl.prev(); }
+      });
+      strip.addEventListener('click', () => { if (swiped) { swiped = false; return; } tap(strip.dataset.zone); });
+      strip.addEventListener('wheel', e => {
+        e.preventDefault();
+        if (Date.now() - wheelAt < 450 || Math.abs(e.deltaY) + Math.abs(e.deltaX) < 8) return;
+        wheelAt = Date.now(); activity();
+        (e.deltaY || e.deltaX) > 0 ? ctrl.next() : ctrl.prev();
+      }, { passive: false });
     });
-    tapLayer.addEventListener('click', e => {
-      if (swiped) { swiped = false; return; }
-      const r = tapLayer.getBoundingClientRect(), x = (e.clientX - r.left) / r.width;
-      tap(x < 0.3 ? 'left' : x > 0.7 ? 'right' : 'center');
-    });
-    tapLayer.addEventListener('wheel', e => {
-      e.preventDefault();
-      if (Date.now() - wheelAt < 450 || Math.abs(e.deltaY) + Math.abs(e.deltaX) < 8) return;
-      wheelAt = Date.now(); activity();
-      (e.deltaY || e.deltaX) > 0 ? ctrl.next() : ctrl.prev();
-    }, { passive: false });
-    }
+    if (rs().flow === 'scroll') watchScrollChrome(stage, toggleChrome, () => root.classList.contains('chrome'));
     $('#r-prev', root).addEventListener('click', () => { activity(); ctrl.prev(); });
     $('#r-next', root).addEventListener('click', () => { activity(); ctrl.next(); });
   }
@@ -296,6 +285,7 @@ export async function renderReader(view, [id], query) {
 
   // Sayfadan çıkınca çağrılır
   return async () => {
+    stopSel?.();
     clearInterval(tick); clearTimeout(saveT); clearTimeout(chromeT);
     document.removeEventListener('keyup', onKey);
     document.removeEventListener('visibilitychange', onHide);
@@ -308,7 +298,7 @@ export async function renderReader(view, [id], query) {
 // =====================================================================
 // EPUB
 // =====================================================================
-async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck, onSelect }) {
+async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck }) {
   const scroll = rs().flow === 'scroll';
   await loadScript('vendor/jszip.min.js');
   await loadScript('vendor/epub.min.js');
@@ -319,9 +309,8 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck, 
     ? { width: '100%', height: '100%', manager: 'continuous', flow: 'scrolled', allowScriptedContent: false }
     : { width: '100%', height: '100%', flow: 'paginated', spread: 'none', allowScriptedContent: false });
   // Kaydırma modunda dokunma katmanı yok: ortaya dokunmak menüyü açsın
-  rendition.on('selected', (cfi, contents) => { try { onSelect?.(contents.window.getSelection().toString()); } catch { /* yok */ } });
-  if (scroll) {
-    // iPhone düz metne dokunuşu sayfa içinde "click" olarak bildirmiyor: dokunuşu parmak hareketinden anla
+  {
+    // Ortaya dokununca menü (Android/bilgisayar; iPhone korumalı çerçevedeki dokunmaları bildirmediği için orada ⋯ düğmesi var)
     let lastTouch = 0;
     rendition.hooks.content.register(contents => {
       const d = contents.document;
@@ -661,12 +650,11 @@ async function renderSplit(view, id) {
       <div class="sp-panes">
         ${order.map((sl, i) => `<div class="sp-pane ${slotFile(real, sl).type}" data-i="${i}">
           <div class="sp-stage" id="sp-stage-${i}"></div>
-          ${slotFile(real, sl).type === 'epub' ? `<div class="sp-tap" data-i="${i}"></div>` : ''}
+          ${slotFile(real, sl).type === 'epub' && s.flow !== 'scroll' ? `<div class="sp-tap sp-tap-l" data-i="${i}" data-dir="-1"></div><div class="sp-tap sp-tap-r" data-i="${i}" data-dir="1"></div>` : ''}
           <div class="sp-status"><b>${esc(langLabel(slotFile(real, sl)))}</b><span class="sp-chap" id="sp-chap-${i}"></span><span id="sp-pct-${i}"></span></div>
           <div class="r-loading" id="sp-load-${i}">Açılıyor…</div>
         </div>`).join('')}
       </div>
-      <button class="wp-fab hidden" id="sp-tr">🔤 Çevir</button>
     </div>`;
   const root = $('#reader', view);
 
@@ -680,8 +668,7 @@ async function renderSplit(view, id) {
 
   let saveT = null;
   const persist = () => db.putBook(real);
-  let selText = '', selLang = 'orig', selT = null;
-  $('#sp-tr', root).addEventListener('click', () => { $('#sp-tr', root).classList.add('hidden'); openTranslate(selText, { lang: selLang }); });
+  const stops = [];
   const panes = await Promise.all(order.map(async (sl, i) => {
     const book = slotBook(real, sl);
     const pane = { slot: sl, book, last: null, ctrl: null, i };
@@ -698,10 +685,10 @@ async function renderSplit(view, id) {
     try {
       const stage = $(`#sp-stage-${i}`, root);
       pane.ctrl = book.file.type === 'epub'
-        ? await openEpub(stage, blob, book, { onLocation, onTap: () => {}, start: book.progress?.loc, onStuck: () => toast('Sayfa çevrilemedi: Aa → "Kaydırarak oku"yu dene'),
-          onSelect: t => { selText = String(t || '').trim(); selLang = book.file.lang; const fab = $('#sp-tr', root); fab.classList.toggle('hidden', !selText); clearTimeout(selT); selT = setTimeout(() => fab.classList.add('hidden'), 8000); } })
+        ? await openEpub(stage, blob, book, { onLocation, onTap: () => {}, start: book.progress?.loc, onStuck: () => toast('Sayfa çevrilemedi: Aa → "Kaydırarak oku"yu dene') })
         : await openPdf(stage, blob, book, { onLocation, onTap: () => {}, start: book.progress?.loc, onActivity: activity });
       $(`#sp-load-${i}`, root).remove();
+      if (book.file.type === 'epub') stops.push(watchSelection(stage, root, { lang: () => book.file.lang }));
     } catch (e) {
       $(`#sp-load-${i}`, root).innerHTML = `⚠️ Açılamadı<br><span class="small">${esc(e.message || '')}</span>`;
     }
@@ -711,8 +698,6 @@ async function renderSplit(view, id) {
   // Bölme başına dokunma: sol kenar geri, sağ kenar ileri, kaydırma da çevirir
   $$('.sp-tap', root).forEach(layer => {
     const pane = panes[Number(layer.dataset.i)];
-    attachWordPicker(layer, $(`#sp-stage-${layer.dataset.i}`, root), { lang: () => pane.book.file.lang });
-    if (rs().flow === 'scroll') { wireScrollLayer(layer, $(`#sp-stage-${layer.dataset.i}`, root), { onTap: () => {}, onActivity: activity }); return; }
     let t0 = null, swiped = false;
     const go = d => { activity(); if (pane.ctrl) (d > 0 ? pane.ctrl.next() : pane.ctrl.prev()); };
     layer.addEventListener('touchstart', e => { const t = e.changedTouches[0]; t0 = { x: t.clientX, y: t.clientY }; swiped = false; }, { passive: true });
@@ -726,8 +711,7 @@ async function renderSplit(view, id) {
     });
     layer.addEventListener('click', e => {
       if (swiped) { swiped = false; return; }
-      const r = layer.getBoundingClientRect(), x = (e.clientX - r.left) / r.width;
-      if (x < 0.4) go(-1); else if (x > 0.6) go(1);
+      go(Number(layer.dataset.dir));
     });
     let wheelAt = 0;
     layer.addEventListener('wheel', e => {
@@ -802,6 +786,7 @@ async function renderSplit(view, id) {
   document.addEventListener('visibilitychange', onHide);
 
   return async () => {
+    stops.forEach(f => f());
     clearInterval(tick); clearTimeout(saveT);
     document.removeEventListener('visibilitychange', onHide);
     panes.forEach(p => { try { p.ctrl?.destroy(); } catch { /* yok */ } });
@@ -818,49 +803,21 @@ function closeReader(id) {
   else location.replace(target);
 }
 
-// Kaydırma modu için dokunma katmanı. iPhone, kitabın açıldığı (betiksiz, korumalı) çerçevenin içindeki
-// dokunmaları uygulamaya bildirmiyor; bu yüzden kaydırmayı ve dokunmayı katmanda biz yaparız.
-function wireScrollLayer(layer, stage, { onTap, onActivity }) {
-  const box = () => stage.querySelector('.epub-container') || stage;
-  let t0 = null, lastY = 0, lastT = 0, vel = 0, raf = 0, moved = false;
-  const stopInertia = () => { cancelAnimationFrame(raf); raf = 0; };
-  layer.addEventListener('touchstart', e => {
-    stopInertia();
-    if (e.touches.length !== 1) { t0 = null; return; }
-    const t = e.touches[0];
-    t0 = { x: t.clientX, y: t.clientY, at: Date.now() }; lastY = t.clientY; lastT = performance.now(); vel = 0; moved = false;
-  }, { passive: true });
-  layer.addEventListener('touchmove', e => {
-    e.preventDefault();
-    if (!t0) return;
-    const t = e.touches[0], now = performance.now();
-    const dy = t.clientY - lastY;
-    if (!moved && Math.hypot(t.clientX - t0.x, t.clientY - t0.y) > 8) moved = true;
-    if (moved) {
-      box().scrollTop -= dy;
-      vel = 0.8 * (dy / Math.max(1, now - lastT)) + 0.2 * vel; // px/ms
-      onActivity?.();
-    }
-    lastY = t.clientY; lastT = now;
-  }, { passive: false });
-  layer.addEventListener('touchend', () => {
-    if (!t0) return;
-    const quick = Date.now() - t0.at < 350;
-    t0 = null;
-    if (!moved) { if (quick) onTap?.(); return; }
-    // Bırakınca kaymaya devam et (yavaşlayarak)
-    if (performance.now() - lastT > 80) vel = 0;
-    let v = vel * 16;
-    const step = () => {
-      if (Math.abs(v) < 0.5) { raf = 0; return; }
-      box().scrollTop -= v; v *= 0.95;
-      raf = requestAnimationFrame(step);
-    };
-    if (Math.abs(v) > 1) raf = requestAnimationFrame(step);
-  });
-  layer.addEventListener('wheel', e => { e.preventDefault(); stopInertia(); box().scrollTop += e.deltaY; onActivity?.(); }, { passive: false });
-  // Fare ile tıklama (dokunmatik olmayan)
-  let lastTouch = 0;
-  layer.addEventListener('touchend', () => { lastTouch = Date.now(); });
-  layer.addEventListener('click', () => { if (Date.now() - lastTouch > 800) onTap?.(); });
+// Kaydırma modunda menü: geri (yukarı) kaydırınca açılır, okumaya devam edince (aşağı) kapanır.
+function watchScrollChrome(stage, toggleChrome, isOpen) {
+  let box = null, lastTop = 0, acc = 0;
+  const onScroll = () => {
+    const top = box.scrollTop, d = top - lastTop;
+    lastTop = top;
+    acc = Math.sign(d) === Math.sign(acc) ? acc + d : d;
+    if (acc < -60 && !isOpen()) { toggleChrome(true); acc = 0; }
+    else if (acc > 120 && isOpen()) { toggleChrome(false); acc = 0; }
+  };
+  const attach = () => {
+    box = stage.querySelector('.epub-container');
+    if (!box) { setTimeout(attach, 300); return; }
+    lastTop = box.scrollTop;
+    box.addEventListener('scroll', onScroll, { passive: true });
+  };
+  attach();
 }

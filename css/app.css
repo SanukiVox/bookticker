@@ -430,3 +430,20 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; dis
 .reader .r-menu-fab { position: absolute; z-index: 2; right: 10px; bottom: calc(var(--safe-bottom) + 36px); width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--rline); background: var(--rbar); color: var(--rfg); font-size: 22px; line-height: 1; opacity: .75; box-shadow: 0 2px 8px rgba(0,0,0,.12); }
 .reader .r-menu-fab { z-index: 4; transition: bottom .2s; }
 .reader.chrome .r-menu-fab { bottom: calc(var(--safe-bottom) + 124px); opacity: .9; }
+
+/* Sayfa sayfa modunda yalnız kenar şeritleri dokunmayı alır; ortadaki metin iPhone'un kendi seçimiyle seçilir */
+.reader .r-tap, .reader.split .sp-tap { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.reader .r-tap.r-tap-l { left: 0; right: auto; width: 16%; }
+.reader .r-tap.r-tap-r { right: 0; left: auto; width: 16%; }
+.reader.split .sp-tap.sp-tap-l { left: 0; right: auto; width: 18%; }
+.reader.split .sp-tap.sp-tap-r { right: 0; left: auto; width: 18%; }
+/* Seçim çeviri kartı */
+.sel-card { position: absolute; z-index: 6; left: 10px; right: 10px; bottom: calc(var(--safe-bottom) + 34px); max-height: 38vh; overflow: auto; background: var(--surface); color: var(--text); border: 1px solid var(--line); border-radius: 16px; padding: 10px 12px; box-shadow: 0 6px 24px rgba(0,0,0,.22); display: flex; flex-direction: column; gap: 6px; font-size: 15px; }
+.sel-card.hidden { display: none; }
+.sel-card .sel-row { display: flex; gap: 8px; align-items: flex-start; }
+.sel-card .sel-src { flex: 1; font-family: var(--serif); opacity: .75; max-height: 3.9em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; }
+.sel-card .sel-x { border: 0; background: none; color: var(--muted); font-size: 16px; padding: 0 4px; }
+.sel-card .sel-out b { font-size: 17px; }
+.sel-card .sel-links { display: flex; gap: 14px; font-size: 14px; }
+.sel-card .sel-links a { color: var(--accent); text-decoration: none; font-weight: 600; }
+.reader.chrome .sel-card { bottom: calc(var(--safe-bottom) + 124px); }
