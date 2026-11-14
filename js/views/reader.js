@@ -64,6 +64,7 @@ export async function renderReader(view, [id], query) {
         <div class="btn-row"><button class="btn" id="r-fin-no">Henüz değil</button><button class="btn primary" id="r-fin-yes">✅ Okundu olarak işaretle</button></div></div>
       <div class="r-loading" id="r-loading">Kitap açılıyor…</div>
       <button class="wp-fab hidden" id="r-tr">🔤 Çevir</button>
+      ${book.file.type === 'epub' && s.flow === 'scroll' ? '<button class="r-menu-fab" id="r-menu" aria-label="Menü">⋯</button>' : ''}
     </div>`;
   const root = $('#reader', view);
   // Kaydırma modunda tarayıcının kendi seçimi çalışır: seçilince "Çevir" düğmesi çıkar
@@ -149,6 +150,7 @@ export async function renderReader(view, [id], query) {
   toggleChrome(true);
   chromeT = setTimeout(() => toggleChrome(false), 2500);
   $('#r-status', root).addEventListener('click', () => toggleChrome());
+  $('#r-menu', root)?.addEventListener('click', () => toggleChrome());
 
   $('#r-tr', root).addEventListener('click', () => { $('#r-tr', root).classList.add('hidden'); openTranslate(selText, { lang: book.file.lang }); });
   const tapLayer = $('#r-tap', root);
@@ -315,7 +317,35 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck, 
     : { width: '100%', height: '100%', flow: 'paginated', spread: 'none', allowScriptedContent: false });
   // Kaydırma modunda dokunma katmanı yok: ortaya dokunmak menüyü açsın
   rendition.on('selected', (cfi, contents) => { try { onSelect?.(contents.window.getSelection().toString()); } catch { /* yok */ } });
-  if (scroll) rendition.on('click', e => { const sel = e.view?.getSelection?.(); if (!(sel && String(sel).length)) onTap('center'); });
+  if (scroll) {
+    // iPhone düz metne dokunuşu sayfa içinde "click" olarak bildirmiyor: dokunuşu parmak hareketinden anla
+    let lastTouch = 0;
+    rendition.hooks.content.register(contents => {
+      const d = contents.document;
+      let t0 = null;
+      d.addEventListener('touchstart', e => {
+        if (e.touches.length !== 1) { t0 = null; return; }
+        const t = e.touches[0]; t0 = { x: t.screenX, y: t.screenY, at: Date.now() };
+      }, { passive: true });
+      d.addEventListener('touchend', e => {
+        lastTouch = Date.now();
+        if (!t0) return;
+        const t = e.changedTouches[0];
+        const moved = Math.hypot(t.screenX - t0.x, t.screenY - t0.y), dt = Date.now() - t0.at;
+        t0 = null;
+        if (moved > 10 || dt > 350) return; // kaydırma ya da basılı tutma
+        if (String(d.getSelection?.() || '').length) return; // metin seçiliyor
+        if (e.target?.closest?.('a[href]')) return; // bağlantı
+        onTap('center');
+      }, { passive: true });
+    });
+    // Fare / dokunmatik olmayan cihazlar için
+    rendition.on('click', e => {
+      if (Date.now() - lastTouch < 800) return;
+      const sel = e.view?.getSelection?.();
+      if (!(sel && String(sel).length)) onTap('center');
+    });
+  }
   const locKey = `loc:${book.file.key}`;
   let locationsReady = false;
   let last = null;
