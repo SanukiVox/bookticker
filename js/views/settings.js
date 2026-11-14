@@ -6,7 +6,7 @@ import { backButton, wireBack } from './detail.js';
 import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 
-export const APP_VERSION = '1.27.1';
+export const APP_VERSION = '1.28.0';
 
 export async function renderSettings(view) {
   const s = state.settings;
@@ -60,6 +60,8 @@ export async function renderSettings(view) {
       <button class="set-row" id="exp" style="width:100%;border:0;background:none;text-align:left">📤 Excel'e aktar<span class="chev"></span></button>
       <button class="set-row" id="bak" style="width:100%;border:0;background:none;text-align:left">💾 Yedek al (kapaklar dahil)<span class="chev"></span></button>
       <label class="set-row" style="position:relative">♻️ Yedekten geri yükle<span class="chev"></span><input type="file" id="res" accept=".json,application/json" style="position:absolute;inset:0;opacity:0"></label>
+      ${fu.count ? `<button class="set-row" id="fbak" style="width:100%;border:0;background:none;text-align:left">📦 Kitap dosyalarını yedekle (${fu.count} · ${formatSize(fu.bytes)})<span class="chev"></span></button>` : ''}
+      <label class="set-row" style="position:relative">📂 Kitap dosyalarını geri yükle<span class="chev"></span><input type="file" id="fres" accept=".zip,application/zip" style="position:absolute;inset:0;opacity:0"></label>
       <div class="set-row muted small" style="display:block">Son yedek: ${lastBackup}${storage ? `<br>${storage}` : ''}${fu.count ? `<br>📄 Kitap dosyaları: ${fu.count} dosya · ${formatSize(fu.bytes)} (sadece bu telefonda; yedeğe ve GitHub'a dahil değil)` : ''}<br>Veriler yalnızca bu telefonda saklanır. Ara sıra yedek alıp Dosyalar'a ya da iCloud Drive'a kaydetmeni öneririm.</div>
     </div>
 
@@ -67,6 +69,27 @@ export async function renderSettings(view) {
     <p class="muted small" style="text-align:center">Kitaplığım ${APP_VERSION} · ${state.books.length} kitap<br><button class="mini-btn" id="check-upd" style="margin-top:8px">🔄 Güncellemeleri denetle</button></p>`;
 
   wireGithub(view);
+  // 📦 Kitap dosyaları (PDF/EPUB) yedeği: ZIP olarak Dosyalar/iCloud Drive'a
+  $('#fbak', view)?.addEventListener('click', async e => {
+    const btn = e.currentTarget, label = btn.innerHTML;
+    try {
+      const fb = await import('../filebackup.js');
+      const res = await fb.backupFiles(f => { btn.firstChild.textContent = `📦 Hazırlanıyor… %${Math.round(f * 100)}`; });
+      btn.innerHTML = label;
+      const how = await fb.saveOrShare(res.file);
+      if (how !== 'cancel') toast(`📦 ${res.count} dosya yedeklendi (${fb.formatSize(res.bytes)})${how === 'shared' ? '' : ' · indirildi'}`);
+    } catch (err) { btn.innerHTML = label; toast(err.message || 'Yedeklenemedi'); }
+  });
+  $('#fres', view)?.addEventListener('change', async e => {
+    const f = e.target.files?.[0]; e.target.value = '';
+    if (!f) return;
+    toast('📂 Dosyalar geri yükleniyor…');
+    try {
+      const r = await (await import('../filebackup.js')).restoreFiles(f);
+      toast(`📂 ${r.restored} dosya geri yüklendi${r.already ? ` · ${r.already} zaten vardı` : ''}${r.skipped ? ` · ${r.skipped} eşleşmedi` : ''}`);
+      renderSettings(view);
+    } catch (err) { toast(err.message || 'Geri yüklenemedi'); }
+  });
   $('#guide', view).addEventListener('click', async () => (await import('../ui.js')).openGuide());
   (await import('./aisettings.js')).fillAiSection(view);
   $('#check-upd', view)?.addEventListener('click', () => checkForUpdate());

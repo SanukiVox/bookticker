@@ -513,7 +513,7 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck }
   const ready = () => { locationsReady = true; if (last) report(last); };
   if (cached) { eb.locations.load(cached); ready(); }
   else {
-    setTimeout(() => eb.locations.generate(1200).then(() => { db.putMeta(locKey, eb.locations.save()); ready(); }).catch(() => {}), 300);
+    setTimeout(() => { try { eb.locations.generate(1200).then(() => { db.putMeta(locKey, eb.locations.save()); ready(); }).catch(() => {}); } catch { /* okuyucu kapandı */ } }, 300);
   }
 
   return {
