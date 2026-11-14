@@ -259,6 +259,29 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start }) {
 
   await eb.ready;
   applyStyle();
+  // Kapak gibi linear="no" işaretli bölümlerde epub.js ileri/geri gidemiyor (kapakta takılma).
+  // Bu bölümlerden en yakın okunur bölüme geçilsin.
+  const items = eb.spine.spineItems;
+  for (const sec of items) {
+    if (sec.linear) continue;
+    sec.next = () => items.slice(sec.index + 1).find(x => x.linear) || items[sec.index + 1];
+    sec.prev = () => items.slice(0, sec.index).reverse().find(x => x.linear) || items[sec.index - 1];
+  }
+  // Yedek: sayfa çevirme konumu değiştirmediyse sonraki/önceki bölümü doğrudan aç.
+  let turning = false;
+  async function turn(dir) {
+    if (turning) return;
+    turning = true;
+    try {
+      const before = last?.start?.cfi;
+      await (dir > 0 ? rendition.next() : rendition.prev());
+      if (last?.start?.cfi === before && !(dir > 0 ? last?.atEnd : last?.atStart)) {
+        const cur = last?.start?.index ?? rendition.location?.start?.index;
+        const target = cur == null ? null : items[cur + dir];
+        if (target) await rendition.display(target.href);
+      }
+    } finally { turning = false; }
+  }
   const nav = await eb.loaded.navigation;
   const flat = [];
   (function walk(items, depth) { for (const it of items || []) { flat.push({ label: (it.label || '').trim(), href: it.href, depth }); walk(it.subitems, depth + 1); } })(nav.toc, 0);
@@ -290,7 +313,7 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start }) {
   rendition.on('touchend', e => {
     if (!touch) return;
     const t = e.changedTouches[0], dx = t.screenX - touch.x, dy = t.screenY - touch.y;
-    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.3) { swiped = true; dx < 0 ? rendition.next() : rendition.prev(); }
+    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.3) { swiped = true; turn(dx < 0 ? 1 : -1); }
     touch = null;
   });
   rendition.on('click', e => {
@@ -301,7 +324,7 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start }) {
     const x = ((e.screenX - (window.screenX || 0)) % w + w) % w;
     onTap(x < w * 0.3 ? 'left' : x > w * 0.7 ? 'right' : 'center');
   });
-  rendition.on('keyup', e => { if (e.key === 'ArrowRight') rendition.next(); if (e.key === 'ArrowLeft') rendition.prev(); });
+  rendition.on('keyup', e => { if (e.key === 'ArrowRight') turn(1); if (e.key === 'ArrowLeft') turn(-1); });
 
   try { await rendition.display(start || undefined); } catch { await rendition.display(); }
 
@@ -314,8 +337,8 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start }) {
   }
 
   return {
-    next: () => rendition.next(),
-    prev: () => rendition.prev(),
+    next: () => turn(1),
+    prev: () => turn(-1),
     goto: loc => rendition.display(loc),
     gotoToc: t => rendition.display(t.href),
     toc: async () => flat,
