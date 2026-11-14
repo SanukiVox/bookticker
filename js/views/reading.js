@@ -2,6 +2,7 @@
 import { state, computeScore, booksInSeries, displayTitle, statusInfo, genreColor, saveBooks, saveSettings, norm } from '../store.js';
 import { esc, enc, coverHTML, bookCard, hydrateCovers, sheet, toast, $, $$ } from '../ui.js';
 import { vocabCount } from './vocab.js';
+import { upcomingCount } from './upcoming.js';
 import { tasteSection } from './finished.js';
 import { readingStats, formatDuration, progressOf, latestSlot, slotProgress } from '../files.js';
 import { tasteRecommendations } from '../similar.js';
@@ -76,6 +77,7 @@ export async function renderReading(view) {
     ${sugg.length > 1 ? `<h3 style="margin-bottom:8px">Diğer öneriler</h3><div class="strip" style="margin:0 -16px 20px;padding:2px 16px 4px">${sugg.slice(1).map(s => bookCard(s.b)).join('')}</div>` : ''}
     ${taste.length ? `<h3 style="margin-bottom:8px">Zevkine göre</h3><div class="strip" style="margin:0 -16px 20px;padding:2px 16px 4px">${taste.map(t => bookCard(t.b, '', `${displayTitle(t.because)} sevdiğin için`)).join('')}</div>` : ''}
 
+    ${upcomingCount() ? `<a class="section" href="#/upcoming" style="display:flex;align-items:center;gap:12px;color:inherit"><span style="font-size:26px">📅</span><span style="flex:1"><b>Çıkış takvimi</b><br><span class="muted small">${upcomingCount()} kitap yakında çıkacak</span></span><span class="muted">›</span></a>` : ''}
     ${vocabCount() ? `<a class="section" href="#/vocab" style="display:flex;align-items:center;gap:12px;color:inherit"><span style="font-size:26px">📒</span><span style="flex:1"><b>Kelime defterim</b><br><span class="muted small">${vocabCount()} kelime · kartlarla tekrar et</span></span><span class="muted">›</span></a>` : ''}
     <div class="section"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><h3 style="margin:0">Öncelik sıram</h3><button class="mini-btn" id="add-q">＋ Ekle</button></div>
       ${queue.length ? `<div class="list" id="queue" style="box-shadow:none;margin:0 -14px -14px">${queue.map((b, i) => `

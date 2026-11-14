@@ -13,6 +13,7 @@ import { renderAuthor, renderSeries } from './views/group.js';
 import { renderReader } from './views/reader.js';
 import { renderChat } from './views/chat.js';
 import { renderVocab } from './views/vocab.js';
+import { renderUpcoming, checkReleases } from './views/upcoming.js';
 
 const routes = [
   [/^\/?$/, renderLibrary, 'library'],
@@ -28,6 +29,7 @@ const routes = [
   [/^\/read\/([^/]+)$/, renderReader, 'read'],
   [/^\/chat$/, renderChat, 'chat'],
   [/^\/vocab(?:\/([^/]+))?$/, renderVocab, 'reading'],
+  [/^\/upcoming$/, renderUpcoming, 'reading'],
 ];
 
 const scrollMemory = new Map();
@@ -92,6 +94,7 @@ async function start() {
   await route();
   requestPersistence();
   startAutoSync();
+  setTimeout(() => checkReleases().catch(() => {}), 1500);
   onAutoPush(err => toast(err ? `☁️ GitHub'a gönderilemedi: ${err.message}` : '☁️ GitHub\'a kaydedildi'));
   onAutoPull(() => toast('☁️ Diğer cihazdaki değişiklikler alındı'));
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
