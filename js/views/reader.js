@@ -36,9 +36,9 @@ export async function renderReader(view, [id], query) {
 
   const s = rs();
   view.innerHTML = `
-    <div class="reader ${book.file.type}" id="reader" data-rtheme="${s.theme}">
+    <div class="reader ${book.file.type}${book.file.type === 'epub' && s.flow === 'scroll' ? ' scroll' : ''}" id="reader" data-rtheme="${s.theme}">
       <div class="r-stage" id="stage"></div>
-      ${book.file.type === 'epub' ? '<div class="r-tap" id="r-tap"></div>' : ''}
+      ${book.file.type === 'epub' && s.flow !== 'scroll' ? '<div class="r-tap" id="r-tap"></div>' : ''}
       <div class="r-status" id="r-status"><span id="r-chap"></span><span id="r-pct"></span></div>
       <div class="r-top">
         <button class="icon-btn" id="r-close" aria-label="Kapat">${ICON.back}</button>
@@ -97,7 +97,7 @@ export async function renderReader(view, [id], query) {
   let ctrl;
   try {
     ctrl = book.file.type === 'epub'
-      ? await openEpub(stage, blob, book, { onLocation, onTap: zone => tap(zone), start: query.get('loc') || book.progress?.loc })
+      ? await openEpub(stage, blob, book, { onLocation, onTap: zone => tap(zone), start: query.get('loc') || book.progress?.loc, onStuck: () => switchFlow('scroll', true) })
       : await openPdf(stage, blob, book, { onLocation, onTap: () => toggleChrome(), start: query.get('loc') || book.progress?.loc, onActivity: activity });
   } catch (e) {
     clearInterval(tick);
@@ -106,6 +106,15 @@ export async function renderReader(view, [id], query) {
   }
   $('#r-loading', root).remove();
   $('#r-range', root).max = ctrl.rangeMax();
+
+  // Sayfa sayfa / kaydırarak: okuyucuyu aynı yerden yeniden açar
+  function switchFlow(flow, auto) {
+    if ((rs().flow || 'paged') === flow) return;
+    rs().flow = flow; saveSettings();
+    if (auto) toast('Sayfa çevrilemedi; "Kaydırarak oku" moduna geçildi (Aa menüsünden değiştirebilirsin)', 4500);
+    const loc = book.progress?.loc;
+    location.replace(`#/read/${encodeURIComponent(book.id)}?${loc ? `loc=${encodeURIComponent(loc)}&` : ''}m=${Date.now()}`);
+  }
 
   // ---------- Üst/alt çubuklar ----------
   let chromeT;
@@ -122,6 +131,7 @@ export async function renderReader(view, [id], query) {
   }
   toggleChrome(true);
   chromeT = setTimeout(() => toggleChrome(false), 2500);
+  $('#r-status', root).addEventListener('click', () => toggleChrome());
 
   const tapLayer = $('#r-tap', root);
   if (tapLayer) {
@@ -205,6 +215,7 @@ export async function renderReader(view, [id], query) {
       title: 'Görünüm',
       body: `<div class="f-block"><h3>Arka plan</h3><div class="r-themes">${Object.entries(THEMES).map(([k, t]) => `<button data-th="${k}" class="${s.theme === k ? 'on' : ''}" style="background:${t.bg};color:${t.fg}">${t.label}</button>`).join('')}</div></div>
         ${isEpub ? `<div class="f-block"><h3>Yazı boyutu</h3><div class="range-row"><button class="btn" data-fs="-10">A−</button><b id="fs-val" style="flex:1;text-align:center">%${s.fontSize}</b><button class="btn" data-fs="10">A+</button></div></div>
+        <div class="f-block"><h3>Okuma düzeni</h3><div class="chip-wrap"><button class="chip ${s.flow !== 'scroll' ? 'on' : ''}" data-flow="paged">📖 Sayfa sayfa</button><button class="chip ${s.flow === 'scroll' ? 'on' : ''}" data-flow="scroll">📜 Kaydırarak oku</button></div><p class="small muted" style="margin-top:6px">Sayfa çevrilemiyorsa "Kaydırarak oku"yu seç: metin web sayfası gibi parmakla aşağı kaydırılır.</p></div>
         <div class="f-block"><h3>Yazı tipi</h3><div class="chip-wrap">${Object.entries(FONTS).map(([k, [l]]) => `<button class="chip ${s.font === k ? 'on' : ''}" data-ff="${k}">${l}</button>`).join('')}</div></div>`
         : `<div class="f-block"><h3>Yakınlaştırma</h3><div class="chip-wrap">${[1, 1.25, 1.5, 2].map(z => `<button class="chip ${s.pdfZoom === z ? 'on' : ''}" data-zoom="${z}">%${z * 100}</button>`).join('')}</div></div>
         <div class="f-block"><h3>Sayfaya git</h3><div class="range-row"><input id="goto-p" type="number" inputmode="numeric" min="1" max="${ctrl.rangeMax()}" placeholder="1–${ctrl.rangeMax()}" style="flex:1;height:44px;border-radius:10px;border:1px solid var(--line);padding:0 12px;background:var(--surface)"><button class="btn primary" id="goto-go">Git</button></div></div>`}`,
@@ -220,6 +231,7 @@ export async function renderReader(view, [id], query) {
         $$('[data-ff]', el).forEach(b => b.addEventListener('click', () => {
           s.font = b.dataset.ff; $$('[data-ff]', el).forEach(x => x.classList.toggle('on', x === b)); ctrl.applyStyle(); saveSettings();
         }));
+        $$('[data-flow]', el).forEach(b => b.addEventListener('click', () => { close(); switchFlow(b.dataset.flow); }));
         $$('[data-zoom]', el).forEach(b => b.addEventListener('click', () => {
           s.pdfZoom = Number(b.dataset.zoom); $$('[data-zoom]', el).forEach(x => x.classList.toggle('on', x === b)); ctrl.applyStyle(); saveSettings();
         }));
@@ -262,14 +274,19 @@ export async function renderReader(view, [id], query) {
 // =====================================================================
 // EPUB
 // =====================================================================
-async function openEpub(stage, blob, book, { onLocation, onTap, start }) {
+async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck }) {
+  const scroll = rs().flow === 'scroll';
   await loadScript('vendor/jszip.min.js');
   await loadScript('vendor/epub.min.js');
   const ePub = window.ePub;
   const buf = await blob.arrayBuffer();
   await checkEpub(buf);
   const eb = ePub(buf);
-  const rendition = eb.renderTo(stage, { width: '100%', height: '100%', flow: 'paginated', spread: 'none', allowScriptedContent: false });
+  const rendition = eb.renderTo(stage, scroll
+    ? { width: '100%', height: '100%', manager: 'continuous', flow: 'scrolled', allowScriptedContent: false }
+    : { width: '100%', height: '100%', flow: 'paginated', spread: 'none', allowScriptedContent: false });
+  // Kaydırma modunda dokunma katmanı yok: ortaya dokunmak menüyü açsın
+  if (scroll) rendition.on('click', e => { const sel = e.view?.getSelection?.(); if (!(sel && String(sel).length)) onTap('center'); });
   const locKey = `loc:${book.file.key}`;
   let locationsReady = false;
   let last = null;
@@ -298,7 +315,8 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start }) {
     sec.prev = () => items.slice(0, sec.index).reverse().find(x => x.linear) || items[sec.index - 1];
   }
   // Yedek: sayfa çevirme konumu değiştirmediyse sonraki/önceki bölümü doğrudan aç.
-  let turning = false;
+  let turning = false, stuck = 0;
+  const within = (p, ms) => Promise.race([p, new Promise(res => setTimeout(res, ms))]);
   async function turn(dir) {
     if (turning) return;
     turning = true;
@@ -306,16 +324,18 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start }) {
     try {
       // Konum bildirimi (relocated) sayfa çevrildikten biraz sonra gelir; onu bekle.
       const moved = new Promise(res => { const h = () => { rendition.off('relocated', h); res(true); }; rendition.on('relocated', h); setTimeout(() => { rendition.off('relocated', h); res(false); }, 1500); });
-      try { await (dir > 0 ? rendition.next() : rendition.prev()); } catch (e) { console.warn('sayfa çevirme', e); }
+      try { await within(dir > 0 ? rendition.next() : rendition.prev(), 2500); } catch (e) { console.warn('sayfa çevirme', e); }
       await moved;
       if (last?.start?.cfi === before && !(dir > 0 ? last?.atEnd : last?.atStart)) {
         const cur = last?.start?.index ?? rendition.location?.start?.index;
         const target = cur == null ? null : items[cur + dir];
         if (target) {
-          try { await rendition.display(target.href); }
+          try { await within(rendition.display(target.href), 4000); }
           catch (e) { toast(`⚠️ ${cur + dir + 1}. bölüm açılamadı: ${e?.message || e}`); }
         }
-      }
+        // Hiçbir şekilde ilerlenemiyorsa (bazı iPhone/EPUB birleşimleri) kaydırma moduna geç
+        if (last?.start?.cfi === before && !scroll && ++stuck >= 2) onStuck?.();
+      } else stuck = 0;
     } finally { turning = false; }
   }
   const nav = await eb.loaded.navigation;
