@@ -297,7 +297,8 @@ export async function renderReader(view, [id], query) {
         <div class="f-block"><h3>Okuma düzeni</h3><div class="chip-wrap"><button class="chip ${s.flow !== 'scroll' ? 'on' : ''}" data-flow="paged">📖 Sayfa sayfa</button><button class="chip ${s.flow === 'scroll' ? 'on' : ''}" data-flow="scroll">📜 Kaydırarak oku</button></div><p class="small muted" style="margin-top:6px">Sayfa çevrilemiyorsa "Kaydırarak oku"yu seç: metin web sayfası gibi parmakla aşağı kaydırılır.</p></div>
         <div class="f-block"><h3>Yazı tipi</h3><div class="chip-wrap">${Object.entries(FONTS).map(([k, [l]]) => `<button class="chip ${s.font === k ? 'on' : ''}" data-ff="${k}">${l}</button>`).join('')}</div></div>
         ${typoBlocks(s)}`
-        : `<div class="f-block"><h3>Yakınlaştırma</h3><div class="chip-wrap">${[1, 1.25, 1.5, 2].map(z => `<button class="chip ${s.pdfZoom === z ? 'on' : ''}" data-zoom="${z}">%${z * 100}</button>`).join('')}</div></div>
+        : `<div class="f-block"><h3>Okuma düzeni</h3><div class="chip-wrap"><button class="chip ${(s.pdfFlow || 'paged') === 'paged' ? 'on' : ''}" data-pflow="paged">📖 Sayfa sayfa</button><button class="chip ${s.pdfFlow === 'scroll' ? 'on' : ''}" data-pflow="scroll">📜 Kaydırarak</button></div></div>
+        <div class="f-block"><h3>Yakınlaştırma</h3><div class="chip-wrap">${[1, 1.25, 1.5, 2].map(z => `<button class="chip ${s.pdfZoom === z ? 'on' : ''}" data-zoom="${z}">%${z * 100}</button>`).join('')}</div></div>
         <div class="f-block"><h3>Sayfaya git</h3><div class="range-row"><input id="goto-p" type="number" inputmode="numeric" min="1" max="${ctrl.rangeMax()}" placeholder="1–${ctrl.rangeMax()}" style="flex:1;height:44px;border-radius:10px;border:1px solid var(--line);padding:0 12px;background:var(--surface)"><button class="btn primary" id="goto-go">Git</button></div></div>`}`,
       onMount: (el, close) => {
         $$('[data-th]', el).forEach(b => b.addEventListener('click', () => {
@@ -313,6 +314,13 @@ export async function renderReader(view, [id], query) {
           s.font = b.dataset.ff; $$('[data-ff]', el).forEach(x => x.classList.toggle('on', x === b)); ctrl.applyStyle(); saveSettings();
         }));
         $$('[data-flow]', el).forEach(b => b.addEventListener('click', () => { close(); switchFlow(b.dataset.flow); }));
+        $$('[data-pflow]', el).forEach(b => b.addEventListener('click', () => {
+          close();
+          if ((rs().pdfFlow || 'paged') === b.dataset.pflow) return;
+          rs().pdfFlow = b.dataset.pflow; saveSettings();
+          const loc = book.progress?.loc;
+          location.replace(`#/read/${encodeURIComponent(book.id)}?${slotQ}${loc ? `loc=${encodeURIComponent(loc)}&` : ''}m=${Date.now()}`);
+        }));
         $$('[data-zoom]', el).forEach(b => b.addEventListener('click', () => {
           s.pdfZoom = Number(b.dataset.zoom); $$('[data-zoom]', el).forEach(x => x.classList.toggle('on', x === b)); ctrl.applyStyle(); saveSettings();
         }));
@@ -570,6 +578,7 @@ async function openPdf(stage, blob, book, { onLocation, onTap, start, onActivity
   pdfjs.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.mjs';
   const doc = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()), isEvalSupported: false, standardFontDataUrl: base + 'standard_fonts/' }).promise;
   const pages = doc.numPages;
+  if ((rs().pdfFlow || 'paged') === 'paged') return openPdfPaged(stage, doc, pages, { onLocation, onTap, start, onActivity });
   const first = (await doc.getPage(1)).getViewport({ scale: 1 });
 
   stage.innerHTML = `<div class="pdf-inner" id="pdf-inner">${Array.from({ length: pages }, (_, i) => `<div class="pdf-page" data-n="${i + 1}" style="aspect-ratio:${first.width}/${first.height}"><span class="pdf-num">${i + 1}</span></div>`).join('')}</div>`;
@@ -653,24 +662,7 @@ async function openPdf(stage, blob, book, { onLocation, onTap, start, onActivity
     prev: () => stage.scrollBy({ top: -stage.clientHeight * 0.9, behavior: 'smooth' }),
     goto: loc => goto(loc),
     gotoToc: t => goto(t.page),
-    toc: async () => {
-      if (outline) return outline;
-      outline = [];
-      const items = await doc.getOutline().catch(() => null);
-      async function walk(list, depth) {
-        for (const it of list || []) {
-          let page = null;
-          try {
-            const dest = typeof it.dest === 'string' ? await doc.getDestination(it.dest) : it.dest;
-            if (dest?.[0]) page = (typeof dest[0] === 'number' ? dest[0] : await doc.getPageIndex(dest[0])) + 1;
-          } catch { /* yok */ }
-          if (page) outline.push({ label: it.title, page, depth });
-          await walk(it.items, depth + 1);
-        }
-      }
-      await walk(items, 0);
-      return outline;
-    },
+    toc: async () => (outline ||= await pdfOutline(doc)),
     rangeMax: () => pages,
     rangeValue: () => current,
     previewLabel: v => `Sayfa ${v} / ${pages}`,
@@ -933,4 +925,120 @@ function watchScrollChrome(stage, toggleChrome, isOpen) {
     box.addEventListener('scroll', onScroll, { passive: true });
   };
   attach();
+}
+
+// PDF içindekiler
+async function pdfOutline(doc) {
+  const outline = [];
+  const items = await doc.getOutline().catch(() => null);
+  async function walk(list, depth) {
+    for (const it of list || []) {
+      let page = null;
+      try {
+        const dest = typeof it.dest === 'string' ? await doc.getDestination(it.dest) : it.dest;
+        if (dest?.[0]) page = (typeof dest[0] === 'number' ? dest[0] : await doc.getPageIndex(dest[0])) + 1;
+      } catch { /* yok */ }
+      if (page) outline.push({ label: it.title, page, depth });
+      await walk(it.items, depth + 1);
+    }
+  }
+  await walk(items, 0);
+  return outline;
+}
+
+// PDF sayfa sayfa: ekrana sığan tek sayfa; kenara dokun ya da yana kaydır → sayfa çevir, ortaya dokun → menü.
+// Sonraki/önceki sayfa önceden çizilir, çevirme anında olur.
+async function openPdfPaged(stage, doc, pages, { onLocation, onTap, start, onActivity }) {
+  stage.classList.add('pdf-paged');
+  stage.innerHTML = '<div class="pdf-sheet"></div><div class="pdf-pgnum"></div>';
+  const sheet = stage.firstElementChild, pgnum = stage.lastElementChild;
+  const cache = new Map(); // n → Promise<canvas>
+  let current = Math.max(1, Math.min(pages, Number(start) || 1)), sizeKey = '';
+  const zoom = () => rs().pdfZoom || 1;
+
+  function draw(n) {
+    const key = `${stage.clientWidth}x${stage.clientHeight}@${zoom()}`;
+    if (key !== sizeKey) { cache.clear(); sizeKey = key; }
+    if (!cache.has(n)) {
+      cache.set(n, (async () => {
+        const page = await doc.getPage(n);
+        const vp1 = page.getViewport({ scale: 1 });
+        const W = stage.clientWidth - 12, H = stage.clientHeight - 30;
+        const fit = Math.min(W / vp1.width, H / vp1.height) * zoom();
+        let scale = fit * Math.min(window.devicePixelRatio || 1, 2);
+        const maxPixels = 4.5e6;
+        if (vp1.width * vp1.height * scale * scale > maxPixels) scale = Math.sqrt(maxPixels / (vp1.width * vp1.height));
+        const vp = page.getViewport({ scale });
+        const c = document.createElement('canvas');
+        c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
+        c.style.width = `${Math.floor(vp1.width * fit)}px`; c.style.height = `${Math.floor(vp1.height * fit)}px`;
+        await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+        return c;
+      })());
+      // Bellek: yakındaki sayfalar dışındakileri bırak
+      for (const k of [...cache.keys()]) if (Math.abs(k - n) > 2 && Math.abs(k - current) > 2) cache.delete(k);
+    }
+    return cache.get(n);
+  }
+
+  async function show(n, dir = 0) {
+    n = Math.max(1, Math.min(pages, Number(n) || 1));
+    current = n;
+    report();
+    let c;
+    try { c = await draw(n); } catch { return; }
+    if (current !== n) return;
+    sheet.replaceChildren(c);
+    stage.scrollTop = 0; stage.scrollLeft = 0;
+    if (dir) { sheet.classList.remove('turn-l', 'turn-r'); void sheet.offsetWidth; sheet.classList.add(dir > 0 ? 'turn-l' : 'turn-r'); }
+    if (n < pages) draw(n + 1).catch(() => {});
+    if (n > 1) draw(n - 1).catch(() => {});
+  }
+  function report() {
+    pgnum.textContent = `${current} / ${pages}`;
+    onLocation({ loc: current, page: current, pages, percent: (current / pages) * 100, label: `Sayfa ${current} / ${pages}`, chapter: '', atEnd: current === pages });
+  }
+  const next = () => { onActivity?.(); if (current < pages) show(current + 1, 1); };
+  const prev = () => { onActivity?.(); if (current > 1) show(current - 1, -1); };
+
+  // Dokunma: yakınlaştırılmışsa kaydırma sayfanın içinde gezinir; değilse yana kaydırmak sayfa çevirir
+  let t0 = null, swiped = false;
+  stage.addEventListener('touchstart', e => { if (e.touches.length !== 1) { t0 = null; return; } const t = e.touches[0]; t0 = { x: t.clientX, y: t.clientY }; swiped = false; }, { passive: true });
+  stage.addEventListener('touchend', e => {
+    if (!t0) return;
+    const t = e.changedTouches[0], dx = t.clientX - t0.x, dy = t.clientY - t0.y;
+    t0 = null;
+    if (zoom() > 1) return;
+    if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { swiped = true; dx < 0 ? next() : prev(); }
+  });
+  stage.addEventListener('click', e => {
+    if (swiped) { swiped = false; return; }
+    const r = stage.getBoundingClientRect(), x = (e.clientX - r.left) / r.width;
+    if (x < 0.3) prev(); else if (x > 0.7) next(); else onTap?.();
+  });
+  let wheelAt = 0;
+  stage.addEventListener('wheel', e => {
+    if (zoom() > 1) return;
+    e.preventDefault();
+    if (Date.now() - wheelAt < 350 || Math.abs(e.deltaY) + Math.abs(e.deltaX) < 8) return;
+    wheelAt = Date.now(); (e.deltaY || e.deltaX) > 0 ? next() : prev();
+  }, { passive: false });
+  const onResize = () => { cache.clear(); sizeKey = ''; show(current); };
+  window.addEventListener('resize', onResize);
+
+  await show(current);
+  let outline = null;
+  return {
+    next, prev,
+    goto: loc => show(loc),
+    gotoToc: t => show(t.page),
+    toc: async () => (outline ||= await pdfOutline(doc)),
+    rangeMax: () => pages,
+    rangeValue: () => current,
+    previewLabel: v => `Sayfa ${v} / ${pages}`,
+    gotoRange: async v => show(v),
+    isBookmarked: bms => bms.find(b => Number(b.loc) === current) || null,
+    applyStyle: () => { cache.clear(); sizeKey = ''; show(current); },
+    destroy: () => { window.removeEventListener('resize', onResize); cache.clear(); doc.destroy(); },
+  };
 }
