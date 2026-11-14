@@ -25,13 +25,17 @@ async function slotCard(b, slot, both) {
     ? `<div><div style="display:flex;justify-content:space-between;font-size:14px"><span>${p.page && p.pages ? `Sayfa ${p.page} / ${p.pages}` : p.chapter ? esc(p.chapter) : 'İlerleme'}</span><b>%${Math.floor(pct)}</b></div>
        <div class="progress" style="height:8px"><span style="width:${pct}%"></span></div></div>` : '';
   if (!local) {
-    return `<div class="slot-card">${head}<div class="warn">📄 <span><b>${esc(f.name)}</b> başka bir cihazda eklenmiş. Dosyalar sadece eklendiği cihazda saklanır; burada okumak için yeniden ekle. İlerlemen korunur.</span></div>
+    if (f.driveId) {
+      return `<div class="slot-card">${head}<div class="small muted">📄 <b>${esc(f.name)}</b> · ${formatSize(f.size || 0)} · ☁️ Google Drive'da</div>
+        ${progressLine}<div class="btn-row"><button class="btn primary" data-dl="${slot}">☁️ Drive'dan indir</button><button class="mini-btn" data-rm="${slot}" style="color:var(--danger);background:transparent">Kaldır</button></div></div>`;
+    }
+    return `<div class="slot-card">${head}<div class="warn">📄 <span><b>${esc(f.name)}</b> başka bir cihazda eklenmiş ve henüz Drive'a yüklenmemiş. O cihazda Google Drive bağlıysa kendiliğinden yüklenir; ya da burada yeniden ekle. İlerlemen korunur.</span></div>
       ${progressLine}<div class="btn-row">${filePick('📎 Yeniden ekle', 'btn', slot, f.lang || '')}<button class="mini-btn" data-rm="${slot}" style="color:var(--danger);background:transparent">Kaldır</button></div></div>`;
   }
   return `<div class="slot-card">${head}
       <div class="read-cta"><a class="btn primary" href="${href}">📖 ${b.status === 'Okundu' && pct >= 100 ? 'Yeniden oku' : pct ? `Devam et · %${Math.floor(pct)}` : p.loc ? 'Devam et' : 'Okumaya başla'}</a></div>
       ${progressLine}
-      <div class="file-chip">📄 <b>${esc(f.name)}</b><span>${f.type.toUpperCase()} · ${formatSize(f.size)}${bms.length ? ` · 🔖 ${bms.length}` : ''}</span></div>
+      <div class="file-chip">📄 <b>${esc(f.name)}</b><span>${f.type.toUpperCase()} · ${formatSize(f.size)}${bms.length ? ` · 🔖 ${bms.length}` : ''}${f.driveId ? ' · ☁️' : ''}</span></div>
       <div class="btn-row"><button class="mini-btn" data-ai="${slot}">🤖 Yapay zekâya gönder</button>${filePick('Değiştir', 'mini-btn', slot, f.lang || '')}<button class="mini-btn" data-rm="${slot}" style="color:var(--danger);background:transparent">Kaldır</button></div>
     </div>`;
 }
@@ -77,6 +81,7 @@ export async function fillFileSection(view, b) {
     if (!(await confirmSheet('Dosyayı kaldır', `${langLabel(slotFile(b, slot))} dosyası bu cihazdan silinecek. İlerlemen, yer imlerin ve notların kalır.`, 'Kaldır'))) return;
     await detachFile(slotBook(b, slot)); toast('Dosya kaldırıldı');
   }));
+  $$('[data-dl]', sec).forEach(btn => btn.addEventListener('click', () => driveDownload(b, Number(btn.dataset.dl), btn)));
   $$('[data-ai]', sec).forEach(btn => btn.addEventListener('click', async () => (await import('./sendbook.js')).openSendBook(slotBook(b, Number(btn.dataset.ai)))));
   $$('[data-setlang]', sec).forEach(btn => btn.addEventListener('click', async () => {
     const slot = Number(btn.dataset.slot), lang = btn.dataset.setlang;
@@ -111,4 +116,24 @@ function manualProgress(b) {
       if (done) (await import('./finished.js')).openFinished(b);
     }),
   });
+}
+
+
+// Drive'dan indir (bağlantı süresi dolmuşsa Google'a gidip bu sayfaya geri döner)
+export async function driveDownload(b, slot, btn) {
+  const gd = await import('../gdrive.js');
+  const c = await gd.driveConf();
+  if (!c.clientId || !c.connected) { toast('Önce Ayarlar → Google Drive bölümünden bağlan'); return false; }
+  if (!gd.tokenValid(c)) { gd.rememberDownload(b.id, slot); gd.connect({ silent: !!c.email, returnTo: location.hash }); return false; }
+  const label = btn?.innerHTML;
+  try {
+    await gd.downloadOne(b, slot, f => { if (btn) btn.textContent = `☁️ İndiriliyor… %${Math.round(f * 100)}`; });
+    toast('☁️ Dosya indirildi');
+    return true;
+  } catch (e) {
+    if (btn) btn.innerHTML = label;
+    if (/yenilenmeli/.test(e.message)) { gd.rememberDownload(b.id, slot); gd.connect({ silent: !!c.email, returnTo: location.hash }); }
+    else toast(e.message || 'İndirilemedi');
+    return false;
+  }
 }

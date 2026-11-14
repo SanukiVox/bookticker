@@ -75,7 +75,15 @@ export async function renderReader(view, [id], query) {
   if (!book?.file?.key) { location.replace(book ? `#/book/${encodeURIComponent(id)}` : '#/'); return; }
   const blob = await getFileBlob(book);
   if (!blob) {
-    view.innerHTML = `<div class="empty"><div class="big">📄</div><h2>Dosya bu telefonda yok</h2><p>Kitap dosyası sadece eklendiği telefonda saklanır. Kitap sayfasından yeniden ekleyebilirsin.</p><a class="btn primary" href="#/book/${encodeURIComponent(id)}">Kitap sayfasına dön</a></div>`;
+    if (book.file.driveId) {
+      view.innerHTML = `<div class="empty"><div class="big">☁️</div><h2>Dosya Google Drive'da</h2><p>Bu cihaza indirip okumaya devam edebilirsin; ilerlemen korunur.</p><button class="btn primary" id="r-dl">☁️ Drive'dan indir</button><br><a class="btn" style="margin-top:10px" href="#/book/${encodeURIComponent(id)}">Kitap sayfasına dön</a></div>`;
+      $('#r-dl', view).addEventListener('click', async e => {
+        const ok = await (await import('./bookfile.js')).driveDownload(realBook(book), slot, e.currentTarget);
+        if (ok) renderReader(view, [id], query);
+      });
+      return;
+    }
+    view.innerHTML = `<div class="empty"><div class="big">📄</div><h2>Dosya bu cihazda yok</h2><p>Kitap dosyası eklendiği cihazda duruyor. O cihazda Google Drive bağlıysa Drive'a yüklenir ve buradan indirebilirsin; ya da kitap sayfasından yeniden ekle.</p><a class="btn primary" href="#/book/${encodeURIComponent(id)}">Kitap sayfasına dön</a></div>`;
     return;
   }
 

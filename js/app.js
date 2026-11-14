@@ -86,6 +86,8 @@ onSyncChange(() => {
 
 async function start() {
   await Promise.all([load(), loadSync()]);
+  // Google Drive girişinden dönüş (#access_token=…): adresi düzelt, anahtarı sakla
+  try { await (await import('./gdrive.js')).handleRedirect(); } catch { /* yok */ }
   applyTheme();
   window.addEventListener('hashchange', () => {
     // Sayfa değişince açık panelleri kapat
@@ -94,11 +96,18 @@ async function start() {
     route();
   });
   await route();
+  // Google girişinden dönüldüyse yarım kalan Drive indirmesini tamamla, ekranı yenile
+  try { if (await (await import('./gdrive.js')).resumeAfterAuth(toast)) await route(); } catch { /* yok */ }
   requestPersistence();
   startAutoSync();
   setTimeout(() => checkReleases().catch(() => {}), 1500);
+  // Google Drive: yüklenmemiş dosyaları yükle, öbür cihazdan eklenenleri indir (GitHub çekişinden sonra)
+  setTimeout(async () => { try { (await import('./gdrive.js')).startupDrive(toast); } catch { /* yok */ } }, 4000);
   onAutoPush(err => toast(err ? `☁️ GitHub'a gönderilemedi: ${err.message}` : '☁️ GitHub\'a kaydedildi'));
-  onAutoPull(() => toast('☁️ Diğer cihazdaki değişiklikler alındı'));
+  onAutoPull(async () => {
+    toast('☁️ Diğer cihazdaki değişiklikler alındı');
+    try { const r = await (await import('./gdrive.js')).syncDrive(); if (r?.down) toast(`☁️ Drive'dan ${r.down} kitap dosyası indirildi`); } catch { /* yok */ }
+  });
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     // Yeni sürüm yayınlanınca uygulama kendini bir kez yeniler (eski sürümde takılı kalmaz).
     const hadController = !!navigator.serviceWorker.controller;

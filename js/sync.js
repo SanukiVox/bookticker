@@ -135,6 +135,9 @@ function mergeBook(a, b) {
     if (fa || fb) {
       out[f] = fa?.hash && fb?.hash && fa.hash === fb.hash ? base[f] || fa // aynı dosya: daha yeni düzenleme (ör. dil etiketi)
         : (fa?.hash ? fa : fb?.hash ? fb : base[f]) || fa || fb;
+      // Aynı dosyanın Drive kimliği hangi cihazda yazıldıysa korunur
+      const did = [fa, fb].find(x => x?.driveId && x.hash && x.hash === out[f]?.hash)?.driveId;
+      if (out[f] && did && !out[f].driveId) out[f] = { ...out[f], driveId: did };
     }
   }
   if (!out.file2 && !out.progress2 && !out.bookmarks2?.length) { delete out.progress2; delete out.bookmarks2; }

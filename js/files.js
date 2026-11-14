@@ -73,6 +73,8 @@ export async function attachFile(book, file, lang) {
     book.bookmarks = [];
   }
   await saveBook(book);
+  // Drive bağlıysa arka planda yükle (bağlantı süresi dolmuşsa sonraki açılışta yüklenir)
+  import('./gdrive.js').then(m => m.syncDrive({ download: false })).catch(() => {});
   return { sameFile };
 }
 

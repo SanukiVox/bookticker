@@ -5,8 +5,9 @@ import { esc, toast, sheet, confirmSheet, promptSheet, $, $$ } from '../ui.js';
 import { backButton, wireBack } from './detail.js';
 import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
+import { driveSectionShell, fillDriveSection } from './drivesettings.js';
 
-export const APP_VERSION = '1.28.0';
+export const APP_VERSION = '1.29.0';
 
 export async function renderSettings(view) {
   const s = state.settings;
@@ -35,6 +36,7 @@ export async function renderSettings(view) {
       <div class="set-row muted small" style="display:block">Tek bir kitap için: kitap sayfası → <b>Düzenle</b> → kapağın altındaki <b>🔍 Bul</b>.</div></div>
 
     ${githubSection()}
+    ${driveSectionShell()}
 
     <div class="form-group-title">Seçenek listelerim</div>
     <div class="form-group">${Object.entries(OPTION_LISTS).map(([k, d]) => `<a class="set-row" href="#/options/${k}"><span>${d.label}</span><span class="muted small" style="margin-left:auto">${state.options[k].length}</span><span class="chev"></span></a>`).join('')}</div>
@@ -92,6 +94,7 @@ export async function renderSettings(view) {
   });
   $('#guide', view).addEventListener('click', async () => (await import('../ui.js')).openGuide());
   (await import('./aisettings.js')).fillAiSection(view);
+  fillDriveSection(view, () => renderSettings(view));
   $('#check-upd', view)?.addEventListener('click', () => checkForUpdate());
   $('#autofill', view).addEventListener('click', async () => (await import('./autofill.js')).openAutofill());
   $('#theme', view).addEventListener('change', async e => { s.theme = e.target.value; applyTheme(); await saveSettings(); });
