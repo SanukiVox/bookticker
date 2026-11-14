@@ -25,6 +25,42 @@ const FONTS = {
   sans: ['Sans', '-apple-system, "Helvetica Neue", Arial, sans-serif'],
 };
 const rs = () => (state.settings.reader ||= { theme: 'light', fontSize: 100, font: 'publisher', pdfZoom: 1 });
+// Okuyucu ince ayarları (EPUB)
+const LINE_HEIGHTS = [['pub', 'Yayıncı'], ['1.4', '1,4'], ['1.6', '1,6'], ['1.8', '1,8'], ['2', '2,0']];
+const MARGINS = { s: ['Dar', 0], m: ['Orta', 14], l: ['Geniş', 30] };
+const ALIGNS = [['pub', 'Yayıncı'], ['left', 'Sola yaslı'], ['justify', 'İki yana']];
+function typoBlocks(st) {
+  const chips = (key, list, cur) => list.map(([k, l]) => `<button class="chip ${String(cur) === k ? 'on' : ''}" data-${key}="${k}">${l}</button>`).join('');
+  return `<div class="f-block"><h3>Satır aralığı</h3><div class="chip-wrap">${chips('lh', LINE_HEIGHTS, st.lineHeight || 'pub')}</div></div>
+    <div class="f-block"><h3>Kenar boşluğu</h3><div class="chip-wrap">${chips('mg', Object.entries(MARGINS).map(([k, [l]]) => [k, l]), st.margin || 's')}</div></div>
+    <div class="f-block"><h3>Hizalama</h3><div class="chip-wrap">${chips('al', ALIGNS, st.align || 'pub')}</div></div>`;
+}
+function wireTypo(el, st, apply) {
+  for (const [key, prop] of [['lh', 'lineHeight'], ['mg', 'margin'], ['al', 'align']]) {
+    $$(`[data-${key}]`, el).forEach(b => b.addEventListener('click', () => {
+      st[prop] = b.dataset[key];
+      $$(`[data-${key}]`, el).forEach(x => x.classList.toggle('on', x === b));
+      apply(); saveSettings();
+    }));
+  }
+}
+// Hizalamayı kitabın kendi paragraflarına uygula (başlıklar ve ortalanmış satırlar korunur)
+function applyAlign(doc) {
+  if (!doc?.body) return;
+  const mode = rs().align || 'pub';
+  for (const el of doc.body.querySelectorAll('p, div, li, blockquote')) {
+    if (el.dataset.kjAlign) { el.style.removeProperty('text-align'); el.style.removeProperty('hyphens'); el.style.removeProperty('-webkit-hyphens'); delete el.dataset.kjAlign; }
+  }
+  if (mode === 'pub') return;
+  for (const el of doc.body.querySelectorAll('p, div, li, blockquote')) {
+    const ta = doc.defaultView.getComputedStyle(el).textAlign;
+    const swap = mode === 'left' ? (ta === 'justify') : (ta === 'left' || ta === 'start');
+    if (!swap || (mode === 'justify' && el.children.length && !el.textContent.trim())) continue;
+    el.dataset.kjAlign = '1';
+    el.style.setProperty('text-align', mode, 'important');
+    if (mode === 'justify') { el.style.setProperty('hyphens', 'auto'); el.style.setProperty('-webkit-hyphens', 'auto'); }
+  }
+}
 
 export async function renderReader(view, [id], query) {
   if (query.get('split') === '1') return renderSplit(view, id);
@@ -230,7 +266,8 @@ export async function renderReader(view, [id], query) {
       body: `<div class="f-block"><h3>Arka plan</h3><div class="r-themes">${Object.entries(THEMES).map(([k, t]) => `<button data-th="${k}" class="${s.theme === k ? 'on' : ''}" style="background:${t.bg};color:${t.fg}">${t.label}</button>`).join('')}</div></div>
         ${isEpub ? `<div class="f-block"><h3>Yazı boyutu</h3><div class="range-row"><button class="btn" data-fs="-10">A−</button><b id="fs-val" style="flex:1;text-align:center">%${s.fontSize}</b><button class="btn" data-fs="10">A+</button></div></div>
         <div class="f-block"><h3>Okuma düzeni</h3><div class="chip-wrap"><button class="chip ${s.flow !== 'scroll' ? 'on' : ''}" data-flow="paged">📖 Sayfa sayfa</button><button class="chip ${s.flow === 'scroll' ? 'on' : ''}" data-flow="scroll">📜 Kaydırarak oku</button></div><p class="small muted" style="margin-top:6px">Sayfa çevrilemiyorsa "Kaydırarak oku"yu seç: metin web sayfası gibi parmakla aşağı kaydırılır.</p></div>
-        <div class="f-block"><h3>Yazı tipi</h3><div class="chip-wrap">${Object.entries(FONTS).map(([k, [l]]) => `<button class="chip ${s.font === k ? 'on' : ''}" data-ff="${k}">${l}</button>`).join('')}</div></div>`
+        <div class="f-block"><h3>Yazı tipi</h3><div class="chip-wrap">${Object.entries(FONTS).map(([k, [l]]) => `<button class="chip ${s.font === k ? 'on' : ''}" data-ff="${k}">${l}</button>`).join('')}</div></div>
+        ${typoBlocks(s)}`
         : `<div class="f-block"><h3>Yakınlaştırma</h3><div class="chip-wrap">${[1, 1.25, 1.5, 2].map(z => `<button class="chip ${s.pdfZoom === z ? 'on' : ''}" data-zoom="${z}">%${z * 100}</button>`).join('')}</div></div>
         <div class="f-block"><h3>Sayfaya git</h3><div class="range-row"><input id="goto-p" type="number" inputmode="numeric" min="1" max="${ctrl.rangeMax()}" placeholder="1–${ctrl.rangeMax()}" style="flex:1;height:44px;border-radius:10px;border:1px solid var(--line);padding:0 12px;background:var(--surface)"><button class="btn primary" id="goto-go">Git</button></div></div>`}`,
       onMount: (el, close) => {
@@ -242,6 +279,7 @@ export async function renderReader(view, [id], query) {
           s.fontSize = Math.max(70, Math.min(200, s.fontSize + Number(b.dataset.fs)));
           $('#fs-val', el).textContent = `%${s.fontSize}`; ctrl.applyStyle(); saveSettings();
         }));
+        wireTypo(el, s, () => ctrl.applyStyle());
         $$('[data-ff]', el).forEach(b => b.addEventListener('click', () => {
           s.font = b.dataset.ff; $$('[data-ff]', el).forEach(x => x.classList.toggle('on', x === b)); ctrl.applyStyle(); saveSettings();
         }));
@@ -353,7 +391,32 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck }
     rendition.themes.fontSize(`${s.fontSize}%`);
     if (FONTS[s.font][1]) rendition.themes.override('font-family', FONTS[s.font][1], true);
     else rendition.themes.removeOverride('font-family');
+    // Satır aralığı: paragraflara (başlıklar kitabın kendi aralığında kalır)
+    const lh = s.lineHeight && s.lineHeight !== 'pub' ? s.lineHeight : null;
+    rendition.getContents().forEach(c => {
+      const d = c.document;
+      let st = d.getElementById('kj-typo');
+      if (!st) { st = d.createElement('style'); st.id = 'kj-typo'; d.head.appendChild(st); }
+      st.textContent = lh ? `p, li, blockquote { line-height: ${lh} !important; }` : '';
+      applyAlign(d);
+    });
+    // Kenar boşluğu: okuma alanını daralt
+    const mg = (MARGINS[s.margin || 's'] || MARGINS.s)[1];
+    if (stage.dataset.mg !== String(mg)) {
+      const first = stage.dataset.mg == null;
+      stage.dataset.mg = String(mg);
+      stage.style.marginLeft = stage.style.marginRight = `${mg}px`;
+      if (!first) requestAnimationFrame(() => { try { rendition.resize(); } catch { /* yok */ } });
+    }
   }
+  // Yeni yüklenen bölümlere de uygula
+  rendition.hooks.content.register(contents => {
+    const s = rs(), lh = s.lineHeight && s.lineHeight !== 'pub' ? s.lineHeight : null;
+    const st = contents.document.createElement('style'); st.id = 'kj-typo';
+    st.textContent = lh ? `p, li, blockquote { line-height: ${lh} !important; }` : '';
+    contents.document.head.appendChild(st);
+    applyAlign(contents.document);
+  });
 
   await eb.ready;
   applyStyle();
@@ -761,6 +824,7 @@ async function renderSplit(view, id) {
       body: `<div class="f-block"><h3>Arka plan</h3><div class="r-themes">${Object.entries(THEMES).map(([k, t]) => `<button data-th="${k}" class="${st.theme === k ? 'on' : ''}" style="background:${t.bg};color:${t.fg}">${t.label}</button>`).join('')}</div></div>
         <div class="f-block"><h3>Yazı boyutu</h3><div class="range-row"><button class="btn" data-fs="-10">A−</button><b id="fs-val" style="flex:1;text-align:center">%${st.fontSize}</b><button class="btn" data-fs="10">A+</button></div></div>
         <div class="f-block"><h3>Okuma düzeni</h3><div class="chip-wrap"><button class="chip ${st.flow !== 'scroll' ? 'on' : ''}" data-flow="paged">📖 Sayfa sayfa</button><button class="chip ${st.flow === 'scroll' ? 'on' : ''}" data-flow="scroll">📜 Kaydırarak oku</button></div></div>
+        ${typoBlocks(st)}
         <div class="f-block"><button class="btn block" id="sp-exit">Tek ekrana dön</button></div>`,
       onMount: (el, close) => {
         $$('[data-th]', el).forEach(b => b.addEventListener('click', () => {
@@ -771,6 +835,7 @@ async function renderSplit(view, id) {
           st.fontSize = Math.max(70, Math.min(200, st.fontSize + Number(b.dataset.fs)));
           $('#fs-val', el).textContent = `%${st.fontSize}`; panes.forEach(p => p.book.file.type === 'epub' && p.ctrl?.applyStyle()); saveSettings();
         }));
+        wireTypo(el, st, () => panes.forEach(p => p.book.file.type === 'epub' && p.ctrl?.applyStyle()));
         $$('[data-flow]', el).forEach(b => b.addEventListener('click', () => {
           close();
           if ((st.flow || 'paged') === b.dataset.flow) return;
