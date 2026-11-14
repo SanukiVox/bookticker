@@ -215,7 +215,7 @@ function sentenceAround(sel, text) {
   } catch { return ''; }
 }
 
-export function watchSelection(stage, mount, { lang = () => 'orig', onSave, isSaved } = {}) {
+export function watchSelection(stage, mount, { lang = () => 'orig', onSave, isSaved, onHighlight } = {}) {
   const card = document.createElement('div');
   card.className = 'sel-card hidden';
   mount.appendChild(card);
@@ -230,9 +230,16 @@ export function watchSelection(stage, mount, { lang = () => 'orig', onSave, isSa
     const ctx = ctxNow;
     card.innerHTML = `<div class="sel-row"><div class="sel-src">${esc(text)}</div><button class="sel-x" aria-label="Kapat">✕</button></div>
       <div class="sel-out"><span class="muted">Çevriliyor…</span></div>
-      <div class="sel-links"><a href="https://www.deepl.com/translator#${from}/${to}/${q}" target="_blank" rel="noopener">DeepL ↗</a><a href="https://translate.google.com/?sl=auto&tl=${to}&text=${q}&op=translate" target="_blank" rel="noopener">Google ↗</a>${single ? `<a href="https://tureng.com/tr/${to === 'tr' ? 'turkce-ingilizce' : 'ingilizce-turkce'}/${q}" target="_blank" rel="noopener">Tureng ↗</a>` : ''}${onSave && text.length <= 80 ? `<button class="sel-save">${isSaved?.(text) ? '✓ Defterde' : '📒 Deftere ekle'}</button>` : ''}</div>`;
+      <div class="sel-links"><a href="https://www.deepl.com/translator#${from}/${to}/${q}" target="_blank" rel="noopener">DeepL ↗</a><a href="https://translate.google.com/?sl=auto&tl=${to}&text=${q}&op=translate" target="_blank" rel="noopener">Google ↗</a>${single ? `<a href="https://tureng.com/tr/${to === 'tr' ? 'turkce-ingilizce' : 'ingilizce-turkce'}/${q}" target="_blank" rel="noopener">Tureng ↗</a>` : ''}${onSave && text.length <= 80 ? `<button class="sel-save">${isSaved?.(text) ? '✓ Defterde' : '📒 Deftere ekle'}</button>` : ''}</div>
+      ${onHighlight ? `<div class="sel-acts"><button data-hl="yellow"><i style="background:#ffd84d"></i>Vurgula</button><button data-hl="green"><i style="background:#8fdc8f"></i></button><button data-hl="blue"><i style="background:#8cc8ff"></i></button><button data-hl="pink"><i style="background:#ffa3c4"></i></button><button data-note>📝 Not</button></div>` : ''}`;
     card.classList.remove('hidden');
     card.querySelector('.sel-x').addEventListener('click', () => { dismissed = text; hide(); });
+    card.querySelectorAll('[data-hl]').forEach(b => b.addEventListener('click', async () => {
+      if (await onHighlight({ color: b.dataset.hl })) { dismissed = text; hide(); }
+    }));
+    card.querySelector('[data-note]')?.addEventListener('click', async () => {
+      if (await onHighlight({ color: 'yellow', askNote: true })) { dismissed = text; hide(); }
+    });
     card.querySelector('.sel-save')?.addEventListener('click', async e => {
       const btn = e.currentTarget;
       if (isSaved?.(text)) return;

@@ -109,13 +109,28 @@ function mergeBook(a, b) {
   const base = t(b.updatedAt) > t(a.updatedAt) ? b : a;
   const out = { ...base };
   // İki dosya yuvası: file/progress/bookmarks ve file2/progress2/bookmarks2
-  for (const [f, p, m] of [['file', 'progress', 'bookmarks'], ['file2', 'progress2', 'bookmarks2']]) {
+  for (const [f, p, m, h] of [['file', 'progress', 'bookmarks', 'highlights'], ['file2', 'progress2', 'bookmarks2', 'highlights2']]) {
     const pa = a[p], pb = b[p];
     out[p] = !pa ? (pb ?? null) : !pb ? pa : (t(pb.updatedAt) > t(pa.updatedAt) ? pb : pa);
+    // Yer imleri: birleşir; bir cihazda silinen (…Del kaydı) öbüründen geri gelmez
+    const md = m + 'Del', bmDel = { ...(a[md] || {}), ...(b[md] || {}) };
     const seen = new Set();
     out[m] = [...(a[m] || []), ...(b[m] || [])]
-      .filter(x => { const k = `${x.loc}|${x.createdAt}`; if (seen.has(k)) return false; seen.add(k); return true; })
+      .filter(x => { const k = `${x.loc}|${x.createdAt}`; if (seen.has(k) || bmDel[k]) return false; seen.add(k); return true; })
       .sort((x, y) => t(x.createdAt) - t(y.createdAt));
+    if (Object.keys(bmDel).length) out[md] = bmDel; else delete out[md];
+    // Vurgular: kimliğe göre birleşir (aynı vurguda son düzenlenen), silinenler düşer
+    const hd = h + 'Del', hlDel = { ...(a[hd] || {}), ...(b[hd] || {}) };
+    if (a[h] || b[h] || Object.keys(hlDel).length) {
+      const byId = new Map();
+      for (const x of [...(a[h] || []), ...(b[h] || [])]) {
+        if (hlDel[x.id]) continue;
+        const have = byId.get(x.id);
+        if (!have || t(x.upd) > t(have.upd)) byId.set(x.id, x);
+      }
+      out[h] = [...byId.values()].sort((x, y) => t(x.at) - t(y.at));
+      if (Object.keys(hlDel).length) out[hd] = hlDel;
+    }
     const fa = a[f], fb = b[f];
     if (fa || fb) {
       out[f] = fa?.hash && fb?.hash && fa.hash === fb.hash ? base[f] || fa // aynı dosya: daha yeni düzenleme (ör. dil etiketi)
@@ -201,7 +216,7 @@ async function applyLocal(merged, head) {
   try { await replaceAll(merged.books, merged.options, merged.settings); } finally { suppress = false; }
 }
 
-const fingerprint = d => JSON.stringify([d.books.map(b => [b.id, b.updatedAt, b.progress?.updatedAt, (b.bookmarks || []).length, b.readingSeconds, b.progress2?.updatedAt, (b.bookmarks2 || []).length, (b.vocab || []).reduce((m, v) => Math.max(m, v.upd || 0), 0), (b.vocab || []).length, Object.keys(b.vocabDel || {}).length]).sort(), d.options?.updatedAt, d.settings?.updatedAt, Object.keys(d.deleted || {}).length]);
+const fingerprint = d => JSON.stringify([d.books.map(b => [b.id, b.updatedAt, b.progress?.updatedAt, (b.bookmarks || []).length, b.readingSeconds, b.progress2?.updatedAt, (b.bookmarks2 || []).length, (b.vocab || []).reduce((m, v) => Math.max(m, v.upd || 0), 0), (b.vocab || []).length, Object.keys(b.vocabDel || {}).length, ...[b.highlights, b.highlights2].map(l => (l || []).reduce((m, v) => Math.max(m, v.upd || 0), 0) + ':' + (l || []).length), Object.keys(b.bookmarksDel || {}).length + Object.keys(b.highlightsDel || {}).length + Object.keys(b.bookmarksDel2 || {}).length + Object.keys(b.highlightsDel2 || {}).length]).sort(), d.options?.updatedAt, d.settings?.updatedAt, Object.keys(d.deleted || {}).length]);
 
 // ---------- Gönder ----------
 export async function push({ force = false } = {}) {

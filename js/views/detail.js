@@ -5,6 +5,7 @@ import { esc, enc, ICON, coverHTML, bookCard, hydrateCovers, peppers, toast, she
 import { fileSectionShell, fillFileSection } from './bookfile.js';
 import { similarTo } from '../similar.js';
 import { vocabSection } from './vocab.js';
+import { highlightsSection, wireHighlights } from './highlights.js';
 
 export function backButton(fallback = '#/') {
   return `<button class="icon-btn" data-back="${fallback}" aria-label="Geri">${ICON.back}</button>`;
@@ -72,6 +73,7 @@ export async function renderDetail(view, [id]) {
     ${seriesWarn}
     ${fileSectionShell()}
     ${vocabSection(b)}
+    ${highlightsSection(b)}
     <div class="section gr-row"><span class="gr-badge">g</span>
       ${b.goodreads ? `<div style="flex:1"><b style="font-size:20px">★ ${String(b.goodreads.toFixed(2)).replace('.', ',')}</b> <span class="muted small">Goodreads${b.goodreadsVotes ? ` · ${formatVotes(b.goodreadsVotes)}` : ''}</span></div>`
         : '<div style="flex:1" class="muted">Goodreads puanı girilmemiş</div>'}
@@ -120,6 +122,7 @@ export async function renderDetail(view, [id]) {
     }),
   }));
   fillFileSection(view, b);
+  wireHighlights(view, b);
   $$('[data-st]', view).forEach(c => c.addEventListener('click', async () => {
     if (b.status === c.dataset.st) return;
     b.status = c.dataset.st;

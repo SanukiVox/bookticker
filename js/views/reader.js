@@ -5,6 +5,7 @@ import { esc, ICON, sheet, toast, $, $$ } from '../ui.js';
 import { getFileBlob, addReadingTime, formatDuration, slotBook, slotFile, langLabel, realBook } from '../files.js';
 import { watchSelection } from './wordpick.js';
 import { addWord, findWord } from './vocab.js';
+import { HL_COLORS, newHighlight, removeHighlight } from './highlights.js';
 
 const loaded = {};
 function loadScript(src) {
@@ -186,7 +187,8 @@ export async function renderReader(view, [id], query) {
   //  - kaydırma modunda yukarı kaydırınca menü açılır, aşağı okurken kapanır
   let stopSel = null;
   if (book.file.type === 'epub') {
-    stopSel = watchSelection(stage, root, { lang: () => book.file.lang, onSave: e => addWord(book, e), isSaved: w => !!findWord(book, w) });
+    stopSel = watchSelection(stage, root, { lang: () => book.file.lang, onSave: e => addWord(book, e), isSaved: w => !!findWord(book, w),
+      onHighlight: async opts => { const h = await newHighlight(book, ctrl, opts); if (h) toast(h.note ? '📝 Not eklendi' : '🖍 Vurgulandı'); return !!h; } });
     $$('.r-tap', root).forEach(strip => {
       let t0 = null, swiped = false, wheelAt = 0;
       strip.addEventListener('touchstart', e => { const t = e.changedTouches[0]; t0 = { x: t.clientX, y: t.clientY }; swiped = false; }, { passive: true });
@@ -225,7 +227,7 @@ export async function renderReader(view, [id], query) {
   $('#r-bm', root).addEventListener('click', () => {
     book.bookmarks ||= [];
     const existing = ctrl.isBookmarked(book.bookmarks);
-    if (existing) { book.bookmarks = book.bookmarks.filter(b => b !== existing); toast('Yer imi kaldırıldı'); }
+    if (existing) { book.bookmarks = book.bookmarks.filter(b => b !== existing); (book.bookmarksDel ||= {})[`${existing.loc}|${existing.createdAt}`] = Date.now(); toast('Yer imi kaldırıldı'); }
     else {
       const p = book.progress || {};
       book.bookmarks.push({ loc: p.loc, percent: p.percent ?? null, label: [p.chapter, p.label].filter(Boolean).join(' · '), createdAt: Date.now() });
@@ -238,11 +240,13 @@ export async function renderReader(view, [id], query) {
   $('#r-toc', root).addEventListener('click', async () => {
     const toc = await ctrl.toc();
     const bms = [...(book.bookmarks || [])].sort((a, b) => (a.percent ?? 0) - (b.percent ?? 0));
+    const hls = [...(book.highlights || [])].sort((a, b) => a.at - b.at);
     sheet({
       title: displayTitle(book),
-      body: `<div class="seg"><button class="on" data-tab="toc">İçindekiler</button><button data-tab="bm">Yer imleri · ${bms.length}</button></div>
+      body: `<div class="seg"><button class="on" data-tab="toc">İçindekiler</button><button data-tab="bm">Yer imleri · ${bms.length}</button>${book.file.type === 'epub' ? `<button data-tab="hl">Vurgular · ${hls.length}</button>` : ''}</div>
         <div data-pane="toc">${toc.length ? `<div class="list">${toc.map((t, i) => `<button class="row" data-toc="${i}" style="width:100%;border:0;background:none;text-align:left;padding-left:${14 + t.depth * 16}px"><div class="body"><div class="t" style="font-weight:${t.depth ? 400 : 600}">${esc(t.label)}</div></div>${t.page ? `<span class="end">${t.page}</span>` : ''}</button>`).join('')}</div>` : '<div class="empty">Bu dosyada içindekiler listesi yok.</div>'}</div>
-        <div data-pane="bm" class="hidden">${bms.length ? `<div class="list">${bms.map((b, i) => `<div class="row"><button data-bm="${i}" class="body" style="border:0;background:none;text-align:left;padding:0"><div class="t">🔖 ${esc(b.label || 'Yer imi')}</div><div class="s">${b.percent != null ? `%${Math.floor(b.percent)} · ` : ''}${new Date(b.createdAt).toLocaleDateString('tr-TR')}</div></button><button class="icon-btn" data-bmdel="${i}" aria-label="Sil" style="color:var(--text-3)">✕</button></div>`).join('')}</div>` : '<div class="empty">Henüz yer imi yok. Okurken üstteki 🔖 düğmesine dokun.</div>'}</div>`,
+        <div data-pane="bm" class="hidden">${bms.length ? `<div class="list">${bms.map((b, i) => `<div class="row"><button data-bm="${i}" class="body" style="border:0;background:none;text-align:left;padding:0"><div class="t">🔖 ${esc(b.label || 'Yer imi')}</div><div class="s">${b.percent != null ? `%${Math.floor(b.percent)} · ` : ''}${new Date(b.createdAt).toLocaleDateString('tr-TR')}</div></button><button class="icon-btn" data-bmdel="${i}" aria-label="Sil" style="color:var(--text-3)">✕</button></div>`).join('')}</div>` : '<div class="empty">Henüz yer imi yok. Okurken üstteki 🔖 düğmesine dokun.</div>'}</div>
+        <div data-pane="hl" class="hidden">${hls.length ? `<div class="list">${hls.map((h, i) => `<div class="row"><button data-hl="${i}" class="body" style="border:0;background:none;text-align:left;padding:0"><div class="t hl-quote" style="border-left-color:${HL_COLORS[h.color] || HL_COLORS.yellow}">${esc(h.text)}</div>${h.note ? `<div class="s">📝 ${esc(h.note)}</div>` : ''}</button><button class="icon-btn" data-hldel="${i}" aria-label="Sil" style="color:var(--text-3)">✕</button></div>`).join('')}</div>` : '<div class="empty">Henüz vurgu yok. Metni seç, alttaki kartta 🖍 Vurgula ya da 📝 Not\'a dokun.</div>'}</div>`,
       onMount: (el, close) => {
         $$('[data-tab]', el).forEach(t => t.addEventListener('click', () => {
           $$('[data-tab]', el).forEach(x => x.classList.toggle('on', x === t));
@@ -250,9 +254,15 @@ export async function renderReader(view, [id], query) {
         }));
         $$('[data-toc]', el).forEach(b => b.addEventListener('click', async () => { close(); await ctrl.gotoToc(toc[Number(b.dataset.toc)]); toggleChrome(false); }));
         $$('[data-bm]', el).forEach(b => b.addEventListener('click', async () => { close(); await ctrl.goto(bms[Number(b.dataset.bm)].loc); toggleChrome(false); }));
+        $$('[data-hl]', el).forEach(b => b.addEventListener('click', async () => { close(); await ctrl.goto(hls[Number(b.dataset.hl)].cfi); toggleChrome(false); }));
+        $$('[data-hldel]', el).forEach(b => b.addEventListener('click', async () => {
+          const h = hls[Number(b.dataset.hldel)];
+          ctrl.unhighlight?.(h.cfi); await removeHighlight(book, h.id); b.closest('.row').remove();
+        }));
         $$('[data-bmdel]', el).forEach(b => b.addEventListener('click', () => {
           const bm = bms[Number(b.dataset.bmdel)];
           book.bookmarks = book.bookmarks.filter(x => x !== bm);
+          (book.bookmarksDel ||= {})[`${bm.loc}|${bm.createdAt}`] = Date.now();
           b.closest('.row').remove(); updateBookmarkBtn(); persist();
         }));
       },
@@ -481,6 +491,9 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck }
   rendition.on('keyup', e => { if (e.key === 'ArrowRight') turn(1); if (e.key === 'ArrowLeft') turn(-1); });
 
   try { await rendition.display(start || undefined); } catch { await rendition.display(); }
+  // Vurgular (kitabın üstüne çizilir; her bölüm açıldığında epub.js yeniden çizer)
+  const drawHl = h => { try { rendition.annotations.highlight(h.cfi, { id: h.id }, () => {}, 'kj-hl', { fill: HL_COLORS[h.color] || HL_COLORS.yellow, 'fill-opacity': '0.38', 'mix-blend-mode': 'multiply' }); } catch { /* yok */ } };
+  (book.highlights || []).forEach(drawHl);
 
   // Yüzde için konum haritası (ilk açışta hesaplanır, sonra hatırlanır)
   const cached = await db.getMeta(locKey);
@@ -505,6 +518,18 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck }
       // En sona çekildiyse (yazı boyutu değişmiş olabilir) gerçekten son sayfaya kadar git
       if (v >= 1000) for (let i = 0; i < 80 && !last?.atEnd; i++) await rendition.next();
     },
+    // Seçili metnin konumu (vurgu için) ve seçimi temizleme
+    selection: () => {
+      for (const c of rendition.getContents()) {
+        const sel = c.document?.getSelection?.();
+        if (sel && String(sel).trim() && sel.rangeCount) {
+          try { return { cfi: c.cfiFromRange(sel.getRangeAt(0)), text: String(sel), clear: () => sel.removeAllRanges() }; } catch { /* yok */ }
+        }
+      }
+      return null;
+    },
+    highlight: drawHl,
+    unhighlight: cfi => { try { rendition.annotations.remove(cfi, 'highlight'); } catch { /* yok */ } },
     isBookmarked: bms => {
       if (!last) return null;
       const CFI = new ePub.CFI();
@@ -752,7 +777,8 @@ async function renderSplit(view, id) {
         ? await openEpub(stage, blob, book, { onLocation, onTap: () => {}, start: book.progress?.loc, onStuck: () => toast('Sayfa çevrilemedi: Aa → "Kaydırarak oku"yu dene') })
         : await openPdf(stage, blob, book, { onLocation, onTap: () => {}, start: book.progress?.loc, onActivity: activity });
       $(`#sp-load-${i}`, root).remove();
-      if (book.file.type === 'epub') stops.push(watchSelection(stage, root, { lang: () => book.file.lang, onSave: e => addWord(book, e), isSaved: w => !!findWord(book, w) }));
+      if (book.file.type === 'epub') stops.push(watchSelection(stage, root, { lang: () => book.file.lang, onSave: e => addWord(book, e), isSaved: w => !!findWord(book, w),
+        onHighlight: async opts => { const h = await newHighlight(book, pane.ctrl, opts); if (h) toast(h.note ? '📝 Not eklendi' : '🖍 Vurgulandı'); return !!h; } }));
     } catch (e) {
       $(`#sp-load-${i}`, root).innerHTML = `⚠️ Açılamadı<br><span class="small">${esc(e.message || '')}</span>`;
     }

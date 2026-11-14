@@ -8,7 +8,7 @@ import { db } from './db.js';
 // Her dosyada lang: 'orig' (orijinal metin) | 'tr' (çeviri). Okuma süresi kitap için ortaktır.
 export const LANGS = { orig: '🌐 Orijinal', tr: '🇹🇷 Çeviri' };
 export const langLabel = f => LANGS[f?.lang] || '📄 Kitap dosyası';
-const SLOT2 = { file: 'file2', progress: 'progress2', bookmarks: 'bookmarks2' };
+const SLOT2 = { file: 'file2', progress: 'progress2', bookmarks: 'bookmarks2', bookmarksDel: 'bookmarksDel2', highlights: 'highlights2', highlightsDel: 'highlightsDel2' };
 // 2. yuvayı, okuyucu ve diğer kodun book.file/progress/bookmarks olarak görebileceği bir görünüme çevirir.
 export function slotBook(book, slot) {
   if (!book || slot !== 2) return book;
