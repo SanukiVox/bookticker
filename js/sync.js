@@ -123,6 +123,18 @@ function mergeBook(a, b) {
     }
   }
   if (!out.file2 && !out.progress2 && !out.bookmarks2?.length) { delete out.progress2; delete out.bookmarks2; }
+  // Kelime defteri: kimliğe göre birleşir (aynı kelimede son güncellenen), silinenler (vocabDel) her iki cihazdan da düşer
+  if (a.vocab || b.vocab || a.vocabDel || b.vocabDel) {
+    const del = { ...(a.vocabDel || {}), ...(b.vocabDel || {}) };
+    const byId = new Map();
+    for (const v of [...(a.vocab || []), ...(b.vocab || [])]) {
+      if (del[v.id]) continue;
+      const have = byId.get(v.id);
+      if (!have || t(v.upd) > t(have.upd)) byId.set(v.id, v);
+    }
+    out.vocab = [...byId.values()].sort((x, y) => t(x.at) - t(y.at));
+    if (Object.keys(del).length) out.vocabDel = del;
+  }
   out.readingSeconds = Math.max(t(a.readingSeconds), t(b.readingSeconds)) || undefined;
   return out;
 }
@@ -189,7 +201,7 @@ async function applyLocal(merged, head) {
   try { await replaceAll(merged.books, merged.options, merged.settings); } finally { suppress = false; }
 }
 
-const fingerprint = d => JSON.stringify([d.books.map(b => [b.id, b.updatedAt, b.progress?.updatedAt, (b.bookmarks || []).length, b.readingSeconds, b.progress2?.updatedAt, (b.bookmarks2 || []).length]).sort(), d.options?.updatedAt, d.settings?.updatedAt, Object.keys(d.deleted || {}).length]);
+const fingerprint = d => JSON.stringify([d.books.map(b => [b.id, b.updatedAt, b.progress?.updatedAt, (b.bookmarks || []).length, b.readingSeconds, b.progress2?.updatedAt, (b.bookmarks2 || []).length, (b.vocab || []).reduce((m, v) => Math.max(m, v.upd || 0), 0), (b.vocab || []).length, Object.keys(b.vocabDel || {}).length]).sort(), d.options?.updatedAt, d.settings?.updatedAt, Object.keys(d.deleted || {}).length]);
 
 // ---------- Gönder ----------
 export async function push({ force = false } = {}) {

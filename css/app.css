@@ -447,3 +447,16 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; dis
 .sel-card .sel-links { display: flex; gap: 14px; font-size: 14px; }
 .sel-card .sel-links a { color: var(--accent); text-decoration: none; font-weight: 600; }
 .reader.chrome .sel-card { bottom: calc(var(--safe-bottom) + 124px); }
+
+/* Kelime defteri */
+.sel-card .sel-save { margin-left: auto; border: 0; background: var(--accent-soft); color: var(--accent); border-radius: 9px; padding: 3px 10px; font-weight: 600; font-size: 14px; }
+.vocab-row { align-items: flex-start; gap: 8px; }
+.vocab-ctx { font-family: var(--serif); opacity: .8; margin: 3px 0; line-height: 1.35; }
+.vocab-ctx b { background: color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 3px; padding: 0 2px; }
+.vocab-box { font-size: 9px; letter-spacing: 1px; color: var(--accent); white-space: nowrap; margin-top: 6px; }
+.flash { background: var(--surface); border-radius: 20px; box-shadow: var(--shadow); padding: 34px 22px; text-align: center; min-height: 46vh; display: flex; flex-direction: column; justify-content: center; gap: 14px; cursor: pointer; }
+.flash-w { font-family: var(--serif); font-size: 34px; font-weight: 700; }
+.flash-ctx { font-family: var(--serif); font-size: 17px; line-height: 1.45; opacity: .85; }
+.flash-ctx b { background: color-mix(in srgb, var(--accent) 18%, transparent); border-radius: 3px; padding: 0 2px; }
+.flash-t { font-size: 24px; font-weight: 700; color: var(--accent); }
+.page-pad { padding: 0 0 24px; }

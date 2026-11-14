@@ -4,6 +4,7 @@ import { db } from '../db.js';
 import { esc, ICON, sheet, toast, $, $$ } from '../ui.js';
 import { getFileBlob, addReadingTime, formatDuration, slotBook, slotFile, langLabel, realBook } from '../files.js';
 import { watchSelection } from './wordpick.js';
+import { addWord, findWord } from './vocab.js';
 
 const loaded = {};
 function loadScript(src) {
@@ -185,7 +186,7 @@ export async function renderReader(view, [id], query) {
   //  - kaydırma modunda yukarı kaydırınca menü açılır, aşağı okurken kapanır
   let stopSel = null;
   if (book.file.type === 'epub') {
-    stopSel = watchSelection(stage, root, { lang: () => book.file.lang });
+    stopSel = watchSelection(stage, root, { lang: () => book.file.lang, onSave: e => addWord(book, e), isSaved: w => !!findWord(book, w) });
     $$('.r-tap', root).forEach(strip => {
       let t0 = null, swiped = false, wheelAt = 0;
       strip.addEventListener('touchstart', e => { const t = e.changedTouches[0]; t0 = { x: t.clientX, y: t.clientY }; swiped = false; }, { passive: true });
@@ -751,7 +752,7 @@ async function renderSplit(view, id) {
         ? await openEpub(stage, blob, book, { onLocation, onTap: () => {}, start: book.progress?.loc, onStuck: () => toast('Sayfa çevrilemedi: Aa → "Kaydırarak oku"yu dene') })
         : await openPdf(stage, blob, book, { onLocation, onTap: () => {}, start: book.progress?.loc, onActivity: activity });
       $(`#sp-load-${i}`, root).remove();
-      if (book.file.type === 'epub') stops.push(watchSelection(stage, root, { lang: () => book.file.lang }));
+      if (book.file.type === 'epub') stops.push(watchSelection(stage, root, { lang: () => book.file.lang, onSave: e => addWord(book, e), isSaved: w => !!findWord(book, w) }));
     } catch (e) {
       $(`#sp-load-${i}`, root).innerHTML = `⚠️ Açılamadı<br><span class="small">${esc(e.message || '')}</span>`;
     }

@@ -4,6 +4,7 @@ import { state, getBook, saveBook, computeScore, CRITERIA, SPICY_LABELS, statusI
 import { esc, enc, ICON, coverHTML, bookCard, hydrateCovers, peppers, toast, sheet, $, $$, coverKeyOf, fmtScore } from '../ui.js';
 import { fileSectionShell, fillFileSection } from './bookfile.js';
 import { similarTo } from '../similar.js';
+import { vocabSection } from './vocab.js';
 
 export function backButton(fallback = '#/') {
   return `<button class="icon-btn" data-back="${fallback}" aria-label="Geri">${ICON.back}</button>`;
@@ -70,6 +71,7 @@ export async function renderDetail(view, [id]) {
     <div class="status-pick">${state.options.statuses.map(s => `<button class="chip ${b.status === s.name ? 'on' : ''}" data-st="${esc(s.name)}">${s.emoji} ${esc(s.name)}</button>`).join('')}</div>
     ${seriesWarn}
     ${fileSectionShell()}
+    ${vocabSection(b)}
     <div class="section gr-row"><span class="gr-badge">g</span>
       ${b.goodreads ? `<div style="flex:1"><b style="font-size:20px">★ ${String(b.goodreads.toFixed(2)).replace('.', ',')}</b> <span class="muted small">Goodreads${b.goodreadsVotes ? ` · ${formatVotes(b.goodreadsVotes)}` : ''}</span></div>`
         : '<div style="flex:1" class="muted">Goodreads puanı girilmemiş</div>'}

@@ -12,6 +12,7 @@ import { renderSettings, renderOptions } from './views/settings.js';
 import { renderAuthor, renderSeries } from './views/group.js';
 import { renderReader } from './views/reader.js';
 import { renderChat } from './views/chat.js';
+import { renderVocab } from './views/vocab.js';
 
 const routes = [
   [/^\/?$/, renderLibrary, 'library'],
@@ -26,6 +27,7 @@ const routes = [
   [/^\/options\/([a-z]+)$/, renderOptions, 'settings'],
   [/^\/read\/([^/]+)$/, renderReader, 'read'],
   [/^\/chat$/, renderChat, 'chat'],
+  [/^\/vocab(?:\/([^/]+))?$/, renderVocab, 'reading'],
 ];
 
 const scrollMemory = new Map();
@@ -50,7 +52,7 @@ async function route() {
     current = raw;
     $$('#tabbar a').forEach(a => a.classList.toggle('active', a.dataset.tab === tab));
     $('#tabbar').classList.toggle('hidden', tab === 'add' || tab === 'read' || tab === 'chat');
-    const params = m.slice(1).map(decodeURIComponent);
+    const params = m.slice(1).map(p => (p == null ? p : decodeURIComponent(p)));
     if (cleanup) { const c = cleanup; cleanup = null; try { await c(); } catch { /* yok */ } }
     const ret = await fn(view, params, query);
     if (typeof ret === 'function') cleanup = ret;
@@ -63,7 +65,7 @@ async function route() {
 // Veri değişince açık ekranı yenile (düzenleme ekranı hariç; o kendi durumunu tutar).
 let pending = false;
 onChange(() => {
-  if (pending || parse().path.startsWith('/edit/') || parse().path.startsWith('/read/') || parse().path === '/chat') return;
+  if (pending || parse().path.startsWith('/edit/') || parse().path.startsWith('/read/') || parse().path === '/chat' || (parse().path.startsWith('/vocab') && location.hash.includes('review=1'))) return;
   pending = true;
   requestAnimationFrame(async () => {
     pending = false;

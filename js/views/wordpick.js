@@ -190,38 +190,68 @@ export function openTranslate(text, { lang = 'orig', onClose } = {}) {
 function currentSelection(stage) {
   for (const f of stage.querySelectorAll('iframe')) {
     try {
-      const t = String(f.contentDocument?.getSelection?.() || '');
-      if (t.trim()) return t;
+      const sel = f.contentDocument?.getSelection?.();
+      const t = String(sel || '');
+      if (t.trim()) return { text: t, ctx: sentenceAround(sel, t) };
     } catch { /* yok */ }
   }
-  return '';
+  return { text: '', ctx: '' };
 }
 
-export function watchSelection(stage, mount, { lang = () => 'orig' } = {}) {
+// Seçimin geçtiği cümle (kelime defteri için)
+function sentenceAround(sel, text) {
+  try {
+    let n = sel.getRangeAt(0).commonAncestorContainer;
+    if (n.nodeType === 3) n = n.parentElement;
+    const block = n.closest('p, li, blockquote, div') || n;
+    const all = block.textContent.replace(/\s+/g, ' ').trim();
+    const t = text.replace(/\s+/g, ' ').trim();
+    const i = all.indexOf(t);
+    if (i < 0) return all.slice(0, 240);
+    const before = all.slice(0, i), after = all.slice(i + t.length);
+    const s = Math.max(before.search(/[^.!?…]*$/), 0);
+    const m = after.match(/^[^.!?…]*[.!?…”"’]*/);
+    return (before.slice(s) + t + (m ? m[0] : '')).trim().slice(0, 400);
+  } catch { return ''; }
+}
+
+export function watchSelection(stage, mount, { lang = () => 'orig', onSave, isSaved } = {}) {
   const card = document.createElement('div');
   card.className = 'sel-card hidden';
   mount.appendChild(card);
-  let last = '', pending = '', shownFor = '', dismissed = '';
+  let last = '', pending = '', shownFor = '', dismissed = '', ctxNow = '', trNow = '';
   const hide = () => { card.classList.add('hidden'); shownFor = ''; };
   const show = async text => {
     shownFor = text;
     const to = lang() === 'tr' ? 'en' : 'tr', from = to === 'tr' ? 'en' : 'tr';
     const single = !/\s/.test(text) && text.length < 40;
     const q = encodeURIComponent(text);
+    trNow = '';
+    const ctx = ctxNow;
     card.innerHTML = `<div class="sel-row"><div class="sel-src">${esc(text)}</div><button class="sel-x" aria-label="Kapat">✕</button></div>
       <div class="sel-out"><span class="muted">Çevriliyor…</span></div>
-      <div class="sel-links"><a href="https://www.deepl.com/translator#${from}/${to}/${q}" target="_blank" rel="noopener">DeepL ↗</a><a href="https://translate.google.com/?sl=auto&tl=${to}&text=${q}&op=translate" target="_blank" rel="noopener">Google ↗</a>${single ? `<a href="https://tureng.com/tr/${to === 'tr' ? 'turkce-ingilizce' : 'ingilizce-turkce'}/${q}" target="_blank" rel="noopener">Tureng ↗</a>` : ''}</div>`;
+      <div class="sel-links"><a href="https://www.deepl.com/translator#${from}/${to}/${q}" target="_blank" rel="noopener">DeepL ↗</a><a href="https://translate.google.com/?sl=auto&tl=${to}&text=${q}&op=translate" target="_blank" rel="noopener">Google ↗</a>${single ? `<a href="https://tureng.com/tr/${to === 'tr' ? 'turkce-ingilizce' : 'ingilizce-turkce'}/${q}" target="_blank" rel="noopener">Tureng ↗</a>` : ''}${onSave && text.length <= 80 ? `<button class="sel-save">${isSaved?.(text) ? '✓ Defterde' : '📒 Deftere ekle'}</button>` : ''}</div>`;
     card.classList.remove('hidden');
     card.querySelector('.sel-x').addEventListener('click', () => { dismissed = text; hide(); });
+    card.querySelector('.sel-save')?.addEventListener('click', async e => {
+      const btn = e.currentTarget;
+      if (isSaved?.(text)) return;
+      await onSave({ w: text, t: trNow, ctx, lang: lang() });
+      btn.textContent = '✓ Defterde';
+      toast('📒 Deftere eklendi');
+    });
     const res = await fetchTranslation(text, to);
     if (shownFor !== text) return;
+    trNow = res?.main || '';
     const out = card.querySelector('.sel-out');
     out.innerHTML = res
       ? `<b>${esc(res.main)}</b>${single && res.alts.length ? `<div class="small muted">${res.alts.slice(0, 2).map(a => `${esc(POS[a.pos] || a.pos)}: ${esc(a.words.slice(0, 4).join(', '))}`).join(' · ')}</div>` : ''}`
       : '<span class="muted">Çeviri alınamadı; DeepL ya da Google düğmesini kullan.</span>';
   };
   const timer = setInterval(() => {
-    const t = clean(currentSelection(stage));
+    const cur = currentSelection(stage);
+    const t = clean(cur.text);
+    if (t) ctxNow = cur.ctx;
     if (!t) { last = pending = ''; dismissed = ''; if (shownFor) hide(); return; }
     // Seçim parmakla genişletilirken her adımda çevirmesin: iki yoklamada aynı kalınca göster
     if (t !== pending) { pending = t; return; }
