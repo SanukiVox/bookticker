@@ -2,6 +2,7 @@
 import { state, computeScore, booksInSeries, displayTitle, statusInfo, genreColor, saveBooks, saveSettings, norm } from '../store.js';
 import { esc, enc, coverHTML, bookCard, hydrateCovers, sheet, toast, $, $$ } from '../ui.js';
 import { vocabCount } from './vocab.js';
+import { tasteSection } from './finished.js';
 import { readingStats, formatDuration, progressOf, latestSlot, slotProgress } from '../files.js';
 import { tasteRecommendations } from '../similar.js';
 
@@ -111,6 +112,7 @@ export async function renderReading(view) {
       <div class="stat"><div class="n">${new Set(state.books.map(b => b.author).filter(Boolean)).size}</div><div class="l">Yazar</div></div>
       <div class="stat"><div class="n">${trMissing}</div><div class="l">⏳ Türkçesi yok/belirsiz</div></div>
     </div>
+    ${tasteSection()}
     <div class="section"><h3>Durumlara göre</h3>${state.options.statuses.filter(s => counts[s.name]).map(s => `
       <a class="hbar" href="#/search?status=${enc(s.name)}"><span>${s.emoji} ${esc(s.name)}</span><b>${counts[s.name]}</b><div class="track"><span style="width:${(counts[s.name] / total) * 100}%;background:${s.color}"></span></div></a>`).join('')}</div>
     <div class="section"><h3>Türlere göre</h3>${Object.entries(genres).sort((a, b) => b[1] - a[1]).map(([g, n]) => `

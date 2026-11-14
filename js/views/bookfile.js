@@ -105,8 +105,10 @@ function manualProgress(b) {
         close();
         if (await confirmSheet('Kitabı bitirdin mi?', 'Son sayfaya geldin. Okundu olarak işaretleyeyim mi?', '✅ Okundu', false)) b.status = 'Okundu';
       } else close();
+      const done = b.status === 'Okundu' && page === pages;
       await saveBook(b);
       toast('İlerleme kaydedildi');
+      if (done) (await import('./finished.js')).openFinished(b);
     }),
   });
 }

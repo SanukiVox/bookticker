@@ -6,6 +6,7 @@ import { getFileBlob, addReadingTime, formatDuration, slotBook, slotFile, langLa
 import { watchSelection } from './wordpick.js';
 import { addWord, findWord } from './vocab.js';
 import { HL_COLORS, newHighlight, removeHighlight } from './highlights.js';
+import { openFinished } from './finished.js';
 
 const loaded = {};
 function loadScript(src) {
@@ -314,6 +315,7 @@ export async function renderReader(view, [id], query) {
   $('#r-fin-yes', root).addEventListener('click', async () => {
     book.status = 'Okundu'; $('#r-finish', root).classList.add('hidden'); finishDismissed = true;
     await saveBook(book); toast('✅ Okundu! Tebrikler 🎉');
+    openFinished(book);
   });
 
   // ---------- Kapatma ----------

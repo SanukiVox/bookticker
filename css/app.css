@@ -466,3 +466,12 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; dis
 .sel-card .sel-acts button { border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 18px; padding: 4px 10px; font-size: 14px; display: inline-flex; align-items: center; gap: 6px; }
 .sel-card .sel-acts i { width: 14px; height: 14px; border-radius: 50%; display: inline-block; }
 .hl-quote { font-family: var(--serif); border-left: 4px solid #ffd84d; padding-left: 8px; line-height: 1.35; white-space: normal; }
+
+/* Okudum, nasıldı? */
+.fin-row { display: flex; align-items: center; gap: 6px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.fin-row .fin-l { flex: 1; font-size: 14px; }
+.fin-row .fin-was { font-size: 12px; color: var(--muted); }
+.fin-row .fin-v { min-width: 30px; text-align: center; }
+.fin-row .mini-btn { padding: 4px 11px; font-size: 16px; }
+.taste-row { display: flex; align-items: center; gap: 8px; font-size: 14px; margin: 4px 0; }
+.taste-row span:first-child { width: 42%; }

@@ -5,6 +5,7 @@ import { esc, enc, ICON, coverHTML, bookCard, hydrateCovers, peppers, toast, she
 import { fileSectionShell, fillFileSection } from './bookfile.js';
 import { similarTo } from '../similar.js';
 import { vocabSection } from './vocab.js';
+import { openFinished } from './finished.js';
 import { highlightsSection, wireHighlights } from './highlights.js';
 
 export function backButton(fallback = '#/') {
@@ -128,6 +129,7 @@ export async function renderDetail(view, [id]) {
     b.status = c.dataset.st;
     await saveBook(b);
     toast(`${statusInfo(b.status).emoji} ${b.status}`);
+    if (b.status === 'Okundu') openFinished(b);
   }));
   $('#fav', view).addEventListener('click', async () => { b.favorite = !b.favorite; await saveBook(b); toast(b.favorite ? '❤️ Favorilere eklendi' : 'Favorilerden çıkarıldı'); });
   // Yıldızın sol yarısı yarım puan, sağ yarısı tam puan; aynı değere tekrar basınca silinir
