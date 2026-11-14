@@ -117,3 +117,56 @@ export function bookTextFile(book, { text, partial, pages, total }) {
   const name = `${safe} - ${partial ? 'okuduğum yere kadar' : 'tüm kitap'}.txt`;
   return new File([header + text], name, { type: 'text/plain' });
 }
+
+// Tek bölümün metni (bölüm özeti için). which: 'current' = içinde bulunulan bölüm, kalınan yere kadar;
+// 'prev' = bir önceki bölümün tamamı (çok kısa ara sayfalar atlanır).
+export async function chapterText(book, { which = 'current' } = {}) {
+  const blob = await getFileBlob(book);
+  if (!blob) throw new Error('Kitap dosyası bu cihazda yok');
+  if (book.file.type !== 'epub') throw new Error('Bölüm özeti şimdilik EPUB kitaplarda çalışıyor');
+  await loadScript('vendor/jszip.min.js');
+  await loadScript('vendor/epub.min.js');
+  const ePub = window.ePub;
+  const { checkEpub } = await import('./views/reader.js');
+  const eb = ePub(await checkEpub(await blob.arrayBuffer()));
+  try {
+    await eb.ready;
+    const nav = await eb.loaded.navigation;
+    const labels = new Map();
+    (function walk(items) { for (const it of items || []) { labels.set((it.href || '').split('#')[0], (it.label || '').trim()); walk(it.subitems); } })(nav.toc);
+    const labelOf = sec => labels.get(sec.href) || [...labels.entries()].find(([h]) => h && (sec.href.endsWith(h) || h.endsWith(sec.href)))?.[1] || '';
+    let parsed = null;
+    try { parsed = book.progress?.loc ? new ePub.CFI(book.progress.loc) : null; } catch { parsed = null; }
+    if (!parsed) throw new Error('Önce kitabı biraz oku; konumun bilinmiyor');
+    const sections = [];
+    eb.spine.each(s => sections.push(s));
+    const load = async (i, upTo) => {
+      const sec = sections[i];
+      const root = await sec.load(eb.load.bind(eb));
+      const doc = root.ownerDocument || root;
+      const body = doc.body || root.querySelector?.('body') || doc.documentElement;
+      let text;
+      if (upTo) {
+        const range = parsed.toRange(doc);
+        const before = doc.createRange();
+        before.setStart(body, 0);
+        before.setEnd(range.endContainer || range.startContainer, range.endOffset ?? range.startOffset);
+        const frag = before.cloneContents();
+        const box = doc.createElement('div'); box.appendChild(frag);
+        text = blockText(box);
+      } else text = blockText(body);
+      sec.unload?.();
+      return { text: tidy(text), label: labelOf(sec) };
+    };
+    if (which === 'current') {
+      const r = await load(parsed.spinePos, true);
+      // Konum sayfanın başındaysa kalınan yere kadar az metin olur: o zaman sayfanın sonuna kadar ver
+      return r.text.length > 300 ? { ...r, partial: true } : { ...(await load(parsed.spinePos, false)), partial: false };
+    }
+    for (let i = parsed.spinePos - 1; i >= 0 && i >= parsed.spinePos - 4; i--) {
+      const r = await load(i, false);
+      if (r.text.length > 400) return { ...r, partial: false };
+    }
+    throw new Error('Önceki bölüm bulunamadı');
+  } finally { eb.destroy(); }
+}

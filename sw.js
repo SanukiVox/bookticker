@@ -1,6 +1,6 @@
 // Çevrimdışı çalışma: uygulama dosyalarını telefona önbelleğe al.
 // Yeni sürüm yayınlarken VERSION değerini artır.
-const VERSION = 'v1.23.0';
+const VERSION = 'v1.24.0';
 const IMG_CACHE = 'kitapligim-kapaklar';
 const CACHE = `kitapligim-${VERSION}`;
 const FILES = [
@@ -8,7 +8,7 @@ const FILES = [
   'js/app.js', 'js/db.js', 'js/store.js', 'js/ui.js', 'js/io.js', 'js/sync.js', 'js/lookup.js',
   'js/views/library.js', 'js/views/search.js', 'js/views/detail.js', 'js/views/edit.js',
   'js/views/group.js', 'js/views/reading.js', 'js/views/settings.js', 'js/views/github.js', 'js/views/autofill.js',
-  'js/files.js', 'js/views/reader.js', 'js/views/wordpick.js', 'js/views/vocab.js', 'js/views/highlights.js', 'js/views/finished.js', 'js/views/estimate.js', 'js/views/bookfile.js', 'js/views/cropper.js', 'js/views/ask.js', 'js/similar.js', 'js/ai.js', 'js/views/chat.js', 'js/views/aisettings.js', 'js/booktext.js', 'js/views/sendbook.js', 'vendor/anthropic-sdk.min.mjs',
+  'js/files.js', 'js/views/reader.js', 'js/views/wordpick.js', 'js/views/vocab.js', 'js/views/highlights.js', 'js/views/finished.js', 'js/views/estimate.js', 'js/views/chapsum.js', 'js/views/bookfile.js', 'js/views/cropper.js', 'js/views/ask.js', 'js/similar.js', 'js/ai.js', 'js/views/chat.js', 'js/views/aisettings.js', 'js/booktext.js', 'js/views/sendbook.js', 'vendor/anthropic-sdk.min.mjs',
   'vendor/xlsx.full.min.js', 'vendor/jszip.min.js', 'vendor/epub.min.js',
   'vendor/pdfjs/pdf.min.mjs', 'vendor/pdfjs/pdf.worker.min.mjs',
   ...['FoxitDingbats.pfb', 'FoxitFixed.pfb', 'FoxitFixedBold.pfb', 'FoxitFixedBoldItalic.pfb', 'FoxitFixedItalic.pfb',

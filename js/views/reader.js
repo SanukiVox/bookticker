@@ -307,7 +307,9 @@ export async function renderReader(view, [id], query) {
   // ---------- Yapay zekâya gönder (önce ilerlemeyi kaydet ki "okuduğum yere kadar" güncel olsun) ----------
   $('#r-ai', root).addEventListener('click', async () => {
     await persist();
-    (await import('./sendbook.js')).openSendBook(book);
+    const send = async () => (await import('./sendbook.js')).openSendBook(book);
+    if (book.file.type === 'epub') (await import('./chapsum.js')).openAiMenu(book, { onSendBook: send });
+    else send();
   });
 
   // ---------- Bitirme ----------
