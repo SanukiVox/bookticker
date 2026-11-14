@@ -93,7 +93,7 @@ export async function renderEdit(view, [id], query) {
         <div class="field inline"><label>❤️ Favori</label><span class="toggle"><input type="checkbox" id="f-favorite" ${b.favorite ? 'checked' : ''}><span></span></span></div>
       </div>
 
-      <div class="form-group-title" style="display:flex;align-items:center;gap:8px"><span style="flex:1">Puanlar (1–5) · Genel uyum: <b id="live-score">${computeScore(b)?.toFixed(1) ?? '—'}</b></span><button type="button" class="mini-btn" id="open-guide">📏 Rehber</button></div>
+      <div class="form-group-title" style="display:flex;align-items:center;gap:8px"><span style="flex:1">Puanlar (1–5) · Genel uyum: <b id="live-score">${computeScore(b)?.toFixed(1) ?? '—'}</b></span><button type="button" class="mini-btn" id="est-open">🤖 Tahmin et</button><button type="button" class="mini-btn" id="open-guide">📏 Rehber</button></div>
       <div class="form-group">
         ${CRITERIA.map(c => scoreRow(c.key, c.title || c.label, b.scores[c.key])).join('')}
         ${scoreRow('spicy', 'Spicy / +18 (0–5)', b.spicy, 0, false)}
@@ -148,6 +148,36 @@ export async function renderEdit(view, [id], query) {
 
   // Puan butonları
   $('#open-guide', form).addEventListener('click', () => openGuide());
+  // 🤖 Değerlendirme asistanı: tahmini puanları forma uygular
+  const paintRate = (key, n) => {
+    const row = $(`[data-rate="${key}"]`, form);
+    if (!row) return;
+    $$('button[data-n]', row).forEach(x => x.classList.toggle('on', x.dataset.n !== '' && n !== null && Math.floor(n) === Number(x.dataset.n)));
+    $('button[data-half]', row)?.classList.toggle('on', n !== null && n % 1 !== 0);
+    const val = $(`[data-val="${key}"]`, form); if (val) val.textContent = n === null ? '' : fmtScore(n);
+  };
+  const applyEstimate = (est, onlyEmpty) => {
+    for (const [k, v] of Object.entries(est.scores || {})) { if (onlyEmpty && hasVal(b.scores[k])) continue; b.scores[k] = v; paintRate(k, v); }
+    if (est.spicy != null && !(onlyEmpty && hasVal(b.spicy))) { b.spicy = est.spicy; paintRate('spicy', est.spicy); $('#spicy-hint', form).textContent = SPICY_LABELS[est.spicy] || ''; }
+    for (const f of ['originalTitle', 'author', 'genre', 'series', 'seriesOrder', 'pubYear', 'confidence', 'review', 'summary']) {
+      if (est[f] == null) continue;
+      const el = $(`#f-${f}`, form);
+      if (!el || (onlyEmpty && String(el.value || '').trim())) continue;
+      if (el.tagName === 'SELECT' && ![...el.options].some(o => o.value === String(est[f]))) el.add(new Option(String(est[f]), String(est[f])));
+      el.value = String(est[f]);
+      el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input'));
+    }
+    if (est.warnings?.length) {
+      const box = $('[data-multi="warnings"]', form);
+      for (const w of est.warnings) {
+        const chip = box && [...box.querySelectorAll('.chip[data-v]')].find(c => c.dataset.v === w);
+        if (chip && !b.warnings.includes(w)) { b.warnings.push(w); chip.classList.add('on'); }
+      }
+    }
+    $('#live-score', view).textContent = computeScore(b)?.toFixed(1) ?? '—';
+    dirty = true;
+  };
+  $('#est-open', form).addEventListener('click', async () => (await import('./estimate.js')).openEstimate(b, applyEstimate));
   $$('[data-rate]', form).forEach(row => row.addEventListener('click', e => {
     const btn = e.target.closest('button[data-n], button[data-half]');
     if (!btn) return;
