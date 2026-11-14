@@ -1,7 +1,7 @@
-// Kitap sayfasındaki "Kitap dosyası ve ilerleme" bölümü.
+// Kitap sayfasındaki "Okuma" bölümü: iki dosya yuvası (orijinal metin ve çeviri), her birinin ayrı ilerlemesi.
 import { saveBook } from '../store.js';
-import { esc, enc, toast, sheet, confirmSheet, $ } from '../ui.js';
-import { attachFile, detachFile, hasLocalFile, formatSize, formatDuration, progressOf } from '../files.js';
+import { esc, enc, toast, sheet, confirmSheet, $, $$ } from '../ui.js';
+import { attachFile, detachFile, hasLocalFile, formatSize, formatDuration, progressOf, slotBook, slotFile, slotProgress, slotForLang, langLabel, LANGS } from '../files.js';
 
 const ACCEPT = '.pdf,.epub,application/pdf,application/epub+zip';
 
@@ -9,50 +9,82 @@ export function fileSectionShell() {
   return '<div class="section read-card" id="file-sec"><h3>Okuma</h3><div class="muted small">…</div></div>';
 }
 
+const filePick = (label, cls, slot, lang = '') =>
+  `<label class="${cls}" style="position:relative;overflow:hidden">${label}<input type="file" accept="${ACCEPT}" data-slot="${slot}" data-lang="${lang}" ${slot === 1 && !lang ? 'id="file-in"' : ''} style="position:absolute;inset:0;opacity:0"></label>`;
+
+async function slotCard(b, slot, both) {
+  const f = slotFile(b, slot);
+  const local = await hasLocalFile(slotBook(b, slot));
+  const pct = progressOf(b, slot);
+  const p = slotProgress(b, slot) || {};
+  const bms = (slot === 2 ? b.bookmarks2 : b.bookmarks) || [];
+  const href = `#/read/${enc(b.id)}${slot === 2 ? '?f=2' : ''}`;
+  const head = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><b style="flex:1">${esc(langLabel(f))}</b>
+    ${!f.lang ? Object.entries(LANGS).map(([k, l]) => `<button class="chip" data-setlang="${k}" data-slot="${slot}">${l}</button>`).join('') : ''}</div>`;
+  const progressLine = pct != null
+    ? `<div><div style="display:flex;justify-content:space-between;font-size:14px"><span>${p.page && p.pages ? `Sayfa ${p.page} / ${p.pages}` : p.chapter ? esc(p.chapter) : 'İlerleme'}</span><b>%${Math.floor(pct)}</b></div>
+       <div class="progress" style="height:8px"><span style="width:${pct}%"></span></div></div>` : '';
+  if (!local) {
+    return `<div class="slot-card">${head}<div class="warn">📄 <span><b>${esc(f.name)}</b> başka bir cihazda eklenmiş. Dosyalar sadece eklendiği cihazda saklanır; burada okumak için yeniden ekle. İlerlemen korunur.</span></div>
+      ${progressLine}<div class="btn-row">${filePick('📎 Yeniden ekle', 'btn', slot, f.lang || '')}<button class="mini-btn" data-rm="${slot}" style="color:var(--danger);background:transparent">Kaldır</button></div></div>`;
+  }
+  return `<div class="slot-card">${head}
+      <div class="read-cta"><a class="btn primary" href="${href}">📖 ${b.status === 'Okundu' && pct >= 100 ? 'Yeniden oku' : pct ? `Devam et · %${Math.floor(pct)}` : p.loc ? 'Devam et' : 'Okumaya başla'}</a></div>
+      ${progressLine}
+      <div class="file-chip">📄 <b>${esc(f.name)}</b><span>${f.type.toUpperCase()} · ${formatSize(f.size)}${bms.length ? ` · 🔖 ${bms.length}` : ''}</span></div>
+      <div class="btn-row"><button class="mini-btn" data-ai="${slot}">🤖 Yapay zekâya gönder</button>${filePick('Değiştir', 'mini-btn', slot, f.lang || '')}<button class="mini-btn" data-rm="${slot}" style="color:var(--danger);background:transparent">Kaldır</button></div>
+    </div>`;
+}
+
 export async function fillFileSection(view, b) {
   const sec = $('#file-sec', view);
   if (!sec) return;
-  const local = await hasLocalFile(b);
-  const pct = progressOf(b);
-  const p = b.progress || {};
-  const progressLine = pct != null
-    ? `<div><div style="display:flex;justify-content:space-between;font-size:14px"><span>${p.page && p.pages ? `Sayfa ${p.page} / ${p.pages}` : 'İlerleme'}</span><b>%${Math.floor(pct)}</b></div>
-       <div class="progress" style="height:8px"><span style="width:${pct}%"></span></div></div>` : '';
-  const time = b.readingSeconds ? `<div class="muted small">⏱ Toplam okuma süresi: <b>${formatDuration(b.readingSeconds)}</b>${(b.bookmarks || []).length ? ` · 🔖 ${b.bookmarks.length} yer imi` : ''}</div>` : '';
-  const filePick = (label, cls = 'btn') => `<label class="${cls}" style="position:relative;overflow:hidden">${label}<input type="file" accept="${ACCEPT}" id="file-in" style="position:absolute;inset:0;opacity:0"></label>`;
+  const slots = [1, 2].filter(s => slotFile(b, s));
+  const both = slots.length === 2;
+  const time = b.readingSeconds ? `<div class="muted small">⏱ Toplam okuma süresi: <b>${formatDuration(b.readingSeconds)}</b></div>` : '';
 
   let html = '<h3>Okuma</h3>';
-  if (b.file && local) {
-    html += `
-      <div class="read-cta"><a class="btn primary" href="#/read/${enc(b.id)}">📖 ${b.status === 'Okundu' && pct >= 100 ? 'Yeniden oku' : pct ? `Okumaya devam et · %${Math.floor(pct)}` : 'Okumaya başla'}</a></div>
-      ${progressLine}${time}
-      <button class="btn block" id="send-ai">🤖 Kitabı yapay zekâya gönder (ücretsiz)</button>
-      <div class="file-chip">📄 <b>${esc(b.file.name)}</b><span>${b.file.type.toUpperCase()} · ${formatSize(b.file.size)}</span></div>
-      <div class="btn-row">${filePick('Dosyayı değiştir', 'mini-btn')}<button class="mini-btn" id="file-rm" style="color:var(--danger);background:transparent">Dosyayı kaldır</button></div>`;
-  } else if (b.file) {
-    html += `<div class="warn">📄 <span><b>${esc(b.file.name)}</b> başka bir telefonda eklenmiş. Dosyalar sadece eklendiği telefonda saklanır; burada okumak için yeniden ekle. İlerlemen korunur.</span></div>
-      ${progressLine}${time}${filePick('📎 Dosyayı yeniden ekle', 'btn block')}`;
-  } else {
-    html += `${progressLine}${time}
-      <div class="btn-row">${filePick('📎 PDF / EPUB ekle', 'btn primary')}<button class="btn" id="manual">📏 İlerlemeyi elle gir</button></div>
-      <div class="muted small">Dosya eklersen kitabı uygulamanın içinde okuyabilirsin. Basılı kitap okuyorsan sayfanı elle girebilirsin.</div>`;
+  for (const s of slots) html += await slotCard(b, s, both);
+
+  // Eksik dil için ekleme düğmeleri
+  const langs = slots.map(s => slotFile(b, s).lang);
+  const addable = Object.keys(LANGS).filter(l => !langs.includes(l));
+  if (slots.length < 2 && addable.length) {
+    html += `<div class="btn-row">${addable.map(l => filePick(`📎 ${l === 'orig' ? 'Orijinal metin' : 'Çeviri'} ekle`, slots.length ? 'btn' : 'btn primary', slotForLang(b, l), l)).join('')}</div>`;
+    html += `<div class="muted small">${slots.length ? 'İkinci dosyayı da eklersen okurken ⇄ düğmesiyle aralarında geçebilirsin; ikisinin ilerlemesi ayrı kaydedilir.' : 'Kitabın orijinal metnini ve çevirisini ayrı ayrı ekleyebilirsin (PDF / EPUB); her birinin ilerlemesi ayrı kaydedilir.'}</div>`;
   }
+  if (!slots.length) {
+    const pct = progressOf(b, 1);
+    const p = b.progress || {};
+    if (pct != null) html += `<div><div style="display:flex;justify-content:space-between;font-size:14px"><span>${p.page && p.pages ? `Sayfa ${p.page} / ${p.pages}` : 'İlerleme'}</span><b>%${Math.floor(pct)}</b></div><div class="progress" style="height:8px"><span style="width:${pct}%"></span></div></div>`;
+    html += '<button class="btn" id="manual">📏 İlerlemeyi elle gir (basılı kitap)</button>';
+  }
+  html += time;
   sec.innerHTML = html;
 
-  $('#file-in', sec)?.addEventListener('change', async e => {
+  $$('input[type=file]', sec).forEach(inp => inp.addEventListener('change', async e => {
     const f = e.target.files?.[0];
     e.target.value = '';
     if (!f) return;
+    const slot = Number(inp.dataset.slot) || 1, lang = inp.dataset.lang || undefined;
     toast('Dosya ekleniyor…');
-    try { const r = await attachFile(b, f); toast(r?.sameFile ? '📎 Dosya eklendi · ilerlemen korundu' : '📎 Dosya eklendi'); }
+    try { const r = await attachFile(slotBook(b, slot), f, lang); toast(r?.sameFile ? '📎 Dosya eklendi · ilerlemen korundu' : '📎 Dosya eklendi'); }
     catch (err) { toast(err.message); }
-  });
-  $('#file-rm', sec)?.addEventListener('click', async () => {
-    if (!(await confirmSheet('Dosyayı kaldır', 'Kitap dosyası bu telefondan silinecek. İlerlemen, yer imlerin ve notların kalır.', 'Kaldır'))) return;
-    await detachFile(b); toast('Dosya kaldırıldı');
-  });
+  }));
+  $$('[data-rm]', sec).forEach(btn => btn.addEventListener('click', async () => {
+    const slot = Number(btn.dataset.rm);
+    if (!(await confirmSheet('Dosyayı kaldır', `${langLabel(slotFile(b, slot))} dosyası bu cihazdan silinecek. İlerlemen, yer imlerin ve notların kalır.`, 'Kaldır'))) return;
+    await detachFile(slotBook(b, slot)); toast('Dosya kaldırıldı');
+  }));
+  $$('[data-ai]', sec).forEach(btn => btn.addEventListener('click', async () => (await import('./sendbook.js')).openSendBook(slotBook(b, Number(btn.dataset.ai)))));
+  $$('[data-setlang]', sec).forEach(btn => btn.addEventListener('click', async () => {
+    const slot = Number(btn.dataset.slot), lang = btn.dataset.setlang;
+    const other = slotFile(b, slot === 2 ? 1 : 2);
+    slotFile(b, slot).lang = lang;
+    if (other && other.lang === lang) other.lang = lang === 'orig' ? 'tr' : 'orig';
+    await saveBook(b); toast(`${LANGS[lang]} olarak işaretlendi`);
+  }));
   $('#manual', sec)?.addEventListener('click', () => manualProgress(b));
-  $('#send-ai', sec)?.addEventListener('click', async () => (await import('./sendbook.js')).openSendBook(b));
 }
 
 function manualProgress(b) {

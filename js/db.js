@@ -40,7 +40,7 @@ const reqP = r => new Promise((res, rej) => { r.onsuccess = () => res(r.result);
 
 export const db = {
   allBooks: () => tx('books', 'readonly', s => reqP(s.getAll())),
-  putBook: book => tx('books', 'readwrite', s => { s.put(book); }),
+  putBook: book => tx('books', 'readwrite', s => { s.put(book?.__real || book); }),
   putBooks: books => tx('books', 'readwrite', s => { books.forEach(b => s.put(b)); }),
   deleteBook: id => tx('books', 'readwrite', s => { s.delete(id); }),
   clearBooks: () => tx('books', 'readwrite', s => { s.clear(); }),

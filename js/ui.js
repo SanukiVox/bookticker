@@ -1,4 +1,5 @@
 // Ortak arayüz parçaları: kapaklar, kartlar, bildirim, alttan açılan paneller.
+import { progressOf } from './files.js';
 import { db } from './db.js';
 import { state, displayTitle, statusInfo, genreColor, colorFor, computeScore } from './store.js';
 
@@ -50,7 +51,7 @@ export function coverHTML(book, { key, badge = true } = {}) {
   const badges = badge
     ? `${book.status && book.status !== 'Okunacak' ? `<span class="badge" title="${esc(st.name)}">${st.emoji}</span>` : ''}${book.favorite ? '<span class="badge l">❤️</span>' : ''}`
     : '';
-  const pct = book.status === 'Okunuyor' && typeof book.progress?.percent === 'number' ? Math.min(100, book.progress.percent) : null;
+  const pct = book.status === 'Okunuyor' ? progressOf(book) : null;
   const prog = badge && pct !== null ? `<div class="cprog"><span style="width:${pct}%"></span></div>` : '';
   return `<div class="cover"${k ? ` data-cover="${esc(k)}"` : ''}>${ph}${badges}${prog}</div>`;
 }
@@ -97,7 +98,7 @@ export function bookRow(b, { sub } = {}) {
   const subline = sub ?? [b.author, b.series ? `${b.series}${b.seriesOrder ? ' #' + b.seriesOrder : ''}` : ''].filter(Boolean).join(' · ');
   return `<a class="row" href="#/book/${enc(b.id)}">${coverHTML(b, { badge: false })}
     <div class="body"><div class="t">${b.favorite ? '❤️ ' : ''}${esc(displayTitle(b))}</div>${origOf(b) ? `<div class="o">${esc(origOf(b))}</div>` : ''}<div class="s">${esc(subline)}</div>
-    <div class="s">${st.emoji} ${esc(st.name)}${typeof b.progress?.percent === 'number' && b.status === 'Okunuyor' ? ` · %${Math.floor(b.progress.percent)}` : ''}${b.file ? ' · 📄' : ''}</div></div>
+    <div class="s">${st.emoji} ${esc(st.name)}${progressOf(b) != null && b.status === 'Okunuyor' ? ` · %${Math.floor(progressOf(b))}` : ''}${b.file || b.file2 ? ' · 📄' : ''}</div></div>
     <div class="end">${s !== null ? `<span class="score">${s.toFixed(1)}</span>` : ''}${b.goodreads ? `<div class="small" style="margin-top:4px">★ ${b.goodreads.toFixed(2).replace('.', ',')}</div>` : ''}</div></a>`;
 }
 

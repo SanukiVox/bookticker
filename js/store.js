@@ -190,6 +190,7 @@ export function newBook(partial = {}) {
 }
 
 export async function saveBook(book) {
+  book = book?.__real || book; // 2. dosya görünümü (files.js slotBook)
   book.updatedAt = Date.now();
   if (book.status === 'Okundu' && !book.endDate) book.endDate = today();
   if (book.status === 'Okunuyor' && !book.startDate) book.startDate = today();
@@ -213,7 +214,7 @@ export async function deleteBook(id) {
   if (b?.coverTr) await db.deleteCover(b.coverTr);
   if (b?.coverOrig) await db.deleteCover(b.coverOrig);
   for (const k of await db.allFileKeys()) {
-    if (k === b?.file?.key || k.startsWith(`${id}-`)) { await db.deleteFile(k); await db.putMeta(`loc:${k}`, null); }
+    if (k === b?.file?.key || k === b?.file2?.key || k.startsWith(`${id}-`)) { await db.deleteFile(k); await db.putMeta(`loc:${k}`, null); }
   }
   const tomb = (await db.getMeta('deleted')) || {};
   tomb[id] = Date.now();

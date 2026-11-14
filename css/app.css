@@ -393,3 +393,5 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; dis
 .crop-box i[data-h="se"] { right: -5px; bottom: -5px; border-left: 0; border-top: 0; cursor: nwse-resize; }
 .paste-box { margin: 12px 0 4px; padding: 14px; border: 2px dashed var(--line); border-radius: 12px; text-align: center; font-size: 14px; color: var(--text-2); -webkit-user-select: text; user-select: text; outline: none; }
 .paste-box:focus { border-color: var(--accent); }
+.read-card .slot-card { border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+.read-card .slot-card .chip { padding: 4px 8px; font-size: 12px; }

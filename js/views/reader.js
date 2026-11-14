@@ -2,7 +2,7 @@
 import { state, getBook, saveBook, saveSettings, displayTitle, statusInfo } from '../store.js';
 import { db } from '../db.js';
 import { esc, ICON, sheet, toast, $, $$ } from '../ui.js';
-import { getFileBlob, addReadingTime, formatDuration } from '../files.js';
+import { getFileBlob, addReadingTime, formatDuration, slotBook, slotFile, langLabel, realBook } from '../files.js';
 
 const loaded = {};
 function loadScript(src) {
@@ -26,7 +26,11 @@ const FONTS = {
 const rs = () => (state.settings.reader ||= { theme: 'light', fontSize: 100, font: 'publisher', pdfZoom: 1 });
 
 export async function renderReader(view, [id], query) {
-  const book = getBook(id);
+  // ?f=2 → kitabın ikinci dosyası (ör. çeviri); ilerleme ve yer imleri ayrı tutulur
+  const slot = query.get('f') === '2' ? 2 : 1;
+  const book = slotBook(getBook(id), slot);
+  const otherFile = book ? slotFile(realBook(book), slot === 2 ? 1 : 2) : null;
+  const slotQ = slot === 2 ? 'f=2&' : '';
   if (!book?.file?.key) { location.replace(book ? `#/book/${encodeURIComponent(id)}` : '#/'); return; }
   const blob = await getFileBlob(book);
   if (!blob) {
@@ -42,7 +46,8 @@ export async function renderReader(view, [id], query) {
       <div class="r-status" id="r-status"><span id="r-chap"></span><span id="r-pct"></span></div>
       <div class="r-top">
         <button class="icon-btn" id="r-close" aria-label="Kapat">${ICON.back}</button>
-        <div class="r-title">${esc(displayTitle(book))}</div>
+        <div class="r-title">${esc(displayTitle(book))}${otherFile ? `<div class="small muted" style="font-weight:500">${esc(langLabel(book.file))}</div>` : ''}</div>
+        ${otherFile ? `<button class="icon-btn" id="r-swap" aria-label="Diğer dosyaya geç" title="${esc(langLabel(otherFile))} dosyasına geç" style="font-size:12px;font-weight:700;width:auto;padding:0 8px;white-space:nowrap">⇄ ${otherFile.lang === 'tr' ? 'Çeviri' : otherFile.lang === 'orig' ? 'Orijinal' : 'Diğer'}</button>` : ''}
         <button class="icon-btn" id="r-ai" aria-label="Yapay zekâya gönder" style="font-size:20px">🤖</button>
         <button class="icon-btn" id="r-toc" aria-label="İçindekiler"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
         <button class="icon-btn" id="r-bm" aria-label="Yer imi"><svg viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"/></svg></button>
@@ -113,7 +118,7 @@ export async function renderReader(view, [id], query) {
     rs().flow = flow; saveSettings();
     if (auto) toast('Sayfa çevrilemedi; "Kaydırarak oku" moduna geçildi (Aa menüsünden değiştirebilirsin)', 4500);
     const loc = book.progress?.loc;
-    location.replace(`#/read/${encodeURIComponent(book.id)}?${loc ? `loc=${encodeURIComponent(loc)}&` : ''}m=${Date.now()}`);
+    location.replace(`#/read/${encodeURIComponent(book.id)}?${slotQ}${loc ? `loc=${encodeURIComponent(loc)}&` : ''}m=${Date.now()}`);
   }
 
   // ---------- Üst/alt çubuklar ----------
@@ -259,6 +264,11 @@ export async function renderReader(view, [id], query) {
   const onHide = () => { if (document.visibilityState === 'hidden') { saveBook(book); saveSettings(); } };
   document.addEventListener('visibilitychange', onHide);
   $('#r-close', root).addEventListener('click', () => { location.hash = `#/book/${encodeURIComponent(book.id)}`; });
+  // Orijinal ⇄ çeviri: diğer dosya kendi kaldığı yerden açılır
+  $('#r-swap', root)?.addEventListener('click', async () => {
+    await persist();
+    location.replace(`#/read/${encodeURIComponent(book.id)}${slot === 2 ? '' : '?f=2'}`);
+  });
 
   // Sayfadan çıkınca çağrılır
   return async () => {

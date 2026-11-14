@@ -1,7 +1,7 @@
 // Okuma: şu an okunanlar, sıradaki kitap önerisi, öncelik sırası, istatistik.
 import { state, computeScore, booksInSeries, displayTitle, statusInfo, genreColor, saveBooks, saveSettings, norm } from '../store.js';
 import { esc, enc, coverHTML, bookCard, hydrateCovers, sheet, toast, $, $$ } from '../ui.js';
-import { readingStats, formatDuration, progressOf } from '../files.js';
+import { readingStats, formatDuration, progressOf, latestSlot, slotProgress } from '../files.js';
 import { tasteRecommendations } from '../similar.js';
 
 const DONE = new Set(['Okundu', 'Elendi', 'Yarım bırakıldı']);
@@ -66,8 +66,8 @@ export async function renderReading(view) {
       const pct = progressOf(b);
       return `<div class="row"><a href="#/book/${enc(b.id)}" style="display:contents">${coverHTML(b, { badge: false })}
         <div class="body"><div class="t">${esc(displayTitle(b))}</div><div class="s">${esc(b.author || '')}${b.readingSeconds ? ` · ⏱ ${formatDuration(b.readingSeconds)}` : ''}</div>
-        ${pct != null ? `<div class="progress"><span style="width:${pct}%"></span></div><div class="s">%${Math.floor(pct)}${b.progress?.page && b.progress?.pages ? ` · sayfa ${b.progress.page}/${b.progress.pages}` : ''}</div>` : ''}</div></a>
-        ${b.file ? `<a class="mini-btn" href="#/read/${enc(b.id)}">📖 Devam</a>` : ''}</div>`;
+        ${pct != null ? `<div class="progress"><span style="width:${pct}%"></span></div><div class="s">%${Math.floor(pct)}${slotProgress(b, latestSlot(b))?.page && slotProgress(b, latestSlot(b))?.pages ? ` · sayfa ${slotProgress(b, latestSlot(b)).page}/${slotProgress(b, latestSlot(b)).pages}` : ''}</div>` : ''}</div></a>
+        ${b.file || b.file2 ? `<a class="mini-btn" href="#/read/${enc(b.id)}${(latestSlot(b) === 2 && b.file2) || !b.file ? '?f=2' : ''}">📖 Devam</a>` : ''}</div>`;
     }).join('')}</div>` : ''}
     ${top ? `<a class="next-card" href="#/book/${enc(top.b.id)}">${coverHTML(top.b, { badge: false })}
       <div><div class="lbl">Sıradaki kitap önerisi</div><div class="t">${esc(displayTitle(top.b))}</div><div class="small">${esc(top.b.author || '')}</div><div class="why">${esc(top.why)}</div></div></a>` : ''}

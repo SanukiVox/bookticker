@@ -4,6 +4,39 @@
 import { state, saveBook, saveSettings, today } from './store.js';
 import { db } from './db.js';
 
+// İki dosya yuvası: 1 = book.file/progress/bookmarks, 2 = book.file2/progress2/bookmarks2.
+// Her dosyada lang: 'orig' (orijinal metin) | 'tr' (çeviri). Okuma süresi kitap için ortaktır.
+export const LANGS = { orig: '🌐 Orijinal', tr: '🇹🇷 Çeviri' };
+export const langLabel = f => LANGS[f?.lang] || '📄 Kitap dosyası';
+const SLOT2 = { file: 'file2', progress: 'progress2', bookmarks: 'bookmarks2' };
+// 2. yuvayı, okuyucu ve diğer kodun book.file/progress/bookmarks olarak görebileceği bir görünüme çevirir.
+export function slotBook(book, slot) {
+  if (!book || slot !== 2) return book;
+  return new Proxy(book, {
+    get: (t, k) => (k === '__real' ? t : k === '__slot' ? 2 : t[SLOT2[k] || k]),
+    set: (t, k, v) => { t[SLOT2[k] || k] = v; return true; },
+  });
+}
+export const realBook = b => b?.__real || b;
+export const slotOf = b => b?.__slot || 1;
+export const slotFile = (b, slot) => (slot === 2 ? b.file2 : b.file);
+export const slotProgress = (b, slot) => (slot === 2 ? b.progress2 : b.progress);
+// En son okunan yuva (ilerleme çubukları ve "Devam" için)
+export function latestSlot(b) {
+  const p1 = b.progress, p2 = b.progress2;
+  if (p2 && (!p1 || (p2.updatedAt || 0) > (p1.updatedAt || 0))) return 2;
+  if (!p1 && !b.file && b.file2) return 2;
+  return 1;
+}
+// Bir dil için hangi yuva kullanılır?
+export function slotForLang(b, lang) {
+  if (b.file?.lang === lang) return 1;
+  if (b.file2?.lang === lang) return 2;
+  if (!b.file) return 1;
+  if (!b.file2) return 2;
+  return b.file.lang ? 2 : 1;
+}
+
 export function detectType(file) {
   const n = (file.name || '').toLowerCase();
   if (file.type === 'application/pdf' || n.endsWith('.pdf')) return 'pdf';
@@ -11,7 +44,9 @@ export function detectType(file) {
   return null;
 }
 
-export async function attachFile(book, file) {
+export async function attachFile(book, file, lang) {
+  const real = realBook(book), slot = slotOf(book);
+  const other = slotFile(real, slot === 2 ? 1 : 2);
   const type = detectType(file);
   if (!type) throw new Error('Sadece PDF veya EPUB dosyası eklenebilir');
   // Dosyanın imzasını kontrol et (yanlış uzantılı dosyalara karşı)
@@ -28,9 +63,10 @@ export async function attachFile(book, file) {
   await db.putFile(key, blob);
   // Bu kitap için bu cihazdaki eski kopyaları temizle
   for (const k of await db.allFileKeys()) {
-    if (k !== key && (k.startsWith(`${book.id}-`) || k === prev?.key)) await removeFileData(k);
+    if (k !== key && k !== other?.key && ((slot === 1 && k.startsWith(`${book.id}-`)) || k === prev?.key)) await removeFileData(k);
   }
-  book.file = { key, hash, name: file.name, type, size: blob.size, addedAt: sameFile ? (prev.addedAt || Date.now()) : Date.now() };
+  book.file = { key, hash, name: file.name, type, size: blob.size, addedAt: sameFile ? (prev.addedAt || Date.now()) : Date.now(), lang: lang || prev?.lang || undefined };
+  if (!book.file.lang) delete book.file.lang;
   if (!sameFile) {
     // Farklı dosya = farklı sayfa düzeni: konum bilgisi sıfırlanır
     book.progress = book.progress && book.progress.manual ? book.progress : null;
@@ -56,15 +92,17 @@ export async function resolveLocalKey(book) {
   const keys = await db.allFileKeys();
   if (book.file.key && keys.includes(book.file.key)) return book.file.key;
   if (book.file.hash && keys.includes(`h-${book.file.hash.slice(0, 32)}`)) return `h-${book.file.hash.slice(0, 32)}`;
-  // Eski sürümde eklenen dosyalar: anahtar kitabın kimliğiyle başlar
+  // Eski sürümde eklenen dosyalar: anahtar kitabın kimliğiyle başlar (sadece 1. yuva)
+  if (slotOf(book) === 2) return null;
   const legacy = keys.filter(k => k.startsWith(`${book.id}-`)).sort();
   return legacy.length ? legacy[legacy.length - 1] : null;
 }
 
 export async function detachFile(book) {
   const local = await resolveLocalKey(book);
-  if (local) await removeFileData(local);
-  if (book.file?.key && book.file.key !== local) await removeFileData(book.file.key);
+  const other = slotFile(realBook(book), slotOf(book) === 2 ? 1 : 2);
+  if (local && local !== other?.key) await removeFileData(local);
+  if (book.file?.key && book.file.key !== local && book.file.key !== other?.key) await removeFileData(book.file.key);
   book.file = null;
   await saveBook(book);
 }
@@ -80,8 +118,8 @@ export async function getFileBlob(book) {
 
 export async function filesUsage() {
   const keys = new Set(await db.allFileKeys());
-  const books = state.books.filter(b => b.file?.key && keys.has(b.file.key));
-  return { count: books.length, bytes: books.reduce((t, b) => t + (b.file.size || 0), 0) };
+  const files = state.books.flatMap(b => [b.file, b.file2]).filter(f => f?.key && keys.has(f.key));
+  return { count: files.length, bytes: files.reduce((t, f) => t + (f.size || 0), 0) };
 }
 
 export function formatSize(bytes) {
@@ -129,4 +167,8 @@ export function readingStats() {
   return { todaySec, weekSec, monthSec, totalSec, streak, last7 };
 }
 
-export const progressOf = b => (b.progress && typeof b.progress.percent === 'number' ? Math.max(0, Math.min(100, b.progress.percent)) : null);
+// İlerleme yüzdesi: yuva verilmezse en son okunan dosyanınki
+export const progressOf = (b, slot = latestSlot(b)) => {
+  const p = slotProgress(b, slot);
+  return p && typeof p.percent === 'number' ? Math.max(0, Math.min(100, p.percent)) : null;
+};

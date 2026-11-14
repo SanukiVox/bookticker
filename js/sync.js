@@ -108,14 +108,22 @@ const t = v => Number(v) || 0;
 function mergeBook(a, b) {
   const base = t(b.updatedAt) > t(a.updatedAt) ? b : a;
   const out = { ...base };
-  const pa = a.progress, pb = b.progress;
-  out.progress = !pa ? (pb ?? null) : !pb ? pa : (t(pb.updatedAt) > t(pa.updatedAt) ? pb : pa);
-  const seen = new Set();
-  out.bookmarks = [...(a.bookmarks || []), ...(b.bookmarks || [])]
-    .filter(m => { const k = `${m.loc}|${m.createdAt}`; if (seen.has(k)) return false; seen.add(k); return true; })
-    .sort((x, y) => t(x.createdAt) - t(y.createdAt));
+  // İki dosya yuvası: file/progress/bookmarks ve file2/progress2/bookmarks2
+  for (const [f, p, m] of [['file', 'progress', 'bookmarks'], ['file2', 'progress2', 'bookmarks2']]) {
+    const pa = a[p], pb = b[p];
+    out[p] = !pa ? (pb ?? null) : !pb ? pa : (t(pb.updatedAt) > t(pa.updatedAt) ? pb : pa);
+    const seen = new Set();
+    out[m] = [...(a[m] || []), ...(b[m] || [])]
+      .filter(x => { const k = `${x.loc}|${x.createdAt}`; if (seen.has(k)) return false; seen.add(k); return true; })
+      .sort((x, y) => t(x.createdAt) - t(y.createdAt));
+    const fa = a[f], fb = b[f];
+    if (fa || fb) {
+      out[f] = fa?.hash && fb?.hash && fa.hash === fb.hash ? base[f] || fa // aynı dosya: daha yeni düzenleme (ör. dil etiketi)
+        : (fa?.hash ? fa : fb?.hash ? fb : base[f]) || fa || fb;
+    }
+  }
+  if (!out.file2 && !out.progress2 && !out.bookmarks2?.length) { delete out.progress2; delete out.bookmarks2; }
   out.readingSeconds = Math.max(t(a.readingSeconds), t(b.readingSeconds)) || undefined;
-  if (a.file || b.file) out.file = (a.file?.hash ? a.file : b.file?.hash ? b.file : base.file) || a.file || b.file;
   return out;
 }
 
@@ -181,7 +189,7 @@ async function applyLocal(merged, head) {
   try { await replaceAll(merged.books, merged.options, merged.settings); } finally { suppress = false; }
 }
 
-const fingerprint = d => JSON.stringify([d.books.map(b => [b.id, b.updatedAt, b.progress?.updatedAt, (b.bookmarks || []).length, b.readingSeconds]).sort(), d.options?.updatedAt, d.settings?.updatedAt, Object.keys(d.deleted || {}).length]);
+const fingerprint = d => JSON.stringify([d.books.map(b => [b.id, b.updatedAt, b.progress?.updatedAt, (b.bookmarks || []).length, b.readingSeconds, b.progress2?.updatedAt, (b.bookmarks2 || []).length]).sort(), d.options?.updatedAt, d.settings?.updatedAt, Object.keys(d.deleted || {}).length]);
 
 // ---------- Gönder ----------
 export async function push({ force = false } = {}) {
