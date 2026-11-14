@@ -23,7 +23,7 @@ export async function fillAiSection(view) {
       <button class="set-row" id="ai-add" style="width:100%;border:0;background:none;text-align:left">🔑 Anahtarı değiştir<span class="chev"></span></button>
       <button class="set-row" id="ai-del" style="width:100%;border:0;background:none;text-align:left;color:var(--danger)">Anahtarı bu cihazdan sil</button>
       <div class="set-row muted small" style="display:block">Gerçek bakiye ve harcama: <a href="https://console.anthropic.com/settings/billing" target="_blank" rel="noopener" style="color:var(--accent)">Claude Console → Billing</a>. Daha derin yanıtlar ve Opus daha pahalıdır. Anahtar GitHub'a ve yedeğe gitmez.</div>`;
-    $('#ai-model', box).addEventListener('change', async e => { await saveAiConfig({ model: e.target.value }); toast('Model değişti'); });
+    $('#ai-model', box).addEventListener('change', async e => { await saveAiConfig({ model: e.target.value, modelChosen: true }); toast('Model değişti'); });
     $('#ai-effort', box).addEventListener('change', async e => { await saveAiConfig({ effort: e.target.value }); toast('Kaydedildi'); });
     $('#ai-del', box).addEventListener('click', async () => {
       if (!(await confirmSheet('Anahtarı sil', 'Claude API anahtarı bu cihazdan silinecek. Console\'daki anahtar silinmez.', 'Sil'))) return;

@@ -9,11 +9,15 @@ export const MODELS = {
 };
 export const DEPTHS = { low: 'Hızlı', medium: 'Dengeli', high: 'Derin' };
 
-const DEFAULT = { key: '', model: 'claude-opus-5-5', effort: 'low', spent: 0 };
+const DEFAULT = { key: '', model: 'claude-haiku-5-5', effort: 'low', spent: 0 };
 let cfg = null;
 
 export async function aiConfig() {
-  if (!cfg) cfg = { ...DEFAULT, ...((await db.getMeta('ai')) || {}) };
+  if (!cfg) {
+    cfg = { ...DEFAULT, ...((await db.getMeta('ai')) || {}) };
+    // Bir kerelik: model elle seçilmediyse varsayılan en ucuz model (Haiku) olsun
+    if (!cfg.modelChosen && !cfg.haikuDefault) { cfg.model = 'claude-haiku-5-5'; cfg.haikuDefault = true; await db.putMeta('ai', cfg); }
+  }
   return cfg;
 }
 export async function saveAiConfig(patch) {
@@ -53,7 +57,7 @@ function friendlyError(Anthropic, e) {
 export async function chat({ system, messages, onText, signal }) {
   const { Anthropic, c } = await client();
   const conf = await aiConfig();
-  const model = MODELS[conf.model] ? conf.model : 'claude-opus-5-5';
+  const model = MODELS[conf.model] ? conf.model : 'claude-haiku-5-5';
   const params = {
     model,
     max_tokens: 16000,
