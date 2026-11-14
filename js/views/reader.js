@@ -26,6 +26,7 @@ const FONTS = {
 const rs = () => (state.settings.reader ||= { theme: 'light', fontSize: 100, font: 'publisher', pdfZoom: 1 });
 
 export async function renderReader(view, [id], query) {
+  if (query.get('split') === '1') return renderSplit(view, id);
   // ?f=2 → kitabın ikinci dosyası (ör. çeviri); ilerleme ve yer imleri ayrı tutulur
   const slot = query.get('f') === '2' ? 2 : 1;
   const book = slotBook(getBook(id), slot);
@@ -47,6 +48,7 @@ export async function renderReader(view, [id], query) {
       <div class="r-top">
         <button class="icon-btn" id="r-close" aria-label="Kapat">${ICON.back}</button>
         <div class="r-title">${esc(displayTitle(book))}${otherFile ? `<div class="small muted" style="font-weight:500">${esc(langLabel(book.file))}</div>` : ''}</div>
+        ${otherFile ? `<button class="icon-btn" id="r-split" aria-label="İkisini aynı anda göster" title="Orijinal ve çeviri aynı anda" style="font-size:20px">◫</button>` : ''}
         ${otherFile ? `<button class="icon-btn" id="r-swap" aria-label="Diğer dosyaya geç" title="${esc(langLabel(otherFile))} dosyasına geç" style="font-size:12px;font-weight:700;width:auto;padding:0 8px;white-space:nowrap">⇄ ${otherFile.lang === 'tr' ? 'Çeviri' : otherFile.lang === 'orig' ? 'Orijinal' : 'Diğer'}</button>` : ''}
         <button class="icon-btn" id="r-ai" aria-label="Yapay zekâya gönder" style="font-size:20px">🤖</button>
         <button class="icon-btn" id="r-toc" aria-label="İçindekiler"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
@@ -264,6 +266,10 @@ export async function renderReader(view, [id], query) {
   const onHide = () => { if (document.visibilityState === 'hidden') { saveBook(book); saveSettings(); } };
   document.addEventListener('visibilitychange', onHide);
   $('#r-close', root).addEventListener('click', () => { location.hash = `#/book/${encodeURIComponent(book.id)}`; });
+  $('#r-split', root)?.addEventListener('click', async () => {
+    await persist();
+    location.replace(`#/read/${encodeURIComponent(book.id)}?split=1`);
+  });
   // Orijinal ⇄ çeviri: diğer dosya kendi kaldığı yerden açılır
   $('#r-swap', root)?.addEventListener('click', async () => {
     await persist();
@@ -577,4 +583,176 @@ async function fixMissing(zip) {
     }
     return fixed ? await zip.generateAsync({ type: 'arraybuffer', compression: 'STORE' }) : null;
   } catch (e) { console.warn('EPUB onarımı', e); return null; }
+}
+
+// =====================================================================
+// Bölünmüş ekran: orijinal metin ve çeviri aynı anda (telefonda üst/alt, yatayda ve tablette yan yana).
+// Her bölmenin sayfası ve ilerlemesi ayrı; "Bölümü eşle" öbür bölmeyi aynı bölüme getirir.
+// =====================================================================
+const chapterNo = label => {
+  const l = String(label || '').toLowerCase();
+  const m = l.match(/(?:chapter|bölüm|bolum|kapitel|chapitre|capítulo|part|kısım)\s*(\d+)/) || l.match(/^\s*(\d+)\s*[.:\-–)]?\s*(?:bölüm|bolum)?/) || l.match(/(\d+)\.\s*(?:bölüm|bolum)/);
+  return m ? Number(m[1]) : null;
+};
+
+async function renderSplit(view, id) {
+  const real = getBook(id);
+  if (!real?.file?.key || !real?.file2?.key) { location.replace(`#/read/${encodeURIComponent(id)}`); return () => {}; }
+  // Orijinal üstte/solda
+  const order = real.file2.lang === 'orig' && real.file.lang !== 'orig' ? [2, 1] : [1, 2];
+  const s = rs();
+  const dir = s.splitDir || 'auto';
+  view.innerHTML = `
+    <div class="reader split${s.flow === 'scroll' ? ' scroll' : ''}" id="reader" data-rtheme="${s.theme}" data-dir="${dir}">
+      <div class="sp-top">
+        <button class="icon-btn" id="sp-close" aria-label="Kapat">${ICON.back}</button>
+        <div class="r-title">${esc(displayTitle(real))}</div>
+        <button class="mini-btn" id="sp-sync" title="Öbür tarafı aynı bölüme getir">🔗 Bölümü eşle</button>
+        <button class="icon-btn" id="sp-dir" aria-label="Bölme yönü" title="Üst-alt / yan yana">${dir === 'cols' ? '◫' : dir === 'rows' ? '⬒' : '⊞'}</button>
+        <button class="icon-btn" id="sp-set" aria-label="Görünüm" style="font-weight:700;font-family:var(--serif)">Aa</button>
+      </div>
+      <div class="sp-panes">
+        ${order.map((sl, i) => `<div class="sp-pane ${slotFile(real, sl).type}" data-i="${i}">
+          <div class="sp-stage" id="sp-stage-${i}"></div>
+          ${slotFile(real, sl).type === 'epub' && s.flow !== 'scroll' ? `<div class="sp-tap" data-i="${i}"></div>` : ''}
+          <div class="sp-status"><b>${esc(langLabel(slotFile(real, sl)))}</b><span class="sp-chap" id="sp-chap-${i}"></span><span id="sp-pct-${i}"></span></div>
+          <div class="r-loading" id="sp-load-${i}">Açılıyor…</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  const root = $('#reader', view);
+
+  // Okuma süresi ve durum
+  let lastActivity = Date.now();
+  const activity = () => { lastActivity = Date.now(); };
+  const tick = setInterval(() => {
+    if (document.visibilityState === 'visible' && Date.now() - lastActivity < 5 * 60 * 1000) addReadingTime(real, 10);
+  }, 10000);
+  if (real.status !== 'Okunuyor' && real.status !== 'Okundu') { real.status = 'Okunuyor'; await saveBook(real); }
+
+  let saveT = null;
+  const persist = () => db.putBook(real);
+  const panes = await Promise.all(order.map(async (sl, i) => {
+    const book = slotBook(real, sl);
+    const pane = { slot: sl, book, last: null, ctrl: null, i };
+    const blob = await getFileBlob(book);
+    if (!blob) { $(`#sp-load-${i}`, root).innerHTML = `📄 ${esc(langLabel(book.file))} dosyası bu cihazda yok.<br><span class="small">Kitap sayfasından yeniden ekleyebilirsin.</span>`; return pane; }
+    const onLocation = p => {
+      activity();
+      pane.last = p;
+      book.progress = { ...p, updatedAt: Date.now() };
+      $(`#sp-chap-${i}`, root).textContent = p.chapter || p.label || '';
+      $(`#sp-pct-${i}`, root).textContent = p.percent != null ? `%${Math.floor(p.percent)}` : '';
+      clearTimeout(saveT); saveT = setTimeout(persist, 1500);
+    };
+    try {
+      const stage = $(`#sp-stage-${i}`, root);
+      pane.ctrl = book.file.type === 'epub'
+        ? await openEpub(stage, blob, book, { onLocation, onTap: () => {}, start: book.progress?.loc, onStuck: () => toast('Sayfa çevrilemedi: Aa → "Kaydırarak oku"yu dene') })
+        : await openPdf(stage, blob, book, { onLocation, onTap: () => {}, start: book.progress?.loc, onActivity: activity });
+      $(`#sp-load-${i}`, root).remove();
+    } catch (e) {
+      $(`#sp-load-${i}`, root).innerHTML = `⚠️ Açılamadı<br><span class="small">${esc(e.message || '')}</span>`;
+    }
+    return pane;
+  }));
+
+  // Bölme başına dokunma: sol kenar geri, sağ kenar ileri, kaydırma da çevirir
+  $$('.sp-tap', root).forEach(layer => {
+    const pane = panes[Number(layer.dataset.i)];
+    let t0 = null, swiped = false;
+    const go = d => { activity(); if (pane.ctrl) (d > 0 ? pane.ctrl.next() : pane.ctrl.prev()); };
+    layer.addEventListener('touchstart', e => { const t = e.changedTouches[0]; t0 = { x: t.clientX, y: t.clientY }; swiped = false; }, { passive: true });
+    layer.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+    layer.addEventListener('touchend', e => {
+      if (!t0) return;
+      const t = e.changedTouches[0], dx = t.clientX - t0.x, dy = t.clientY - t0.y;
+      t0 = null;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { swiped = true; go(dx < 0 ? 1 : -1); }
+      else if (Math.abs(dy) > 50) { swiped = true; go(dy < 0 ? 1 : -1); }
+    });
+    layer.addEventListener('click', e => {
+      if (swiped) { swiped = false; return; }
+      const r = layer.getBoundingClientRect(), x = (e.clientX - r.left) / r.width;
+      if (x < 0.4) go(-1); else if (x > 0.6) go(1);
+    });
+    let wheelAt = 0;
+    layer.addEventListener('wheel', e => {
+      e.preventDefault();
+      if (Date.now() - wheelAt < 450 || Math.abs(e.deltaY) + Math.abs(e.deltaX) < 8) return;
+      wheelAt = Date.now(); go((e.deltaY || e.deltaX) > 0 ? 1 : -1);
+    }, { passive: false });
+  });
+
+  // Bölümü eşle: en son okunan bölmenin bölümünü öbürüne uygula
+  let active = 0;
+  $$('.sp-pane', root).forEach(el => el.addEventListener('pointerdown', () => { active = Number(el.dataset.i); }, true));
+  async function syncChapter() {
+    const from = panes[active], to = panes[1 - active];
+    if (!from?.ctrl || !to?.ctrl || !from.last) { toast('Önce bir tarafta biraz oku'); return; }
+    const [ta, tb] = await Promise.all([from.ctrl.toc(), to.ctrl.toc()]);
+    const label = from.last.chapter || '';
+    const n = chapterNo(label);
+    let target = null;
+    if (n != null) target = tb.find(t => chapterNo(t.label) === n);
+    if (!target) {
+      // Numara yoksa içindekilerdeki sırasına göre (ön sayfalar farklı olabilir: sondan hizala)
+      const ia = ta.findIndex(t => t.label === label);
+      if (ia >= 0 && ta.length && tb.length) target = tb[Math.max(0, Math.min(tb.length - 1, ia - (ta.length - tb.length)))];
+    }
+    if (target && to.last?.chapter === target.label) { toast('Öbür taraf zaten aynı bölümde'); return; }
+    if (target) { await to.ctrl.gotoToc(target); toast(`🔗 ${target.label}`); return; }
+    // İçindekiler yoksa: yüzdeye göre
+    if (from.last.percent != null) {
+      const v = to.book.file.type === 'pdf' ? Math.max(1, Math.round((from.last.percent / 100) * to.ctrl.rangeMax())) : Math.round(from.last.percent * 10);
+      await to.ctrl.gotoRange(v);
+      toast(`🔗 %${Math.floor(from.last.percent)} konumuna getirildi`);
+    } else toast('Eşlenecek bölüm bulunamadı');
+  }
+  $('#sp-sync', root).addEventListener('click', syncChapter);
+
+  $('#sp-dir', root).addEventListener('click', () => {
+    const next = { auto: 'rows', rows: 'cols', cols: 'auto' }[rs().splitDir || 'auto'];
+    rs().splitDir = next; saveSettings();
+    toast(next === 'rows' ? '⬒ Üst-alt' : next === 'cols' ? '◫ Yan yana' : '⊞ Otomatik (dik: üst-alt, yatay: yan yana)');
+    location.replace(`#/read/${encodeURIComponent(id)}?split=1&m=${Date.now()}`);
+  });
+  $('#sp-set', root).addEventListener('click', () => {
+    const st = rs();
+    sheet({
+      title: 'Görünüm',
+      body: `<div class="f-block"><h3>Arka plan</h3><div class="r-themes">${Object.entries(THEMES).map(([k, t]) => `<button data-th="${k}" class="${st.theme === k ? 'on' : ''}" style="background:${t.bg};color:${t.fg}">${t.label}</button>`).join('')}</div></div>
+        <div class="f-block"><h3>Yazı boyutu</h3><div class="range-row"><button class="btn" data-fs="-10">A−</button><b id="fs-val" style="flex:1;text-align:center">%${st.fontSize}</b><button class="btn" data-fs="10">A+</button></div></div>
+        <div class="f-block"><h3>Okuma düzeni</h3><div class="chip-wrap"><button class="chip ${st.flow !== 'scroll' ? 'on' : ''}" data-flow="paged">📖 Sayfa sayfa</button><button class="chip ${st.flow === 'scroll' ? 'on' : ''}" data-flow="scroll">📜 Kaydırarak oku</button></div></div>
+        <div class="f-block"><button class="btn block" id="sp-exit">Tek ekrana dön</button></div>`,
+      onMount: (el, close) => {
+        $$('[data-th]', el).forEach(b => b.addEventListener('click', () => {
+          st.theme = b.dataset.th; root.dataset.rtheme = st.theme; panes.forEach(p => p.ctrl?.applyStyle());
+          $$('[data-th]', el).forEach(x => x.classList.toggle('on', x === b)); saveSettings();
+        }));
+        $$('[data-fs]', el).forEach(b => b.addEventListener('click', () => {
+          st.fontSize = Math.max(70, Math.min(200, st.fontSize + Number(b.dataset.fs)));
+          $('#fs-val', el).textContent = `%${st.fontSize}`; panes.forEach(p => p.book.file.type === 'epub' && p.ctrl?.applyStyle()); saveSettings();
+        }));
+        $$('[data-flow]', el).forEach(b => b.addEventListener('click', () => {
+          close();
+          if ((st.flow || 'paged') === b.dataset.flow) return;
+          st.flow = b.dataset.flow; saveSettings();
+          location.replace(`#/read/${encodeURIComponent(id)}?split=1&m=${Date.now()}`);
+        }));
+        $('#sp-exit', el).addEventListener('click', () => { close(); location.replace(`#/read/${encodeURIComponent(id)}${panes[active]?.slot === 2 ? '?f=2' : ''}`); });
+      },
+    });
+  });
+  $('#sp-close', root).addEventListener('click', () => { location.hash = `#/book/${encodeURIComponent(id)}`; });
+  const onHide = () => { if (document.visibilityState === 'hidden') { saveBook(real); saveSettings(); } };
+  document.addEventListener('visibilitychange', onHide);
+
+  return async () => {
+    clearInterval(tick); clearTimeout(saveT);
+    document.removeEventListener('visibilitychange', onHide);
+    panes.forEach(p => { try { p.ctrl?.destroy(); } catch { /* yok */ } });
+    await saveBook(real);
+    await saveSettings();
+  };
 }

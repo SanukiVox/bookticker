@@ -44,6 +44,7 @@ export async function fillFileSection(view, b) {
   const time = b.readingSeconds ? `<div class="muted small">⏱ Toplam okuma süresi: <b>${formatDuration(b.readingSeconds)}</b></div>` : '';
 
   let html = '<h3>Okuma</h3>';
+  if (both) html += `<a class="btn block" href="#/read/${enc(b.id)}?split=1">◫ Orijinal ve çeviriyi aynı anda oku</a>`;
   for (const s of slots) html += await slotCard(b, s, both);
 
   // Eksik dil için ekleme düğmeleri

@@ -395,3 +395,27 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; dis
 .paste-box:focus { border-color: var(--accent); }
 .read-card .slot-card { border: 1px solid var(--line); border-radius: 14px; padding: 12px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
 .read-card .slot-card .chip { padding: 4px 8px; font-size: 12px; }
+
+/* Bölünmüş ekran: orijinal + çeviri */
+.reader.split { display: flex; flex-direction: column; }
+.reader.split .sp-top { display: flex; align-items: center; gap: 4px; padding: calc(var(--safe-top) + 4px) 6px 4px; border-bottom: 1px solid var(--rline); background: var(--rbar); flex: 0 0 auto; z-index: 3; }
+.reader.split .sp-top .r-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: 15px; }
+.reader.split .sp-top .mini-btn { font-size: 13px; padding: 6px 8px; white-space: nowrap; }
+.reader.split .sp-panes { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: var(--safe-bottom); }
+.reader.split[data-dir="cols"] .sp-panes { flex-direction: row; }
+@media (orientation: landscape) { .reader.split[data-dir="auto"] .sp-panes { flex-direction: row; } }
+.reader.split .sp-pane { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.reader.split .sp-pane + .sp-pane { border-top: 2px solid var(--rline); }
+.reader.split[data-dir="cols"] .sp-pane + .sp-pane { border-top: 0; border-left: 2px solid var(--rline); }
+@media (orientation: landscape) { .reader.split[data-dir="auto"] .sp-pane + .sp-pane { border-top: 0; border-left: 2px solid var(--rline); } }
+.reader.split .sp-stage { position: relative; flex: 1; min-height: 0; margin: 4px 6px 0; }
+.reader.split .sp-pane.pdf .sp-stage { margin: 0; overflow: auto; -webkit-overflow-scrolling: touch; background: color-mix(in srgb, var(--rfg) 8%, var(--rbg)); }
+.reader.split .sp-pane.pdf .pdf-inner { padding-top: 6px; }
+.reader.split .sp-tap { position: absolute; left: 0; right: 0; top: 0; bottom: 24px; z-index: 2; touch-action: none; -webkit-tap-highlight-color: transparent; }
+.reader.split .sp-status { flex: 0 0 24px; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 11.5px; opacity: .7; white-space: nowrap; }
+.reader.split .sp-status .sp-chap { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.reader.split .r-loading { z-index: 1; }
+.reader.split.pdf .pdf-page { background: #fff; }
+.reader.split[data-rtheme="dark"] .pdf-page { background: #1b181d; }
+.reader.split[data-rtheme="dark"] .pdf-page canvas { filter: invert(.9) hue-rotate(180deg); }
+.reader.split[data-rtheme="sepia"] .pdf-page canvas { filter: sepia(.35) brightness(.97); }
