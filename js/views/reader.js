@@ -108,12 +108,21 @@ export async function renderReader(view, [id], query) {
   const stage = $('#stage', root);
 
   // ---------- Okuma süresi ----------
+  const goalCheck = () => {
+    const goal = Number(state.settings.dailyGoalMin) || 0;
+    const day = new Date().toDateString();
+    if (!goal || state.settings.goalHitDay === day) return;
+    const log = state.settings.readLog || {};
+    const d = new Date(), key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if ((log[key] || 0) >= goal * 60) { state.settings.goalHitDay = day; saveSettings(); toast(`🎯 Bugünkü ${goal} dakikalık hedef tamam! 🔥`); }
+  };
   let lastActivity = Date.now();
   const activity = () => { lastActivity = Date.now(); };
   const sessionStart = book.readingSeconds || 0;
   const tick = setInterval(() => {
     if (document.visibilityState === 'visible' && Date.now() - lastActivity < 5 * 60 * 1000) {
       addReadingTime(book, 10);
+      goalCheck();
       $('#r-time', root).textContent = `⏱ ${formatDuration(book.readingSeconds - sessionStart)} bu oturumda`;
     }
   }, 10000);

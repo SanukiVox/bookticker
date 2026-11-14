@@ -147,6 +147,9 @@ export const saveReadLog = () => saveSettings();
 
 export function readingStats() {
   const log = state.settings.readLog || {};
+  // Günlük hedef varsa seri, hedefin tamamlandığı günlerle sayılır; yoksa en az 1 dakika okunan günlerle
+  const goalSec = (Number(state.settings.dailyGoalMin) || 0) * 60;
+  const counts = sec => (sec || 0) >= (goalSec || 60);
   const now = new Date();
   const dayStr = d => today(d);
   const todaySec = log[dayStr(now)] || 0;
@@ -159,12 +162,20 @@ export function readingStats() {
   let streak = 0;
   for (let i = 0; ; i++) {
     const d = new Date(now); d.setDate(now.getDate() - i);
-    if (log[dayStr(d)] >= 60) streak++;
+    if (counts(log[dayStr(d)])) streak++;
     else if (i > 0) break;
     if (i > 3650) break;
   }
+  // En uzun seri
+  let best = 0, run = 0, prev = null;
+  for (const k of Object.keys(log).filter(k => counts(log[k])).sort()) {
+    const d = new Date(`${k}T12:00:00`);
+    run = prev && Math.round((d - prev) / 86400000) === 1 ? run + 1 : 1;
+    best = Math.max(best, run); prev = d;
+  }
+  const monthDays = Object.keys(log).filter(k => k.startsWith(monthPrefix) && (log[k] || 0) >= 60).length;
   const last7 = Array.from({ length: 7 }, (_, i) => { const d = new Date(now); d.setDate(now.getDate() - (6 - i)); return { d, sec: log[dayStr(d)] || 0 }; });
-  return { todaySec, weekSec, monthSec, totalSec, streak, last7 };
+  return { todaySec, weekSec, monthSec, totalSec, streak, best: Math.max(best, streak), last7, goalSec, monthDays };
 }
 
 // İlerleme yüzdesi: yuva verilmezse en son okunan dosyanınki

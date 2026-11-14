@@ -89,6 +89,7 @@ export async function renderReading(view) {
     <div class="section"><h3>Okuma kurallarım</h3><ol class="rules" style="margin:0;padding-left:20px">${state.settings.rules.map(r => `<li>${esc(r)}</li>`).join('')}</ol>
       <button class="mini-btn" id="edit-rules" style="margin-top:6px">Kuralları düzenle</button></div>
 
+    ${goalCard()}
     <h3 style="margin:20px 0 10px">İstatistik</h3>
     ${(() => {
       const r = readingStats();
@@ -100,7 +101,8 @@ export async function renderReading(view) {
           <div><div class="n" style="font:700 22px/1.1 var(--serif)">${formatDuration(r.weekSec)}</div><div class="muted small">Son 7 gün</div></div>
           <div><div class="n" style="font:700 22px/1.1 var(--serif)">${r.streak ? `🔥 ${r.streak} gün` : '—'}</div><div class="muted small">Art arda okuma</div></div></div>
         <div class="week-bars">${r.last7.map(x => `<div><i class="${x.sec ? '' : 'zero'}" style="height:${x.sec ? Math.max(6, (x.sec / max) * 70) : 3}px" title="${formatDuration(x.sec)}"></i>${days[x.d.getDay()]}</div>`).join('')}</div>
-        <div class="muted small" style="margin-top:8px">Bu ay ${formatDuration(r.monthSec)} · Toplam ${formatDuration(r.totalSec)}</div></div>`;
+        <div class="muted small" style="margin-top:8px">Bu ay ${formatDuration(r.monthSec)} · Toplam ${formatDuration(r.totalSec)}${r.best > 1 ? ` · En uzun seri ${r.best} gün` : ''}</div></div>
+        ${monthCard(r)}`;
     })()}
     <div class="section"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>${year} hedefi</b><span class="muted small">${readThisYear.length} / ${goal || '—'} kitap</span></div>
       <div class="progress" style="height:10px;margin-top:8px"><span style="width:${goal ? Math.min(100, (readThisYear.length / goal) * 100) : 0}%"></span></div></div>
@@ -130,6 +132,7 @@ export async function renderReading(view) {
     await saveBooks([b, ...queue.filter(x => x !== b)]);
   }));
   $('#add-q', view).addEventListener('click', () => addToQueue(queue));
+  wireGoal(view);
   $('#edit-rules', view).addEventListener('click', editRules);
   setupDrag(view, queue);
 }
@@ -210,4 +213,54 @@ function setupDrag(view, queue) {
   };
   list.addEventListener('pointerup', end);
   list.addEventListener('pointercancel', end);
+}
+
+
+// ---------- Günlük okuma hedefi ve seri ----------
+function goalCard() {
+  const r = readingStats();
+  const goal = Number(state.settings.dailyGoalMin) || 0;
+  if (!goal) return `<button class="section goal-card" id="goal-set" style="width:100%;border:0;text-align:left;color:inherit;display:flex;align-items:center;gap:12px">
+    <span style="font-size:28px">🎯</span><span style="flex:1"><b>Günlük okuma hedefi koy</b><br><span class="muted small">Her gün kaç dakika okumak istiyorsun? Hedefi tuttuğun günler seriye sayılır.</span></span><span class="muted">›</span></button>`;
+  const pct = Math.min(1, r.todaySec / (goal * 60));
+  const C = 2 * Math.PI * 34;
+  const left = Math.max(0, goal * 60 - r.todaySec);
+  return `<div class="section goal-card" style="display:flex;align-items:center;gap:16px">
+    <svg width="84" height="84" viewBox="0 0 84 84" aria-hidden="true"><circle cx="42" cy="42" r="34" fill="none" stroke="var(--line)" stroke-width="9"/>
+      <circle cx="42" cy="42" r="34" fill="none" stroke="var(--accent)" stroke-width="9" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - pct)}" transform="rotate(-90 42 42)"/>
+      <text x="42" y="47" text-anchor="middle" font-size="17" font-weight="700" fill="currentColor">${Math.round(pct * 100)}%</text></svg>
+    <div style="flex:1"><b>${pct >= 1 ? '🎉 Bugünkü hedef tamam' : 'Bugünkü hedef'}</b>
+      <div class="small">${formatDuration(r.todaySec)} / ${goal} dk${pct < 1 ? ` · ${formatDuration(left)} kaldı` : ''}</div>
+      <div class="small" style="margin-top:4px">${r.streak ? `🔥 <b>${r.streak} gün</b> art arda` : 'Seri başlatmak için bugün hedefini tut'}${r.best > r.streak ? ` · rekor ${r.best}` : ''}</div></div>
+    <button class="mini-btn" id="goal-set" aria-label="Hedefi değiştir">✎</button></div>`;
+}
+
+function monthCard(r) {
+  const now = new Date();
+  const ym = now.toISOString().slice(0, 7);
+  const finished = state.books.filter(b => b.status === 'Okundu' && String(b.endDate || '').startsWith(ym));
+  if (!r.monthSec && !finished.length) return '';
+  const month = now.toLocaleDateString('tr-TR', { month: 'long' });
+  return `<div class="section"><h3>📅 ${month[0].toLocaleUpperCase('tr-TR') + month.slice(1)} özeti</h3>
+    <div class="stat-grid" style="grid-template-columns:repeat(3,1fr)">
+      <div><div class="n" style="font:700 20px/1.1 var(--serif)">${formatDuration(r.monthSec)}</div><div class="muted small">okuma</div></div>
+      <div><div class="n" style="font:700 20px/1.1 var(--serif)">${r.monthDays}</div><div class="muted small">gün okudum</div></div>
+      <div><div class="n" style="font:700 20px/1.1 var(--serif)">${finished.length}</div><div class="muted small">kitap bitti</div></div></div>
+    ${finished.length ? `<div class="small" style="margin-top:8px">✅ ${finished.map(b => `<a href="#/book/${enc(b.id)}">${esc(displayTitle(b))}</a>`).join(', ')}</div>` : ''}</div>`;
+}
+
+export function wireGoal(view) {
+  $('#goal-set', view)?.addEventListener('click', () => {
+    const cur = Number(state.settings.dailyGoalMin) || 0;
+    sheet({
+      title: '🎯 Günlük okuma hedefi',
+      body: `<div class="chip-wrap">${[10, 15, 20, 30, 45, 60, 90].map(m => `<button class="chip ${cur === m ? 'on' : ''}" data-min="${m}">${m} dk</button>`).join('')}${cur ? '<button class="chip" data-min="0">Hedef yok</button>' : ''}</div>
+        <div class="muted small" style="margin-top:10px">Uygulamada okuduğun süre sayılır. Hedefi tuttuğun günler 🔥 serine eklenir; okurken hedef tamamlanınca haber veririm.</div>`,
+      onMount: (el, close) => $$('[data-min]', el).forEach(b => b.addEventListener('click', async () => {
+        state.settings.dailyGoalMin = Number(b.dataset.min);
+        await saveSettings(); close();
+        toast(state.settings.dailyGoalMin ? `🎯 Günlük hedef: ${state.settings.dailyGoalMin} dk` : 'Hedef kaldırıldı');
+      })),
+    });
+  });
 }
