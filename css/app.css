@@ -330,6 +330,10 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; dis
 .reader[data-rtheme="dark"] { --rbg: #121014; --rfg: #e6dfe8; --rbar: rgba(28,24,31,.95); --rline: #332c38; }
 .reader .r-stage { position: absolute; left: 0; right: 0; top: calc(var(--safe-top) + 34px); bottom: calc(var(--safe-bottom) + 30px); }
 .reader.epub .r-stage { left: 6px; right: 6px; }
+.reader .r-tap { position: absolute; left: 0; right: 0; top: calc(var(--safe-top) + 34px); bottom: calc(var(--safe-bottom) + 30px); z-index: 2; touch-action: none; -webkit-tap-highlight-color: transparent; }
+.reader .r-nav { display: flex; align-items: center; gap: 6px; }
+.reader .r-nav input { flex: 1; min-width: 0; }
+.reader .r-nav .icon-btn { font-size: 28px; line-height: 1; color: var(--rfg); }
 .reader.pdf .r-stage { top: var(--safe-top); bottom: 0; overflow: auto; -webkit-overflow-scrolling: touch; background: color-mix(in srgb, var(--rfg) 8%, var(--rbg)); }
 .reader .r-status { position: absolute; left: 18px; right: 18px; bottom: calc(var(--safe-bottom) + 8px); display: flex; justify-content: space-between; gap: 10px;
   font-size: 12px; opacity: .55; pointer-events: none; white-space: nowrap; }

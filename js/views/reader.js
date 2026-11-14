@@ -38,6 +38,7 @@ export async function renderReader(view, [id], query) {
   view.innerHTML = `
     <div class="reader ${book.file.type}" id="reader" data-rtheme="${s.theme}">
       <div class="r-stage" id="stage"></div>
+      ${book.file.type === 'epub' ? '<div class="r-tap" id="r-tap"></div>' : ''}
       <div class="r-status" id="r-status"><span id="r-chap"></span><span id="r-pct"></span></div>
       <div class="r-top">
         <button class="icon-btn" id="r-close" aria-label="Kapat">${ICON.back}</button>
@@ -49,7 +50,7 @@ export async function renderReader(view, [id], query) {
       </div>
       <div class="r-bottom">
         <div class="r-info"><span id="r-label"></span><span id="r-time"></span></div>
-        <input type="range" id="r-range" min="0" max="1000" value="0" aria-label="Kitapta konum">
+        <div class="r-nav">${book.file.type === 'epub' ? '<button class="icon-btn" id="r-prev" aria-label="Önceki sayfa">‹</button>' : ''}<input type="range" id="r-range" min="0" max="1000" value="0" aria-label="Kitapta konum">${book.file.type === 'epub' ? '<button class="icon-btn" id="r-next" aria-label="Sonraki sayfa">›</button>' : ''}</div>
       </div>
       <div class="r-finish hidden" id="r-finish"><div>🎉 <b>Kitabı bitirdin mi?</b></div>
         <div class="btn-row"><button class="btn" id="r-fin-no">Henüz değil</button><button class="btn primary" id="r-fin-yes">✅ Okundu olarak işaretle</button></div></div>
@@ -121,6 +122,33 @@ export async function renderReader(view, [id], query) {
   }
   toggleChrome(true);
   chromeT = setTimeout(() => toggleChrome(false), 2500);
+
+  const tapLayer = $('#r-tap', root);
+  if (tapLayer) {
+    let t0 = null, swiped = false, wheelAt = 0;
+    tapLayer.addEventListener('touchstart', e => { const t = e.changedTouches[0]; t0 = { x: t.clientX, y: t.clientY }; swiped = false; }, { passive: true });
+    tapLayer.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+    tapLayer.addEventListener('touchend', e => {
+      if (!t0) return;
+      const t = e.changedTouches[0], dx = t.clientX - t0.x, dy = t.clientY - t0.y;
+      t0 = null;
+      if (Math.abs(dx) > 40 && Math.abs(dx) > Math.abs(dy)) { swiped = true; activity(); dx < 0 ? ctrl.next() : ctrl.prev(); }
+      else if (Math.abs(dy) > 60) { swiped = true; activity(); dy < 0 ? ctrl.next() : ctrl.prev(); }
+    });
+    tapLayer.addEventListener('click', e => {
+      if (swiped) { swiped = false; return; }
+      const r = tapLayer.getBoundingClientRect(), x = (e.clientX - r.left) / r.width;
+      tap(x < 0.3 ? 'left' : x > 0.7 ? 'right' : 'center');
+    });
+    tapLayer.addEventListener('wheel', e => {
+      e.preventDefault();
+      if (Date.now() - wheelAt < 450 || Math.abs(e.deltaY) + Math.abs(e.deltaX) < 8) return;
+      wheelAt = Date.now(); activity();
+      (e.deltaY || e.deltaX) > 0 ? ctrl.next() : ctrl.prev();
+    }, { passive: false });
+    $('#r-prev', root).addEventListener('click', () => { activity(); ctrl.prev(); });
+    $('#r-next', root).addEventListener('click', () => { activity(); ctrl.next(); });
+  }
 
   const range = $('#r-range', root);
   if (book.file.type === 'pdf') range.min = 1;
@@ -238,7 +266,9 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start }) {
   await loadScript('vendor/jszip.min.js');
   await loadScript('vendor/epub.min.js');
   const ePub = window.ePub;
-  const eb = ePub(await blob.arrayBuffer());
+  const buf = await blob.arrayBuffer();
+  await checkEpub(buf);
+  const eb = ePub(buf);
   const rendition = eb.renderTo(stage, { width: '100%', height: '100%', flow: 'paginated', spread: 'none', allowScriptedContent: false });
   const locKey = `loc:${book.file.key}`;
   let locationsReady = false;
@@ -272,13 +302,19 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start }) {
   async function turn(dir) {
     if (turning) return;
     turning = true;
+    const before = last?.start?.cfi;
     try {
-      const before = last?.start?.cfi;
-      await (dir > 0 ? rendition.next() : rendition.prev());
+      // Konum bildirimi (relocated) sayfa çevrildikten biraz sonra gelir; onu bekle.
+      const moved = new Promise(res => { const h = () => { rendition.off('relocated', h); res(true); }; rendition.on('relocated', h); setTimeout(() => { rendition.off('relocated', h); res(false); }, 1500); });
+      try { await (dir > 0 ? rendition.next() : rendition.prev()); } catch (e) { console.warn('sayfa çevirme', e); }
+      await moved;
       if (last?.start?.cfi === before && !(dir > 0 ? last?.atEnd : last?.atStart)) {
         const cur = last?.start?.index ?? rendition.location?.start?.index;
         const target = cur == null ? null : items[cur + dir];
-        if (target) await rendition.display(target.href);
+        if (target) {
+          try { await rendition.display(target.href); }
+          catch (e) { toast(`⚠️ ${cur + dir + 1}. bölüm açılamadı: ${e?.message || e}`); }
+        }
       }
     } finally { turning = false; }
   }
@@ -307,23 +343,6 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start }) {
   }
   rendition.on('relocated', report);
 
-  // Dokunma: sol/sağ kenar sayfa çevirir, orta çubukları açar; kaydırma da çevirir.
-  let touch = null, swiped = false;
-  rendition.on('touchstart', e => { const t = e.changedTouches[0]; touch = { x: t.screenX, y: t.screenY, at: Date.now() }; swiped = false; });
-  rendition.on('touchend', e => {
-    if (!touch) return;
-    const t = e.changedTouches[0], dx = t.screenX - touch.x, dy = t.screenY - touch.y;
-    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.3) { swiped = true; turn(dx < 0 ? 1 : -1); }
-    touch = null;
-  });
-  rendition.on('click', e => {
-    if (swiped) { swiped = false; return; }
-    const sel = e.view?.getSelection?.();
-    if (sel && String(sel).length) return; // metin seçiliyorsa sayfa çevirme
-    const w = window.innerWidth;
-    const x = ((e.screenX - (window.screenX || 0)) % w + w) % w;
-    onTap(x < w * 0.3 ? 'left' : x > w * 0.7 ? 'right' : 'center');
-  });
   rendition.on('keyup', e => { if (e.key === 'ArrowRight') turn(1); if (e.key === 'ArrowLeft') turn(-1); });
 
   try { await rendition.display(start || undefined); } catch { await rendition.display(); }
@@ -479,4 +498,16 @@ async function openPdf(stage, blob, book, { onLocation, onTap, start, onActivity
     applyStyle,
     destroy: () => { io.disconnect(); for (const n of [...rendered.keys()]) release(n); doc.destroy(); },
   };
+}
+
+// DRM'li (mağazadan alınmış, şifreli) EPUB'ları baştan tanı: kapak açılır ama metin şifreli olduğu için okunamaz.
+async function checkEpub(buf) {
+  let zip;
+  try { zip = await window.JSZip.loadAsync(buf); } catch { throw new Error('Dosya geçerli bir EPUB değil (zip açılamadı)'); }
+  const enc = zip.file('META-INF/encryption.xml');
+  if (!enc) return;
+  const xml = await enc.async('string');
+  const algs = [...xml.matchAll(/Algorithm="([^"]+)"/g)].map(m => m[1]);
+  const fontOnly = algs.every(a => /idpf\.org\/2008\/embedding|ns\.adobe\.com\/pdf\/enc#RC/.test(a));
+  if (!fontOnly || zip.file('META-INF/rights.xml')) throw new Error('Bu EPUB DRM ile korumalı (şifreli). Kapak açılır ama metin okunamaz. DRM\'siz bir EPUB kopyası gerekiyor.');
 }
