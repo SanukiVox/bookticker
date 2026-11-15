@@ -124,5 +124,16 @@ async function start() {
 }
 
 start().catch(err => {
+  // iPhone Kilit Modu (Lockdown Mode) sitelerin cihazda veri saklamasını (IndexedDB) kapatır
+  if (!('indexedDB' in window) || /indexedDB/i.test(String(err?.message || err))) {
+    $('#view').innerHTML = `<div class="empty" style="text-align:left"><div class="big" style="text-align:center">🔒</div><h2 style="text-align:center">Kilit Modu açık</h2>
+      <p>iPhone'un <b>Kilit Modu</b> bu uygulamanın cihazdaki verilerine (kitaplar, ilerleme, dosyalar) erişimini kapatıyor. Verilerin silinmedi; Kilit Modu'nu kapatmadan bu siteyi istisna yapabilirsin:</p>
+      <ol style="padding-left:20px;line-height:1.5"><li><b>Safari</b>'de <b>${location.host}${location.pathname}</b> adresini aç.</li>
+      <li>Adres çubuğundaki <b>aA</b> (ya da ☰) düğmesine dokun → <b>Web Sitesi Ayarları</b>.</li>
+      <li><b>Kilit Modu</b> anahtarını kapat → <b>Kapat</b> ile onayla.</li>
+      <li>Ana ekrandaki uygulamayı tamamen kapatıp yeniden aç.</li></ol>
+      <p class="muted small">İstisnaları sonradan Ayarlar → Gizlilik ve Güvenlik → Kilit Modu → Web Taramayı Yapılandır bölümünden görebilirsin. Uygulamayı ana ekrandan silme: cihazdaki veriler (kitap dosyaları dahil) silinir.</p></div>`;
+    return;
+  }
   $('#view').innerHTML = `<div class="empty"><div class="big">⚠️</div><h2>Uygulama açılamadı</h2><p>${String(err?.message || err)}</p></div>`;
 });
