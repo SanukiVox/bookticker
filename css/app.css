@@ -506,3 +506,7 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; dis
 @keyframes pdfR { from { transform: translateX(-24px); opacity: .4; } to { transform: none; opacity: 1; } }
 .reader.pdf[data-rtheme="dark"] .pdf-paged canvas { filter: invert(.9) hue-rotate(180deg); }
 .reader.pdf[data-rtheme="sepia"] .pdf-paged canvas { filter: sepia(.35) brightness(.97); }
+
+/* Uzun metin: kısalt / devamını gör */
+.prose.clamped { max-height: calc(1.55em * 6); overflow: hidden; -webkit-mask-image: linear-gradient(to bottom, #000 65%, transparent); mask-image: linear-gradient(to bottom, #000 65%, transparent); }
+.more-btn { border: 0; background: none; color: var(--accent); font-weight: 600; font-size: 14px; padding: 6px 0 0; }

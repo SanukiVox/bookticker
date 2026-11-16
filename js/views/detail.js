@@ -81,9 +81,9 @@ export async function renderDetail(view, [id]) {
       <button class="mini-btn" id="gr-edit">${b.goodreads ? 'Güncelle' : '＋ Ekle'}</button></div>
     ${score !== null || scored.length ? `<div class="section"><div class="bigscore"><div class="n">${score !== null ? score.toFixed(1) : '—'}</div><div><b>Genel uyum puanı</b><div class="muted small">5 üzerinden, ağırlıklı ortalama</div></div></div>
       <div class="bars">${scored.map(c => `<div class="bar"><span>${c.label}</span><div class="track"><span style="width:${(Number(b.scores[c.key]) / 5) * 100}%"></span></div><b>${fmtScore(b.scores[c.key])}</b></div>`).join('')}</div></div>` : ''}
-    ${b.summary ? `<div class="section"><h3>Özet</h3><div class="prose">${esc(b.summary)}</div></div>`
+    ${b.summary ? `<div class="section"><h3>Özet</h3><div class="prose clampable">${esc(b.summary)}</div></div>`
       : `<a class="section" href="#/edit/${enc(b.id)}?summary=1" style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">📝</span><span style="flex:1"><b>Özet / tanıtım yazısı ekle</b><br><span class="muted small">İnternetten bul ya da kopyaladığın yazıyı yapıştır</span></span><span class="chev" style="width:8px;height:8px;border-right:2px solid var(--text-3);border-top:2px solid var(--text-3);transform:rotate(45deg)"></span></a>`}
-    ${b.review ? `<div class="section"><h3>Kısa değerlendirme</h3><div class="prose">${esc(b.review)}</div></div>` : ''}
+    ${b.review ? `<div class="section"><h3>Kısa değerlendirme</h3><div class="prose clampable">${esc(b.review)}</div></div>` : ''}
     ${info.length ? `<div class="section"><h3>Bilgiler</h3><dl class="kv">${info.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></div>` : ''}
     ${(b.warnings || []).length ? `<div class="section"><h3>İçerik uyarıları</h3><div class="tags">${b.warnings.map(w => `<span class="tag">⚠️ ${esc(w)}</span>`).join('')}</div></div>` : ''}
     ${(b.tags || []).length ? `<div class="section"><h3>Etiketler</h3><div class="tags">${b.tags.map(w => `<span class="tag"># ${esc(w)}</span>`).join('')}</div></div>` : ''}
@@ -92,8 +92,8 @@ export async function renderDetail(view, [id]) {
         <div style="display:flex;align-items:center;gap:8px"><div class="stars" id="stars">${[1, 2, 3, 4, 5].map(n => `<button class="${(b.myRating || 0) >= n ? 'on' : (b.myRating || 0) >= n - 0.5 ? 'half' : ''}" data-r="${n}" aria-label="${n} yıldız">★</button>`).join('')}</div>
         <b class="small" style="min-width:24px">${b.myRating ? fmtScore(b.myRating) : ''}</b></div></div>
       <dl class="kv">${b.startDate ? `<dt>Başladım</dt><dd>${fmtDate(b.startDate)}</dd>` : ''}${b.endDate ? `<dt>Bitirdim</dt><dd>${fmtDate(b.endDate)}</dd>` : ''}</dl>
-      ${b.notes ? `<div style="margin-top:10px"><div class="muted small">Notlarım</div><div class="prose">${esc(b.notes)}</div></div>` : ''}
-      ${b.quotes ? `<div style="margin-top:10px"><div class="muted small">Alıntılar</div><div class="prose" style="font-family:var(--serif);font-style:italic">${esc(b.quotes)}</div></div>` : ''}
+      ${b.notes ? `<div style="margin-top:10px"><div class="muted small">Notlarım</div><div class="prose clampable">${esc(b.notes)}</div></div>` : ''}
+      ${b.quotes ? `<div style="margin-top:10px"><div class="muted small">Alıntılar</div><div class="prose clampable" style="font-family:var(--serif);font-style:italic">${esc(b.quotes)}</div></div>` : ''}
       ${!b.notes && !b.quotes ? `<a class="muted small" href="#/edit/${enc(b.id)}?focus=notes" style="display:block;margin-top:8px">＋ Not veya alıntı ekle</a>` : ''}
     </div>
     ${seriesBooks.length > 1 ? `<div class="section"><h3>Serinin kitapları · ${seriesBooks.filter(x => x.status === 'Okundu').length}/${seriesBooks.length}</h3>
@@ -124,6 +124,20 @@ export async function renderDetail(view, [id]) {
   }));
   fillFileSection(view, b);
   wireHighlights(view, b);
+  // Uzun metinler (özet, değerlendirme, notlar): ilk satırlar görünür, "Devamını gör" ile tamamı açılır
+  requestAnimationFrame(() => $$('.clampable', view).forEach(el => {
+    const line = parseFloat(getComputedStyle(el).lineHeight) || 24;
+    if (el.scrollHeight <= line * 8) return;
+    el.classList.add('clamped');
+    const btn = document.createElement('button');
+    btn.className = 'more-btn'; btn.type = 'button'; btn.textContent = 'Devamını gör ▾';
+    btn.addEventListener('click', () => {
+      const open = el.classList.toggle('clamped') === false;
+      btn.textContent = open ? 'Daha az göster ▴' : 'Devamını gör ▾';
+      if (!open) el.scrollIntoView({ block: 'nearest' });
+    });
+    el.after(btn);
+  }));
   $$('[data-st]', view).forEach(c => c.addEventListener('click', async () => {
     if (b.status === c.dataset.st) return;
     b.status = c.dataset.st;
