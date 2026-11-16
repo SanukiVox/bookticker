@@ -20,6 +20,7 @@ const emptyFilters = () => ({
 const S = {
   q: '',
   scope: 'all',
+  hasFile: false, // 📄 yalnızca dosyası (PDF/EPUB) eklenmiş kitaplar
   sort: 'score',
   f: emptyFilters(),
 };
@@ -80,7 +81,7 @@ export async function renderSearch(view, _p, query) {
   view.innerHTML = `
     <div class="page-head"><h1>Ara</h1></div>
     <div class="searchbox">${ICON.search}<input id="q" type="search" inputmode="search" enterkeyhint="search" placeholder="Kitap, yazar, seri ara…" value="${esc(S.q)}" autocomplete="off" autocorrect="off" spellcheck="false"><button class="clear ${S.q ? '' : 'hidden'}" id="clear" aria-label="Temizle">✕</button></div>
-    <div class="chips" id="scopes">${SCOPES.map(([k, l]) => `<button class="chip ${S.scope === k ? 'on' : ''}" data-scope="${k}">${l}</button>`).join('')}</div>
+    <div class="chips" id="scopes">${SCOPES.map(([k, l]) => `<button class="chip ${S.scope === k ? 'on' : ''}" data-scope="${k}">${l}</button>`).join('')}<button class="chip ${S.hasFile ? 'on' : ''}" id="hasfile" title="Yalnızca dosyası eklenmiş kitaplar">📄 Dosyası olan · ${state.books.filter(b => b.file || b.file2).length}</button></div>
     <div id="filterbar"></div>
     <div id="results"></div>`;
 
@@ -94,6 +95,11 @@ export async function renderSearch(view, _p, query) {
     q.placeholder = S.scope === 'all' ? 'Kitap, yazar, seri ara…' : `${c.textContent} içinde ara…`;
     renderResults(view);
   }));
+  $('#hasfile', view).addEventListener('click', e => {
+    S.hasFile = !S.hasFile;
+    e.currentTarget.classList.toggle('on', S.hasFile);
+    renderResults(view);
+  });
   renderFilterBar(view);
   renderResults(view);
 }
@@ -141,6 +147,7 @@ function renderFilterBar(view) {
 function renderResults(view) {
   const res = $('#results', view);
   let books = applyFilters(state.books, S.f, S.q, S.scope);
+  if (S.hasFile) books = books.filter(b => b.file || b.file2);
   books.sort(SORTS[S.sort][1]);
   const nq = norm(S.q);
   let top = '';
@@ -153,7 +160,7 @@ function renderResults(view) {
     const ss = seriesList().filter(s => norm(s.name).includes(nq)).slice(0, 6);
     if (ss.length) top += `<h3 style="margin:6px 0 8px">Seriler</h3><div class="list" style="margin-bottom:16px">${ss.map(s => `<a class="row" href="#/series/${enc(s.name)}"><div class="body"><div class="t">${esc(s.name)}</div><div class="s">${s.books.length} kitap · ${s.books.filter(b => b.status === 'Okundu').length} okundu</div></div><span class="chev"></span></a>`).join('')}</div>`;
   }
-  const searching = nq || activeCount(S.f);
+  const searching = nq || activeCount(S.f) || S.hasFile;
   res.innerHTML = `${top}
     <div class="result-bar"><span>${searching ? `${books.length} sonuç` : `Tüm kitaplar · ${books.length}`}</span>
       <label>Sırala: <select id="ssort">${Object.entries(SORTS).map(([k, [l]]) => `<option value="${k}" ${k === S.sort ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
