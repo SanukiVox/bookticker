@@ -20,7 +20,7 @@ const emptyFilters = () => ({
 const S = {
   q: '',
   scope: 'all',
-  hasFile: false, // 📄 yalnızca dosyası (PDF/EPUB) eklenmiş kitaplar
+  hasFile: '', // 📄 dosya filtresi: '' | 'any' | 'orig' | 'tr'
   sort: 'score',
   f: emptyFilters(),
 };
@@ -81,7 +81,7 @@ export async function renderSearch(view, _p, query) {
   view.innerHTML = `
     <div class="page-head"><h1>Ara</h1></div>
     <div class="searchbox">${ICON.search}<input id="q" type="search" inputmode="search" enterkeyhint="search" placeholder="Kitap, yazar, seri ara…" value="${esc(S.q)}" autocomplete="off" autocorrect="off" spellcheck="false"><button class="clear ${S.q ? '' : 'hidden'}" id="clear" aria-label="Temizle">✕</button></div>
-    <div class="chips" id="scopes">${SCOPES.map(([k, l]) => `<button class="chip ${S.scope === k ? 'on' : ''}" data-scope="${k}">${l}</button>`).join('')}<button class="chip ${S.hasFile ? 'on' : ''}" id="hasfile" title="Yalnızca dosyası eklenmiş kitaplar">📄 Dosyası olan · ${state.books.filter(b => b.file || b.file2).length}</button></div>
+    <div class="chips" id="scopes">${SCOPES.map(([k, l]) => `<button class="chip ${S.scope === k ? 'on' : ''}" data-scope="${k}">${l}</button>`).join('')}<span id="filechips">${fileMain()}</span></div><div id="fmodes">${fileSub()}</div>
     <div id="filterbar"></div>
     <div id="results"></div>`;
 
@@ -95,11 +95,17 @@ export async function renderSearch(view, _p, query) {
     q.placeholder = S.scope === 'all' ? 'Kitap, yazar, seri ara…' : `${c.textContent} içinde ara…`;
     renderResults(view);
   }));
-  $('#hasfile', view).addEventListener('click', e => {
-    S.hasFile = !S.hasFile;
-    e.currentTarget.classList.toggle('on', S.hasFile);
+  const wireFile = () => {
+    $('#hasfile', view).addEventListener('click', () => { S.hasFile = S.hasFile ? '' : 'any'; redrawFile(); });
+    $$('[data-fmode]', view).forEach(c => c.addEventListener('click', () => { S.hasFile = c.dataset.fmode; redrawFile(); }));
+  };
+  const redrawFile = () => {
+    $('#filechips', view).innerHTML = fileMain();
+    $('#fmodes', view).innerHTML = fileSub();
+    wireFile();
     renderResults(view);
-  });
+  };
+  wireFile();
   renderFilterBar(view);
   renderResults(view);
 }
@@ -144,10 +150,23 @@ function renderFilterBar(view) {
   });
 }
 
+// Dosya filtresi: '' kapalı | 'any' dosyası olan | 'orig' orijinal dosyası olan | 'tr' Türkçe (çeviri) dosyası olan
+const fileLangs = b => [b.file, b.file2].filter(Boolean).map(f => f.lang);
+const FILE_TEST = { any: b => !!(b.file || b.file2), orig: b => fileLangs(b).includes('orig'), tr: b => fileLangs(b).includes('tr') };
+function fileMain() {
+  return `<button class="chip ${S.hasFile ? 'on' : ''}" id="hasfile" title="Yalnızca dosyası eklenmiş kitaplar">📄 Dosyası olan · ${state.books.filter(FILE_TEST.any).length}</button>`;
+}
+function fileSub() {
+  if (!S.hasFile) return '';
+  const n = k => state.books.filter(FILE_TEST[k]).length;
+  return `<div class="chips">${[['any', 'Hepsi'], ['orig', '🌐 Orijinal dosyası'], ['tr', '🇹🇷 Türkçe dosyası']]
+    .map(([k, l]) => `<button class="chip sub ${S.hasFile === k ? 'on' : ''}" data-fmode="${k}">${l} · ${n(k)}</button>`).join('')}</div>`;
+}
+
 function renderResults(view) {
   const res = $('#results', view);
   let books = applyFilters(state.books, S.f, S.q, S.scope);
-  if (S.hasFile) books = books.filter(b => b.file || b.file2);
+  if (S.hasFile) books = books.filter(FILE_TEST[S.hasFile] || FILE_TEST.any);
   books.sort(SORTS[S.sort][1]);
   const nq = norm(S.q);
   let top = '';

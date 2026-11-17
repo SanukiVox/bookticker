@@ -36,6 +36,7 @@ function tx(store, mode, fn) {
   }));
 }
 
+let fileKeys = null;
 const reqP = r => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
 
 export const db = {
@@ -52,10 +53,14 @@ export const db = {
   clearCovers: () => tx('covers', 'readwrite', s => { s.clear(); }),
 
   getFile: key => tx('files', 'readonly', s => reqP(s.get(key))),
-  putFile: (key, blob) => tx('files', 'readwrite', s => { s.put(blob, key); }),
-  deleteFile: key => tx('files', 'readwrite', s => { s.delete(key); }),
+  putFile: (key, blob) => tx('files', 'readwrite', s => { s.put(blob, key); }).then(r => { fileKeys?.add(key); db.onFilesChange?.(); return r; }),
+  deleteFile: key => tx('files', 'readwrite', s => { s.delete(key); }).then(r => { fileKeys?.delete(key); db.onFilesChange?.(); return r; }),
   allFileKeys: () => tx('files', 'readonly', s => reqP(s.getAllKeys())),
-  clearFiles: () => tx('files', 'readwrite', s => { s.clear(); }),
+  clearFiles: () => tx('files', 'readwrite', s => { s.clear(); }).then(r => { fileKeys?.clear(); db.onFilesChange?.(); return r; }),
+  // Bu cihazdaki dosya anahtarları (açılışta bir kez okunur, ekleme/silmede güncellenir)
+  loadFileKeys: async () => { fileKeys = new Set(await db.allFileKeys()); return fileKeys; },
+  fileKeysSync: () => fileKeys,
+  onFilesChange: null,
 
   getMeta: key => tx('meta', 'readonly', s => reqP(s.get(key))),
   putMeta: (key, val) => tx('meta', 'readwrite', s => { s.put(val, key); }),

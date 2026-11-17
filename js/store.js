@@ -92,6 +92,7 @@ export const state = {
 const listeners = new Set();
 export const onChange = fn => listeners.add(fn);
 const emit = () => listeners.forEach(fn => fn());
+export const notifyChange = () => emit();
 
 export async function load() {
   const [books, options, settings] = await Promise.all([db.allBooks(), db.getMeta('options'), db.getMeta('settings')]);

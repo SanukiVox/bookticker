@@ -1,5 +1,5 @@
 // Ortak arayüz parçaları: kapaklar, kartlar, bildirim, alttan açılan paneller.
-import { progressOf } from './files.js';
+import { progressOf, fileSummary } from './files.js';
 import { db } from './db.js';
 import { state, displayTitle, statusInfo, genreColor, colorFor, computeScore } from './store.js';
 
@@ -55,7 +55,11 @@ export function coverHTML(book, { key, badge = true } = {}) {
     : '';
   const pct = book.status === 'Okunuyor' ? progressOf(book) : null;
   const prog = badge && pct !== null ? `<div class="cprog"><span style="width:${pct}%"></span></div>` : '';
-  return `<div class="cover"${k ? ` data-cover="${esc(k)}"` : ''}>${ph}${badges}${prog}</div>`;
+  // Sol alt: kitap dosyası (📄 bu cihazda, ☁️ Drive'da); iki dosya varsa sayı
+  const fs = badge ? fileSummary(book) : null;
+  const fb = fs && fs.where !== 'missing'
+    ? `<span class="fbadge ${fs.where}${pct !== null ? ' up' : ''}" title="${fs.where === 'local' ? 'Dosyası bu cihazda' : 'Dosyası Google Drive\'da'}">${fs.where === 'local' ? '📄' : '☁️'} ${fs.count > 1 ? '2' : esc((fs.type || '').toUpperCase())}</span>` : '';
+  return `<div class="cover"${k ? ` data-cover="${esc(k)}"` : ''}>${ph}${badges}${prog}${fb}</div>`;
 }
 
 const io = 'IntersectionObserver' in window
@@ -94,13 +98,19 @@ export function bookCard(b, extra = '', note = '') {
   return `<a class="card ${extra}" href="#/book/${enc(b.id)}">${coverHTML(b)}<div class="t">${esc(displayTitle(b))}</div>${o ? `<div class="o">${esc(o)}</div>` : ''}<div class="a">${esc(b.author || '')}</div>${note ? `<div class="why-note">${esc(note)}</div>` : ''}</a>`;
 }
 
+function fileMark(b) {
+  const fs = fileSummary(b);
+  if (!fs || fs.where === 'missing') return '';
+  return ` · ${fs.where === 'drive' ? '☁️' : '📄'}${fs.count > 1 ? '×2' : ''}`;
+}
+
 export function bookRow(b, { sub } = {}) {
   const s = computeScore(b);
   const st = statusInfo(b.status);
   const subline = sub ?? [b.author, b.series ? `${b.series}${b.seriesOrder ? ' #' + b.seriesOrder : ''}` : ''].filter(Boolean).join(' · ');
   return `<a class="row" href="#/book/${enc(b.id)}">${coverHTML(b, { badge: false })}
     <div class="body"><div class="t">${b.favorite ? '❤️ ' : ''}${esc(displayTitle(b))}</div>${origOf(b) ? `<div class="o">${esc(origOf(b))}</div>` : ''}<div class="s">${esc(subline)}</div>
-    <div class="s">${st.emoji} ${esc(st.name)}${progressOf(b) != null && b.status === 'Okunuyor' ? ` · %${Math.floor(progressOf(b))}` : ''}${b.file || b.file2 ? ' · 📄' : ''}</div></div>
+    <div class="s">${st.emoji} ${esc(st.name)}${progressOf(b) != null && b.status === 'Okunuyor' ? ` · %${Math.floor(progressOf(b))}` : ''}${fileMark(b)}</div></div>
     <div class="end">${s !== null ? `<span class="score">${s.toFixed(1)}</span>` : ''}${b.goodreads ? `<div class="small" style="margin-top:4px">★ ${b.goodreads.toFixed(2).replace('.', ',')}</div>` : ''}</div></a>`;
 }
 

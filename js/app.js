@@ -85,7 +85,7 @@ onSyncChange(() => {
 });
 
 async function start() {
-  await Promise.all([load(), loadSync()]);
+  await Promise.all([load(), loadSync(), (async () => { try { await (await import('./db.js')).db.loadFileKeys(); } catch { /* yok */ } })()]);
   // Google Drive girişinden dönüş (#access_token=…): adresi düzelt, anahtarı sakla
   try { await (await import('./gdrive.js')).handleRedirect(); } catch { /* yok */ }
   applyTheme();

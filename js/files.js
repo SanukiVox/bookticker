@@ -1,7 +1,7 @@
 // Kitap dosyaları (PDF/EPUB): sadece bu telefonda saklanır, GitHub'a gönderilmez.
 // Kitapta yalnızca bilgisi tutulur: book.file = { key, hash, name, type, size, addedAt }
 // Dosya içeriğine göre tanınır (SHA-256): aynı PDF hangi cihaza eklenirse eklensin aynı anahtarı alır.
-import { state, saveBook, saveSettings, today } from './store.js';
+import { state, saveBook, saveSettings, today, notifyChange } from './store.js';
 import { db } from './db.js';
 
 // İki dosya yuvası: 1 = book.file/progress/bookmarks, 2 = book.file2/progress2/bookmarks2.
@@ -36,6 +36,27 @@ export function slotForLang(b, lang) {
   if (!b.file2) return 2;
   return b.file.lang ? 2 : 1;
 }
+
+// Dosyanın bu cihazdaki durumu: 'local' (açılabilir) | 'drive' (Drive'dan indirilebilir) | 'missing' (başka cihazda) | null (dosya yok)
+export function fileWhere(b, slot = 1) {
+  const f = slotFile(b, slot);
+  if (!f) return null;
+  const keys = db.fileKeysSync();
+  if (!keys) return 'local'; // henüz okunmadı
+  if ((f.key && keys.has(f.key)) || (f.hash && keys.has(`h-${f.hash.slice(0, 32)}`))) return 'local';
+  if (slot === 1) for (const k of keys) if (k.startsWith(`${b.id}-`)) return 'local';
+  return f.driveId ? 'drive' : 'missing';
+}
+// Kitabın dosyaları için tek bakışta özet: { count, where: 'local'|'drive'|'missing', type, langs:Set }
+export function fileSummary(b) {
+  const slots = [1, 2].filter(s => slotFile(b, s));
+  if (!slots.length) return null;
+  const wh = slots.map(s => fileWhere(b, s));
+  const where = wh.includes('local') ? 'local' : wh.includes('drive') ? 'drive' : 'missing';
+  const types = [...new Set(slots.map(s => slotFile(b, s).type))];
+  return { count: slots.length, where, type: types.length === 1 ? types[0] : '', langs: new Set(slots.map(s => slotFile(b, s).lang).filter(Boolean)) };
+}
+db.onFilesChange = () => notifyChange();
 
 export function detectType(file) {
   const n = (file.name || '').toLowerCase();
