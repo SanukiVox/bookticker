@@ -3,6 +3,8 @@ import { state, authors, seriesList, collator, displayTitle, computeScore, saveS
 import { esc, enc, ICON, booksView, hydrateCovers, $, $$, coverKeyOf } from '../ui.js';
 
 let statusFilter = '';
+let trOnly = false; // yalnızca Türkçesi olanlar (durum filtresiyle birlikte çalışır)
+const hasTr = b => b.translation === 'Var';
 let sortBy = 'recent';
 
 export const SORTS = {
@@ -41,6 +43,7 @@ export async function renderLibrary(view, [tab = 'books']) {
   $$('[data-go]', view).forEach(b => b.addEventListener('click', () => location.replace(`#/library/${b.dataset.go}`)));
   $('#toggle-view', view)?.addEventListener('click', () => { state.settings.view = v === 'grid' ? 'list' : 'grid'; saveSettings(); });
   $$('[data-status]', view).forEach(c => c.addEventListener('click', () => { statusFilter = c.dataset.status; renderLibrary(view, [tab]); }));
+  $('#tr-only', view)?.addEventListener('click', () => { trOnly = !trOnly; renderLibrary(view, [tab]); });
   $('#tip-go', view)?.addEventListener('click', async () => (await import('./autofill.js')).openAutofill());
   $('#tip-x', view)?.addEventListener('click', () => { state.settings.hideCoverTip = true; saveSettings(); });
   $('#sort', view)?.addEventListener('change', e => { sortBy = e.target.value; renderLibrary(view, [tab]); });
@@ -48,25 +51,30 @@ export async function renderLibrary(view, [tab = 'books']) {
 }
 
 function booksTab() {
+  const pool = trOnly ? state.books.filter(hasTr) : state.books;
+  const trCount = state.books.filter(hasTr).length;
   const counts = {};
-  for (const b of state.books) counts[b.status] = (counts[b.status] || 0) + 1;
-  const statuses = state.options.statuses.filter(s => counts[s.name]);
-  let books = statusFilter === '♥' ? state.books.filter(b => b.favorite) : statusFilter ? state.books.filter(b => b.status === statusFilter) : [...state.books];
+  for (const b of pool) counts[b.status] = (counts[b.status] || 0) + 1;
+  const statuses = state.options.statuses.filter(s => counts[s.name] || statusFilter === s.name);
+  let books = statusFilter === '♥' ? pool.filter(b => b.favorite) : statusFilter ? pool.filter(b => b.status === statusFilter) : [...pool];
   books.sort(SORTS[sortBy][1]);
-  const favs = state.books.filter(b => b.favorite).length;
+  const favs = pool.filter(b => b.favorite).length;
   const noCover = state.books.filter(b => !b.coverTr && !b.coverOrig).length;
   const tip = noCover >= 5 && !state.settings.hideCoverTip
     ? `<div class="tip" id="cover-tip"><span style="font-size:24px">🖼️</span><button id="tip-go" style="border:0;background:none;text-align:left;padding:0;flex:1"><b>${noCover} kitabın kapağı yok</b><br><span class="small">Kapak ve özetleri internetten bul →</span></button><button class="x" id="tip-x" aria-label="Gizle">✕</button></div>`
     : '';
   return `${tip}
     <div class="chips">
-      <button class="chip ${!statusFilter ? 'on' : ''}" data-status="">Tümü · ${state.books.length}</button>
-      ${favs ? `<button class="chip ${statusFilter === '♥' ? 'on' : ''}" data-status="♥">❤️ Favoriler · ${favs}</button>` : ''}
-      ${statuses.map(s => `<button class="chip ${statusFilter === s.name ? 'on' : ''}" data-status="${esc(s.name)}">${s.emoji} ${esc(s.name)} · ${counts[s.name]}</button>`).join('')}
+      <button class="chip ${!statusFilter ? 'on' : ''}" data-status="">Tümü · ${pool.length}</button>
+      ${favs || statusFilter === '♥' ? `<button class="chip ${statusFilter === '♥' ? 'on' : ''}" data-status="♥">❤️ Favoriler · ${favs}</button>` : ''}
+      ${statuses.map(s => `<button class="chip ${statusFilter === s.name ? 'on' : ''}" data-status="${esc(s.name)}">${s.emoji} ${esc(s.name)} · ${counts[s.name] || 0}</button>`).join('')}
+    </div>
+    <div class="chips">
+      <button class="chip ${trOnly ? 'on' : ''}" id="tr-only" aria-pressed="${trOnly}">🇹🇷 Türkçesi olanlar · ${trCount}</button>
     </div>
     <div class="result-bar"><span>${books.length} kitap</span>
       <label>Sırala: <select id="sort">${Object.entries(SORTS).map(([k, [l]]) => `<option value="${k}" ${k === sortBy ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
-    ${books.length ? booksView(books, state.settings.view) : '<div class="empty">Bu durumda kitap yok.</div>'}`;
+    ${books.length ? booksView(books, state.settings.view) : `<div class="empty">${trOnly ? 'Bu durumda Türkçesi olan kitap yok.' : 'Bu durumda kitap yok.'}</div>`}`;
 }
 
 function initials(name) {
