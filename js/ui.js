@@ -48,8 +48,10 @@ export function coverHTML(book, { key, badge = true } = {}) {
   const c = `color-mix(in srgb, ${genreColor(book.genre)} 78%, ${colorFor(displayTitle(book))})`;
   const st = statusInfo(book.status);
   const ph = `<div class="ph" style="background:linear-gradient(160deg, ${c}, color-mix(in srgb, ${c} 55%, #000))"><b>${esc(displayTitle(book))}</b><i>${esc(book.author || '')}</i></div>`;
+  // Sağ üst: Türkçesi varsa 🇹🇷, altında okuma durumu; sol üst: favori
+  const tr = book.translation === 'Var';
   const badges = badge
-    ? `${book.status && book.status !== 'Okunacak' ? `<span class="badge" title="${esc(st.name)}">${st.emoji}</span>` : ''}${book.favorite ? '<span class="badge l">❤️</span>' : ''}`
+    ? `${tr ? '<span class="badge tr" title="Türkçesi var">🇹🇷</span>' : ''}${book.status && book.status !== 'Okunacak' ? `<span class="badge${tr ? ' r2' : ''}" title="${esc(st.name)}">${st.emoji}</span>` : ''}${book.favorite ? '<span class="badge l">❤️</span>' : ''}`
     : '';
   const pct = book.status === 'Okunuyor' ? progressOf(book) : null;
   const prog = badge && pct !== null ? `<div class="cprog"><span style="width:${pct}%"></span></div>` : '';
