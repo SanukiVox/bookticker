@@ -1,6 +1,6 @@
 // Kitaplık: Kitaplar / Yazarlar / Seriler sekmeleri.
 import { state, authors, seriesList, collator, displayTitle, computeScore, saveSettings, colorFor } from '../store.js';
-import { esc, enc, ICON, booksView, hydrateCovers, $, $$, coverKeyOf } from '../ui.js';
+import { esc, enc, ICON, booksView, hydrateCovers, $, $$, coverHTML } from '../ui.js';
 
 let statusFilter = '';
 let trOnly = false; // yalnızca Türkçesi olanlar (durum filtresiyle birlikte çalışır)
@@ -98,16 +98,21 @@ function authorsTab() {
 function seriesTab() {
   const list = seriesList();
   if (!list.length) return '<div class="empty">Henüz seri yok. Kitap eklerken "Seri" alanını doldurursan burada görünür.</div>';
-  return `<div class="result-bar"><span>${list.length} seri</span></div><div class="list">${list.map(s => {
+  // Her seri bir kart: üstte adı ve ilerlemesi, altında tüm kapaklar sırasıyla yan yana (yatay kaydırılır)
+  return `<div class="result-bar"><span>${list.length} seri</span></div><div class="ser-list">${list.map(s => {
     const read = s.books.filter(b => b.status === 'Okundu').length;
     const reading = s.books.some(b => b.status === 'Okunuyor');
     const pct = Math.round((read / s.books.length) * 100);
-    const first = s.books[0];
-    return `<a class="row" href="#/series/${enc(s.name)}">
-      <div class="cover" style="width:44px;flex:0 0 44px;box-shadow:none;border-radius:4px" ${coverKeyOf(first) ? `data-cover="${esc(coverKeyOf(first))}"` : ''}>
-        <div class="ph" style="background:${colorFor(s.name)}"><b style="font-size:7px">${esc(s.name)}</b></div></div>
-      <div class="body"><div class="t">${esc(s.name)}</div>
-        <div class="s">${esc(first.author || '')} · ${read}/${s.books.length} okundu${reading ? ' · 📖' : ''}</div>
-        <div class="progress"><span style="width:${pct}%"></span></div></div><span class="chev"></span></a>`;
+    const authorsTxt = [...new Set(s.books.map(b => b.author).filter(Boolean))].join(', ');
+    const covers = s.books.map(b => `<a class="ser-book ${b.status === 'Okundu' ? 'done' : ''}" href="#/book/${enc(b.id)}" title="${esc(displayTitle(b))}">
+        ${coverHTML(b)}<span class="ser-no">${b.seriesOrder != null ? `#${esc(String(b.seriesOrder))}` : '•'}</span></a>`).join('');
+    return `<div class="ser-card">
+      <a class="ser-head" href="#/series/${enc(s.name)}">
+        <div class="body"><div class="t">${esc(s.name)}</div>
+          <div class="s">${esc(authorsTxt)} · ${s.books.length} kitap · ${read}/${s.books.length} okundu${reading ? ' · 📖' : ''}</div></div>
+        <span class="chev"></span></a>
+      <div class="ser-strip">${covers}</div>
+      <div class="progress ser-prog"><span style="width:${pct}%"></span></div>
+    </div>`;
   }).join('')}</div>`;
 }
