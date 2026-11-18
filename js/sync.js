@@ -1,6 +1,6 @@
 // GitHub ile eşitleme: veriler gizli bir depoya gönderilir / oradan çekilir.
 // Depoda: kitapligim.json (kitaplar, seçenekler, ayarlar) + covers/<anahtar>.jpg (kapaklar)
-import { state, onChange, replaceAll } from './store.js';
+import { state, onChange, replaceAll, FIELD_SKIP, FIELD_NESTED } from './store.js';
 import { db } from './db.js';
 
 const DATA_FILE = 'kitapligim.json';
@@ -98,16 +98,46 @@ const usedCoverKeys = books => new Set(books.flatMap(b => [b.coverTr, b.coverOri
 
 // ---------- Birleştirme (iki cihazın değişiklikleri birbirini ezmesin) ----------
 // Kitaplar kimlikle eşleşir; aynı kitapta:
-//  - genel bilgiler: daha yeni düzenlenen (updatedAt) kazanır
+//  - genel bilgiler: alan alan, o alanı en son değiştiren taraf kazanır (fieldAt; yoksa updatedAt)
 //  - okuma ilerlemesi: en son okunan (progress.updatedAt) kazanır
 //  - yer imleri: iki taraf birleşir · okuma süresi: büyük olan
 //  - dosya bilgisi: içerik özeti (hash) olan tercih edilir
 // Silinen kitaplar "silindi" kaydıyla (mezar taşı) diğer cihaza da yayılır.
 const t = v => Number(v) || 0;
 
+// Genel bilgiler alan alan: her alanda daha yeni değiştirilen taraf kazanır (fieldAt).
+// İki tarafta da o alan için zaman yoksa daha yeni düzenlenen kayıt (updatedAt) geçerlidir.
+function mergeFields(a, b, base, out) {
+  const fa = a.fieldAt || {}, fb = b.fieldAt || {};
+  if (!Object.keys(fa).length && !Object.keys(fb).length) return;
+  const pick = (k, va, vb, hasA, hasB, set, del) => {
+    const ta = t(fa[k]), tb = t(fb[k]);
+    if (!ta && !tb) return;
+    const [w, v, has] = ta >= tb ? [a, va, hasA] : [b, vb, hasB];
+    if (w === base) return;
+    if (has) set(v); else del();
+  };
+  for (const k of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (FIELD_SKIP.has(k) || FIELD_NESTED.has(k)) continue;
+    pick(k, a[k], b[k], k in a, k in b, v => { out[k] = v; }, () => { delete out[k]; });
+  }
+  for (const n of FIELD_NESTED) {
+    const sa = a[n] || {}, sb = b[n] || {};
+    const res = { ...(base[n] || {}) };
+    for (const s of new Set([...Object.keys(sa), ...Object.keys(sb), ...Object.keys(fa).filter(k => k.startsWith(n + '.')).map(k => k.slice(n.length + 1)), ...Object.keys(fb).filter(k => k.startsWith(n + '.')).map(k => k.slice(n.length + 1))])) {
+      pick(`${n}.${s}`, sa[s], sb[s], s in sa, s in sb, v => { res[s] = v; }, () => { delete res[s]; });
+    }
+    if (a[n] || b[n]) out[n] = res;
+  }
+  const merged = { ...fa };
+  for (const [k, v] of Object.entries(fb)) if (t(v) > t(merged[k])) merged[k] = v;
+  out.fieldAt = merged;
+}
+
 function mergeBook(a, b) {
   const base = t(b.updatedAt) > t(a.updatedAt) ? b : a;
   const out = { ...base };
+  mergeFields(a, b, base, out);
   // İki dosya yuvası: file/progress/bookmarks ve file2/progress2/bookmarks2
   for (const [f, p, m, h] of [['file', 'progress', 'bookmarks', 'highlights'], ['file2', 'progress2', 'bookmarks2', 'highlights2']]) {
     const pa = a[p], pb = b[p];
@@ -351,3 +381,6 @@ async function autoPull() {
   } catch { /* sessiz: bir sonraki açılışta tekrar dener */ }
   finally { pulling = false; }
 }
+
+// Test için
+export { mergeBook as _mergeBook };

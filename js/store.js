@@ -156,6 +156,7 @@ export const notifyChange = () => emit();
 export async function load() {
   const [books, options, settings] = await Promise.all([db.allBooks(), db.getMeta('options'), db.getMeta('settings')]);
   state.books = books || [];
+  snapshotBooks(state.books);
   state.options = { ...structuredClone(DEFAULT_OPTIONS), ...(options || {}) };
   state.settings = { ...structuredClone(DEFAULT_SETTINGS), ...(settings || {}) };
   state.settings.weights = { ...DEFAULT_SETTINGS.weights, ...(state.settings.weights || {}) };
@@ -249,11 +250,46 @@ export function newBook(partial = {}) {
   };
 }
 
+// ---------- Alan bazında değişiklik zamanı (eşitlemede alan alan birleştirme için) ----------
+// book.fieldAt = { alan: zaman, 'scores.chemistry': zaman, 'quality.writing': zaman, ... }
+// Dosya / ilerleme / yer imi / vurgu / kelime defteri eşitlemede ayrıca birleştirildiği için burada izlenmez.
+export const FIELD_SKIP = new Set(['id', 'createdAt', 'updatedAt', 'fieldAt', 'file', 'file2', 'progress', 'progress2',
+  'bookmarks', 'bookmarks2', 'bookmarksDel', 'bookmarksDel2', 'highlights', 'highlights2', 'highlightsDel', 'highlightsDel2',
+  'vocab', 'vocabDel', 'readingSeconds']);
+export const FIELD_NESTED = new Set(['scores', 'quality']);
+const snap = new Map(); // kitap kimliği → { alan: JSON } (son kaydedilen hali)
+const jenc = v => (v === undefined ? undefined : JSON.stringify(v));
+function snapshotOf(b) {
+  const o = {};
+  for (const k of Object.keys(b)) {
+    if (FIELD_SKIP.has(k)) continue;
+    if (FIELD_NESTED.has(k) && b[k] && typeof b[k] === 'object') for (const s of Object.keys(b[k])) o[`${k}.${s}`] = jenc(b[k][s]);
+    else o[k] = jenc(b[k]);
+  }
+  return o;
+}
+export function snapshotBooks(books) { for (const b of books) snap.set(b.id, snapshotOf(b)); }
+// Önceki kayda göre değişen alanlara zaman damgası vur
+function stampFields(b, now) {
+  const prev = snap.get(b.id);
+  const cur = snapshotOf(b);
+  if (prev) {
+    const fa = { ...(b.fieldAt || {}) };
+    let changed = false;
+    for (const k of new Set([...Object.keys(prev), ...Object.keys(cur)])) {
+      if (prev[k] !== cur[k]) { fa[k] = now; changed = true; }
+    }
+    if (changed) b.fieldAt = fa;
+  }
+  snap.set(b.id, cur);
+}
+
 export async function saveBook(book) {
   book = book?.__real || book; // 2. dosya görünümü (files.js slotBook)
   book.updatedAt = Date.now();
   if (book.status === 'Okundu' && !book.endDate) book.endDate = today();
   if (book.status === 'Okunuyor' && !book.startDate) book.startDate = today();
+  stampFields(book, book.updatedAt);
   await db.putBook(book);
   const i = state.books.findIndex(b => b.id === book.id);
   if (i >= 0) state.books[i] = book; else state.books.push(book);
@@ -263,7 +299,7 @@ export async function saveBook(book) {
 
 export async function saveBooks(books) {
   const now = Date.now();
-  books.forEach(b => { b.updatedAt = now; });
+  books.forEach(b => { b.updatedAt = now; stampFields(b, now); });
   await db.putBooks(books);
   emit();
 }
@@ -337,6 +373,7 @@ export async function replaceAll(books, options, settings) {
   await db.clearBooks();
   await db.putBooks(books);
   state.books = books;
+  snapshotBooks(books);
   if (options) { state.options = { ...structuredClone(DEFAULT_OPTIONS), ...options }; await db.putMeta('options', state.options); }
   if (settings) { state.settings = { ...structuredClone(DEFAULT_SETTINGS), ...settings }; await db.putMeta('settings', state.settings); }
   emit();
@@ -345,6 +382,7 @@ export async function replaceAll(books, options, settings) {
 export async function addBooks(books) {
   await db.putBooks(books);
   state.books.push(...books);
+  snapshotBooks(books);
   learnOptions(books);
   emit();
 }
