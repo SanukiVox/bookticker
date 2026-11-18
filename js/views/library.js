@@ -1,5 +1,5 @@
 // Kitaplık: Kitaplar / Yazarlar / Seriler sekmeleri.
-import { state, authors, seriesList, collator, displayTitle, computeScore, saveSettings, colorFor } from '../store.js';
+import { state, authors, seriesList, collator, displayTitle, computeScore, computeQuality, saveSettings, colorFor } from '../store.js';
 import { esc, enc, ICON, booksView, hydrateCovers, $, $$, coverHTML } from '../ui.js';
 
 let statusFilter = '';
@@ -13,7 +13,8 @@ export const SORTS = {
   recent: ['Son eklenen', (a, b) => (b.createdAt || 0) - (a.createdAt || 0)],
   title: ['Kitap adı', (a, b) => collator.compare(displayTitle(a), displayTitle(b))],
   author: ['Yazar', (a, b) => collator.compare(a.author || '', b.author || '') || collator.compare(a.series || '', b.series || '') || (a.seriesOrder ?? 99) - (b.seriesOrder ?? 99)],
-  score: ['Uyum puanı', (a, b) => (computeScore(b) ?? -1) - (computeScore(a) ?? -1)],
+  score: ['Romantizm puanı', (a, b) => (computeScore(b) ?? -1) - (computeScore(a) ?? -1)],
+  quality: ['Genel puan', (a, b) => (computeQuality(b) ?? -1) - (computeQuality(a) ?? -1)],
   year: ['Çıkış yılı (yeni → eski)', (a, b) => (b.pubYear ?? -1) - (a.pubYear ?? -1)],
   goodreads: ['Goodreads puanı', (a, b) => (b.goodreads ?? -1) - (a.goodreads ?? -1)],
   spicy: ['Spicy', (a, b) => (b.spicy ?? -1) - (a.spicy ?? -1)],

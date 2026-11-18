@@ -7,7 +7,7 @@ import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 import { driveSectionShell, fillDriveSection } from './drivesettings.js';
 
-export const APP_VERSION = '1.32.0';
+export const APP_VERSION = '1.33.0';
 
 export async function renderSettings(view) {
   const s = state.settings;
@@ -46,11 +46,12 @@ export async function renderSettings(view) {
       <div class="set-row"><span>Tema</span><select id="theme">${[['auto', 'Telefona göre'], ['light', 'Açık'], ['dark', 'Koyu']].map(([v, l]) => `<option value="${v}" ${s.theme === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="set-row"><span>Kapak olarak göster</span><select id="coverpref">${[['tr', 'Türkçe kapak'], ['orig', 'Orijinal kapak']].map(([v, l]) => `<option value="${v}" ${(s.coverPref || 'tr') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="set-row"><span>Orijinal adları göster</span><span class="toggle"><input type="checkbox" id="showorig" ${s.showOriginal !== false ? 'checked' : ''}><span></span></span></div>
+      <div class="set-row"><span>Listede gösterilecek puan</span><select id="listscore">${[['both', 'İkisi de'], ['romance', '💗 Romantizm'], ['quality', '⭐ Genel']].map(([v, l]) => `<option value="${v}" ${(s.listScore || 'both') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="set-row"><span>Kitap görünümü</span><select id="viewmode">${[['grid', 'Kapaklar'], ['list', 'Liste']].map(([v, l]) => `<option value="${v}" ${s.view === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
       <div class="set-row"><span>${new Date().getFullYear()} okuma hedefi</span><input type="number" id="goal" inputmode="numeric" min="0" value="${esc(s.yearlyGoal)}"></div>
     </div>
 
-    <div class="form-group-title">Genel uyum puanı ağırlıkları</div>
+    <div class="form-group-title">💗 Romantizm puanı ağırlıkları</div>
     <div class="form-group">${CRITERIA.map(c => `<div class="set-row"><span>${c.label}</span><input type="number" inputmode="numeric" min="0" data-w="${c.key}" value="${esc(s.weights[c.key])}"></div>`).join('')}
       <div class="set-row muted small">Toplam: <b id="wsum">${CRITERIA.reduce((t, c) => t + (Number(s.weights[c.key]) || 0), 0)}</b> · Boş kriterler hesaba katılmaz.</div></div>
 
@@ -98,6 +99,7 @@ export async function renderSettings(view) {
   $('#check-upd', view)?.addEventListener('click', () => checkForUpdate());
   $('#autofill', view).addEventListener('click', async () => (await import('./autofill.js')).openAutofill());
   $('#theme', view).addEventListener('change', async e => { s.theme = e.target.value; applyTheme(); await saveSettings(); });
+  $('#listscore', view)?.addEventListener('change', e => { s.listScore = e.target.value; saveSettings(); });
   $('#coverpref', view).addEventListener('change', async e => { s.coverPref = e.target.value; await saveSettings(); toast(e.target.value === 'orig' ? 'Orijinal kapaklar gösterilecek' : 'Türkçe kapaklar gösterilecek'); });
   $('#showorig', view).addEventListener('change', async e => { s.showOriginal = e.target.checked; await saveSettings(); });
   $('#viewmode', view).addEventListener('change', async e => { s.view = e.target.value; await saveSettings(); });

@@ -1,6 +1,6 @@
 // "Asistana sor": kitaplık bilgisini hazır metin olarak Claude / ChatGPT / Gemini'ye taşır.
 // Cevaptaki önerileri tekrar yapıştırınca listeye ekler.
-import { state, CRITERIA, SPICY_LABELS, computeScore, displayTitle, norm, newBook, addBooks, saveOptions } from '../store.js';
+import { state, CRITERIA, SPICY_LABELS, computeScore, displayTitle, norm, newBook, addBooks, saveOptions, computeQuality } from '../store.js';
 import { esc, sheet, toast, $, $$ } from '../ui.js';
 
 const APPS = [
@@ -28,7 +28,8 @@ function bookLine(b, withNotes) {
     b.genre,
     b.status,
     b.translation ? `TR: ${b.translation}` : '',
-    sc !== null ? `uyum ${sc.toFixed(1)}` : '',
+    sc !== null ? `romantizm ${sc.toFixed(1)}` : '',
+    computeQuality(b) !== null ? `genel ${computeQuality(b).toFixed(2)}` : '',
     b.spicy != null ? `spicy ${b.spicy}` : '',
     b.goodreads ? `GR ${b.goodreads}` : '',
     b.pubYear ? `yıl ${b.pubYear}` : '',
@@ -65,7 +66,7 @@ export function libraryContext({ scope = 'all', withNotes = true } = {}) {
     '',
     `Puanlama sistemim (1–5, buçuklu olabilir): ${CRITERIA.map(c => `${c.title || c.label} = ${c.desc}`).join(' | ')}.`,
     `Spicy 0–5 sadece açık yetişkin içerik yoğunluğudur (${SPICY_LABELS.map((l, i) => `${i}: ${l}`).join('; ')}); ilişkinin kalitesini göstermez.`,
-    `Kriter kısaltmaları: ${CRITERIA.map(c => c.label).join(', ')}. "Uyum" bu kriterlerin ağırlıklı ortalaması (ağırlıklar: ${CRITERIA.map(c => `${c.label} ${w[c.key]}`).join(', ')}). GR = Goodreads puanı. "Puanım" kitabı okuduktan sonra verdiğim puan.`,
+    `"Genel" türden bağımsız kalite puanıdır (1–5, 3 = iyi kitap). Kriter kısaltmaları: ${CRITERIA.map(c => c.label).join(', ')}. "Romantizm" bu kriterlerin ağırlıklı ortalaması (ağırlıklar: ${CRITERIA.map(c => `${c.label} ${w[c.key]}`).join(', ')}). GR = Goodreads puanı. "Puanım" kitabı okuduktan sonra verdiğim puan.`,
     state.settings.rules?.length ? `Okuma kurallarım: ${state.settings.rules.map((r, i) => `${i + 1}) ${r}`).join(' ')}` : '',
     '',
     'Listemde OLMAYAN bir kitap önerirsen cevabının en sonuna, uygulamama aktarabilmem için şu biçimde bir blok ekle (her satıra bir kitap, bilmediğin alanı boş bırak):',

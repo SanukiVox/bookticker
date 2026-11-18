@@ -28,7 +28,7 @@ export function suggestions(limit = 5) {
     }
     if (b.priority) { pts += 200 - b.priority; why.unshift(`öncelik sıranda #${b.priority}`); }
     const sc = computeScore(b);
-    if (sc !== null) why.push(`uyum ${sc.toFixed(1)}`);
+    if (sc !== null) why.push(`romantizm ${sc.toFixed(1)}`);
     if (b.translation === 'Var') why.push('Türkçesi var');
     out.push({ b, pts, why: why.join(' · ') });
   }

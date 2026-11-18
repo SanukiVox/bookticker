@@ -31,7 +31,38 @@ export const SPICY_LABELS = [
   'Çok yoğun, sık ve oldukça açık yetişkin içerik',
 ];
 
-export const GUIDE_FIT = 'Genel okuyucu uyumu: kitabın bu özellikleriyle beklentiler arasındaki uyum — güçlü romantik ilişki ve kimya, etkileyici ana karakterler, romantizmin yeterli ağırlığı, varsa fantastik dünyanın ve olay örgüsünün başarısı, akıcı anlatım ve tercih edilen yetişkin içerik yoğunluğu. Uygulamada 8 kriterin ağırlıklı ortalaması olarak hesaplanır (spicy hariç).';
+// Genel Puan: türden bağımsız, "bu kitap iyi bir kitap mı?" — Goodreads benzeri 1–5 (çeyrek puan).
+export const QUALITY = [
+  { key: 'writing', label: 'Yazım ve anlatım', weight: 20, desc: 'Dil ve üslup, cümle kalitesi, diyalogların doğallığı, anlatım tekniği (bakış açısı, ses), betimlemeler.' },
+  { key: 'chars', label: 'Karakterler', weight: 20, desc: 'Tüm karakterlerin (yalnızca başroller değil) inandırıcılığı, derinliği, motivasyonları ve gelişimi.' },
+  { key: 'plot', label: 'Kurgu ve yapı', weight: 20, desc: 'Olay örgüsünün tutarlılığı, mantık boşlukları, giriş–gelişme–sonuç dengesi, finalin başarısı.' },
+  { key: 'qpace', label: 'Tempo ve okunabilirlik', weight: 15, desc: 'Sürükleyicilik, gereksiz uzatma ya da aceleye getirme olmaması, okumanın kolaylığı.' },
+  { key: 'orig', label: 'Özgünlük', weight: 10, desc: 'Klişeleri aşabilmesi, yeni bir fikir, kurgu ya da ses getirmesi; türünü ileri taşıması.' },
+  { key: 'theme', label: 'Tema ve derinlik', weight: 10, desc: 'Söylediği bir şey olması, işlediği konuların derinliği, okuduktan sonra akılda kalması.' },
+  { key: 'impact', label: 'Duygusal etki', weight: 5, desc: 'Okuru ne kadar etkilediği: güldürmesi, ağlatması, heyecanlandırması, iz bırakması.' },
+];
+// Ölçek: 3 = türünün sağlam, iyi bir örneği (Goodreads'teki şişkin ortalamalardan daha ayırt edici)
+export const QUALITY_SCALE = [
+  [1, 'Zayıf — tavsiye edilmez'],
+  [2, 'Vasat — ciddi sorunları var'],
+  [3, 'İyi — türünün sağlam bir örneği'],
+  [4, 'Çok iyi — türünün üstünde'],
+  [5, 'Başyapıt — türünü aşan'],
+];
+export const GUIDE_QUALITY = 'Genel Puan, kitabı türünden ve kişisel zevkten bağımsız olarak "iyi bir kitap mı?" sorusuyla ölçer. 7 kriterin sabit ağırlıklı ortalamasıdır; kriterler 1–5 arası, çeyrek puanlarla (3,25 · 3,5 · 3,75) verilir. 3 iyi bir kitap demektir.';
+export function computeQuality(book) {
+  let sum = 0, wsum = 0;
+  for (const c of QUALITY) {
+    const v = book.quality?.[c.key];
+    if (v === null || v === undefined || v === '') continue;
+    sum += Number(v) * c.weight; wsum += c.weight;
+  }
+  if (!wsum) return null;
+  return Math.round((sum / wsum) * 100) / 100;
+}
+export const qualityWord = q => (q == null ? '' : q >= 4.5 ? 'Başyapıt' : q >= 3.75 ? 'Çok iyi' : q >= 2.75 ? 'İyi' : q >= 1.75 ? 'Vasat' : 'Zayıf');
+
+export const GUIDE_FIT = 'Romantizm puanı (kişisel okuyucu uyumu): kitabın bu özellikleriyle beklentiler arasındaki uyum — güçlü romantik ilişki ve kimya, etkileyici ana karakterler, romantizmin yeterli ağırlığı, varsa fantastik dünyanın ve olay örgüsünün başarısı, akıcı anlatım ve tercih edilen yetişkin içerik yoğunluğu. Uygulamada 8 kriterin ağırlıklı ortalaması olarak hesaplanır (spicy hariç).';
 
 // Kullanıcının düzenleyebildiği seçenek listeleri.
 export const OPTION_LISTS = {
@@ -130,7 +161,7 @@ export function norm(s) {
 
 export const collator = new Intl.Collator('tr', { sensitivity: 'base', numeric: true });
 
-// Genel uyum puanı: Excel'deki formülün aynısı. Boş kriterler hesaba katılmaz.
+// Romantizm puanı (eski adıyla genel uyum puanı): Excel'deki formülün aynısı. Boş kriterler hesaba katılmaz.
 export function computeScore(book) {
   const w = state.settings.weights;
   let sum = 0, wsum = 0;
@@ -181,7 +212,7 @@ export function newBook(partial = {}) {
     id: uid(),
     title: '', originalTitle: '', author: '', series: '', seriesOrder: null,
     genre: '', translation: '', publisher: '', status: 'Okunacak', priority: null,
-    scores: {}, spicy: null, goodreads: null, goodreadsVotes: null, pubYear: null, trDate: '', confidence: '', review: '', summary: '',
+    scores: {}, quality: {}, spicy: null, goodreads: null, goodreadsVotes: null, pubYear: null, trDate: '', confidence: '', review: '', summary: '',
     warnings: [], tags: [], inVisuals: '', favorite: false,
     coverTr: null, coverOrig: null,
     startDate: '', endDate: '', myRating: null, notes: '', quotes: '',

@@ -1,7 +1,7 @@
 // Ortak arayüz parçaları: kapaklar, kartlar, bildirim, alttan açılan paneller.
 import { progressOf, fileSummary } from './files.js';
 import { db } from './db.js';
-import { state, displayTitle, statusInfo, genreColor, colorFor, computeScore } from './store.js';
+import { state, displayTitle, statusInfo, genreColor, colorFor, computeScore, computeQuality } from './store.js';
 
 export const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const $ = (sel, root = document) => root.querySelector(sel);
@@ -98,6 +98,17 @@ export function bookCard(b, extra = '', note = '') {
   return `<a class="card ${extra}" href="#/book/${enc(b.id)}">${coverHTML(b)}<div class="t">${esc(displayTitle(b))}</div>${o ? `<div class="o">${esc(o)}</div>` : ''}<div class="a">${esc(b.author || '')}</div>${note ? `<div class="why-note">${esc(note)}</div>` : ''}</a>`;
 }
 
+// Liste satırında puan: Ayarlar → "Listede gösterilecek puan" (romance | quality | both)
+function rowScore(b, s) {
+  const mode = state.settings.listScore || 'both';
+  const q = computeQuality(b);
+  const rs = s !== null ? `<span class="score" title="Romantizm puanı">${s.toFixed(1)}</span>` : '';
+  const qs = q !== null ? `<span class="score q" title="Genel puan">${q.toFixed(2).replace('.', ',')}</span>` : '';
+  if (mode === 'romance') return rs;
+  if (mode === 'quality') return qs;
+  return rs && qs ? `${rs}<div style="margin-top:4px">${qs}</div>` : rs || qs;
+}
+
 function fileMark(b) {
   const fs = fileSummary(b);
   if (!fs || fs.where === 'missing') return '';
@@ -111,7 +122,7 @@ export function bookRow(b, { sub } = {}) {
   return `<a class="row" href="#/book/${enc(b.id)}">${coverHTML(b, { badge: false })}
     <div class="body"><div class="t">${b.favorite ? '❤️ ' : ''}${esc(displayTitle(b))}</div>${origOf(b) ? `<div class="o">${esc(origOf(b))}</div>` : ''}<div class="s">${esc(subline)}</div>
     <div class="s">${st.emoji} ${esc(st.name)}${progressOf(b) != null && b.status === 'Okunuyor' ? ` · %${Math.floor(progressOf(b))}` : ''}${fileMark(b)}</div></div>
-    <div class="end">${s !== null ? `<span class="score">${s.toFixed(1)}</span>` : ''}${b.goodreads ? `<div class="small" style="margin-top:4px">★ ${b.goodreads.toFixed(2).replace('.', ',')}</div>` : ''}</div></a>`;
+    <div class="end">${rowScore(b, s)}${b.goodreads ? `<div class="small" style="margin-top:4px">★ ${b.goodreads.toFixed(2).replace('.', ',')}</div>` : ''}</div></a>`;
 }
 
 export function booksView(books, view) {
@@ -181,7 +192,7 @@ export function promptSheet(title, { value = '', placeholder = '', okLabel = 'Ka
   });
 }
 
-export const fmtScore = v => (v === null || v === undefined || v === '' ? '' : String(Math.round(Number(v) * 10) / 10).replace('.', ','));
+export const fmtScore = v => (v === null || v === undefined || v === '' ? '' : String(Math.round(Number(v) * 100) / 100).replace('.', ','));
 export const peppers = n => (n === null || n === undefined || n === '' ? '—' : Number(n) === 0 ? '0 · yok'
   : `${'🌶️'.repeat(Math.floor(n))}${Number(n) % 1 ? '½' : ''}`);
 
@@ -195,14 +206,17 @@ export function applyTheme() {
 
 // 📏 Puanlama rehberi (DEGERLENDIRME_SISTEMI.md ile aynı içerik)
 export async function openGuide() {
-  const { CRITERIA, SPICY_LABELS, GUIDE_FIT } = await import('./store.js');
+  const { CRITERIA, SPICY_LABELS, GUIDE_FIT, QUALITY, QUALITY_SCALE, GUIDE_QUALITY } = await import('./store.js');
   sheet({
     title: 'Puanlama rehberi',
-    body: `<p class="muted small">Her kriter 1–5 (buçuklu verilebilir) ve birbirinden bağımsızdır.</p>
+    body: `<h3 style="margin:0 0 6px">💗 Romantizm puanı</h3><p class="muted small">Senin zevkine göre: her kriter 1–5 (buçuklu verilebilir) ve birbirinden bağımsızdır.</p>
       ${CRITERIA.map((c, i) => `<div class="section" style="margin-bottom:10px"><b>${i + 1}. ${esc(c.title || c.label)}</b><div class="small muted" style="margin-top:4px">${esc(c.desc || '')}</div></div>`).join('')}
       <div class="section" style="margin-bottom:10px"><b>🌶️ Spicy / +18 (0–5)</b>
         <div class="small muted" style="margin:4px 0 6px">Sadece açık yetişkin içeriğin yoğunluğunu ölçer; ilişkinin kalitesini ya da kitabın başarısını göstermez.</div>
         ${SPICY_LABELS.map((l, i) => `<div class="small"><b>${i}</b> — ${esc(l)}</div>`).join('')}</div>
-      <div class="section"><b>Genel okuyucu uyumu</b><div class="small muted" style="margin-top:4px">${esc(GUIDE_FIT)}</div></div>`,
+      <div class="section"><b>Romantizm puanı nasıl hesaplanır?</b><div class="small muted" style="margin-top:4px">${esc(GUIDE_FIT)}</div></div>
+      <h3 style="margin:18px 0 6px">⭐ Genel puan</h3><p class="muted small">${esc(GUIDE_QUALITY)}</p>
+      ${QUALITY.map((c, i) => `<div class="section" style="margin-bottom:10px"><b>${i + 1}. ${esc(c.label)}</b> <span class="muted small">%${c.weight}</span><div class="small muted" style="margin-top:4px">${esc(c.desc)}</div></div>`).join('')}
+      <div class="section">${QUALITY_SCALE.map(([n, l]) => `<div class="small"><b>${n}</b> — ${esc(l)}</div>`).join('')}</div>`,
   });
 }

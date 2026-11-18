@@ -1,6 +1,6 @@
 # Kitap Değerlendirme Sistemi
 
-Kitaplığım'daki puanlamanın temeli. Yeni kitap değerlendirirken (elle, Excel'le ya da bir yapay zekâdan
+Kitaplığım'daki puanlamanın temeli. İki ayrı puan vardır: **💗 Romantizm puanı** (kişisel zevke uyum; eski adıyla "genel uyum puanı") ve **⭐ Genel puan** (türden bağımsız kalite). Yeni kitap değerlendirirken (elle, Excel'le ya da bir yapay zekâdan
 toplu değerlendirme alırken) bu tanımlar kullanılır. Uygulamada **Ayarlar → 📏 Puanlama rehberi** ve
 **Düzenle → Puanlar → 📏 Rehber** aynı içeriği gösterir (`js/store.js` → `CRITERIA`, `SPICY_LABELS`).
 
@@ -43,10 +43,37 @@ etkileyici ana karakterler, romantizmin yeterli ağırlığı, varsa fantastik d
 akıcı anlatım ve tercih edilen yetişkin içerik yoğunluğu.
 
 Uygulamada **Uyum puanı** 8 kriterin ağırlıklı ortalaması olarak otomatik hesaplanır (ağırlıklar
-**Ayarlar → Genel uyum puanı ağırlıkları**). Spicy bu hesaba katılmaz; spicy tercihi filtrelerle ayrıca uygulanır.
+**Ayarlar → Romantizm puanı ağırlıkları**). Spicy bu hesaba katılmaz; spicy tercihi filtrelerle ayrıca uygulanır.
 
 ## Excel / dış kaynak sütun adları
 
 İçe aktarmada şu başlıklar da tanınır: *Kimya → Romantik kimya*, *Evren / Fantastik dünya ve evren → Fantastik
 dünya*, *Aksiyon ve olay örgüsü → Aksiyon*, *Edebiyat / Edebî derinlik → Edebi derinlik*, *Akıcılık /
 Okunabilirlik / Sürükleyicilik ve okunabilirlik → Sürükleyicilik*, *Spice → Spicy*.
+
+## ⭐ Genel puan (türden bağımsız kalite)
+
+"Bu kitap, kişisel zevkten ve türünden bağımsız olarak iyi bir kitap mı?" sorusunu ölçer. Goodreads'in 5 yıldızına
+benzer ama daha ayırt edicidir: **3 = iyi bir kitap**. Kriterler 1–5 arası, çeyrek puanlarla (3,25 · 3,5 · 3,75) verilir.
+Ağırlıklar sabittir (`js/store.js` → `QUALITY`).
+
+| Kriter | Ağırlık | Neye bakar |
+|---|---|---|
+| Yazım ve anlatım | %20 | Dil ve üslup, cümle kalitesi, diyaloglar, anlatım tekniği, betimlemeler |
+| Karakterler | %20 | Tüm karakterlerin inandırıcılığı, derinliği, motivasyonları ve gelişimi |
+| Kurgu ve yapı | %20 | Tutarlılık, mantık boşlukları, giriş–gelişme–sonuç dengesi, final |
+| Tempo ve okunabilirlik | %15 | Sürükleyicilik, gereksiz uzatma / aceleye getirme olmaması |
+| Özgünlük | %10 | Klişeleri aşabilmesi, yeni bir fikir ya da ses getirmesi |
+| Tema ve derinlik | %10 | Söylediği bir şey olması, akılda kalması |
+| Duygusal etki | %5 | Okuru ne kadar etkilediği |
+
+| Puan | Anlamı |
+|---|---|
+| 1 | Zayıf — tavsiye edilmez |
+| 2 | Vasat — ciddi sorunları var |
+| 3 | İyi — türünün sağlam bir örneği |
+| 4 | Çok iyi — türünün üstünde |
+| 5 | Başyapıt — türünü aşan |
+
+Güven: **Ön değerlendirme** (bilinen eleştiri ve okur yorumlarına dayalı tahmin), **Otomatik tahmin** (romantizm
+kriterlerinden türetilmiş, 3'e doğru sıkıştırılmış kaba tahmin; okununca düzeltilmeli).

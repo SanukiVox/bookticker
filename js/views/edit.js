@@ -1,5 +1,5 @@
 // Kitap ekleme / düzenleme formu.
-import { goodreadsUrl } from '../store.js';
+import { goodreadsUrl, computeQuality, QUALITY } from '../store.js';
 import { state, getBook, newBook, saveBook, deleteBook, CRITERIA, SPICY_LABELS, OPTION_LISTS, computeScore, authors, seriesList, norm, displayTitle, saveOptions } from '../store.js';
 import { db } from '../db.js';
 import { candidates, summaryCandidates, isUrl, imageOk } from '../lookup.js';
@@ -35,7 +35,7 @@ export async function renderEdit(view, [id], query) {
   const b = isNew
     ? newBook({ author: query.get('author') || '', series: query.get('series') || '', seriesOrder: query.get('order') ? Number(query.get('order')) : null })
     : structuredClone(orig);
-  b.scores ||= {}; b.warnings ||= []; b.tags ||= [];
+  b.scores ||= {}; b.quality ||= {}; b.warnings ||= []; b.tags ||= [];
 
   // Kapaklar kaydedilene kadar hafızada tutulur.
   const covers = { tr: { blob: undefined, url: null }, orig: { blob: undefined, url: null } };
@@ -93,11 +93,16 @@ export async function renderEdit(view, [id], query) {
         <div class="field inline"><label>❤️ Favori</label><span class="toggle"><input type="checkbox" id="f-favorite" ${b.favorite ? 'checked' : ''}><span></span></span></div>
       </div>
 
-      <div class="form-group-title" style="display:flex;align-items:center;gap:8px"><span style="flex:1">Puanlar (1–5) · Genel uyum: <b id="live-score">${computeScore(b)?.toFixed(1) ?? '—'}</b></span><button type="button" class="mini-btn" id="est-open">🤖 Tahmin et</button><button type="button" class="mini-btn" id="open-guide">📏 Rehber</button></div>
+      <div class="form-group-title" style="display:flex;align-items:center;gap:8px"><span style="flex:1">💗 Romantizm puanı: <b id="live-score">${computeScore(b)?.toFixed(1) ?? '—'}</b></span><button type="button" class="mini-btn" id="est-open">🤖 Tahmin et</button><button type="button" class="mini-btn" id="open-guide">📏 Rehber</button></div>
       <div class="form-group">
         ${CRITERIA.map(c => scoreRow(c.key, c.title || c.label, b.scores[c.key])).join('')}
         ${scoreRow('spicy', 'Spicy / +18 (0–5)', b.spicy, 0, false)}
         <div class="small muted" id="spicy-hint" style="padding:0 14px 10px">${b.spicy !== null && b.spicy !== undefined ? esc(SPICY_LABELS[Math.floor(b.spicy)]) : ''}</div>
+      </div>
+      <div class="form-group-title" style="display:flex;align-items:center;gap:8px"><span style="flex:1">⭐ Genel puan: <b id="live-quality">${computeQuality(b)?.toFixed(2) ?? '—'}</b> <span class="muted small">(türden bağımsız kalite)</span></span></div>
+      <div class="form-group">
+        ${QUALITY.map(c => scoreRow('q_' + c.key, `${c.label} · %${c.weight}`, b.quality[c.key])).join('')}
+        <div class="small muted" style="padding:0 14px 10px">3 = iyi bir kitap · 4 = çok iyi · 5 = başyapıt. ½ düğmesiyle buçuk verilebilir.</div>
         <div class="field inline"><label for="f-goodreads">⭐ Goodreads puanı</label><input id="f-goodreads" data-field="goodreads" type="number" inputmode="decimal" min="0" max="5" step="0.01" placeholder="örn. 4,21" value="${b.goodreads ?? ''}"></div>
         <div class="field inline"><label for="f-goodreadsVotes">Goodreads oy sayısı</label><input id="f-goodreadsVotes" data-field="goodreadsVotes" type="number" inputmode="numeric" min="0" placeholder="isteğe bağlı" value="${b.goodreadsVotes ?? ''}"></div>
         <div style="padding:4px 14px 12px"><a class="mini-btn" id="gr-open" href="${goodreadsUrl(b)}" target="_blank" rel="noopener" style="display:inline-block">📗 Goodreads'te aç</a></div>
@@ -182,7 +187,8 @@ export async function renderEdit(view, [id], query) {
     const btn = e.target.closest('button[data-n], button[data-half]');
     if (!btn) return;
     const key = row.dataset.rate;
-    const cur = key === 'spicy' ? b.spicy : key === 'myRating' ? b.myRating : b.scores[key];
+    const qk = key.startsWith('q_') ? key.slice(2) : null;
+    const cur = key === 'spicy' ? b.spicy : key === 'myRating' ? b.myRating : qk ? b.quality[qk] : b.scores[key];
     let n;
     if (btn.dataset.half !== undefined) {
       if (!hasVal(cur)) { toast('Önce bir puan seç, sonra ½ ekle'); return; }
@@ -196,11 +202,13 @@ export async function renderEdit(view, [id], query) {
     }
     if (key === 'spicy') { b.spicy = n; $('#spicy-hint', form).textContent = n === null ? '' : SPICY_LABELS[Math.floor(n)]; }
     else if (key === 'myRating') b.myRating = n;
+    else if (qk) { if (n === null) delete b.quality[qk]; else b.quality[qk] = n; }
     else { if (n === null) delete b.scores[key]; else b.scores[key] = n; }
     $$('button[data-n]', row).forEach(x => x.classList.toggle('on', x.dataset.n !== '' && n !== null && Math.floor(n) === Number(x.dataset.n)));
     $('button[data-half]', row)?.classList.toggle('on', n !== null && n % 1 !== 0);
     $(`[data-val="${key}"]`, form).textContent = n === null ? '' : fmtScore(n);
     $('#live-score', view).textContent = computeScore(b)?.toFixed(1) ?? '—';
+    $('#live-quality', view).textContent = computeQuality(b)?.toFixed(2) ?? '—';
     dirty = true;
   }));
 

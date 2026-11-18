@@ -1,5 +1,5 @@
 // Excel içe/dışa aktarma ve yedekleme.
-import { state, CRITERIA, newBook, norm, computeScore, replaceAll, addBooks, learnOptions, saveSettings } from './store.js';
+import { state, CRITERIA, newBook, norm, computeScore, replaceAll, addBooks, learnOptions, saveSettings, computeQuality, QUALITY } from './store.js';
 import { db } from './db.js';
 
 let xlsxP = null;
@@ -33,7 +33,9 @@ const COLUMNS = [
   ['spicy', 'Spicy / +18'],
   ['goodreads', 'Goodreads puanı'],
   ['goodreadsVotes', 'Goodreads oy sayısı'],
-  ['_score', 'Genel uyum puanı'],
+  ['_score', 'Romantizm puanı'],
+  ...QUALITY.map(c => [`qual:${c.key}`, `Genel · ${c.label}`]),
+  ['_quality', 'Genel puan'],
   ['confidence', 'Güven'],
   ['review', 'Kısa değerlendirme'],
   ['warnings', 'İçerik uyarıları'],
@@ -55,6 +57,7 @@ function matchColumn(header) {
   if (exact) return exact[0];
   // Değerlendirme sistemindeki ve dış kaynaklardaki başlık adları
   const ALIAS = {
+    'genel uyum puani': '_score', 'uyum puani': '_score',
     'kimya': 'score:chemistry', 'romantik kimya': 'score:chemistry',
     'erkek': 'score:male', 'kadin': 'score:female',
     'evren': 'score:world', 'fantastik dunya ve evren': 'score:world', 'fantastik dunya evren': 'score:world',
@@ -94,10 +97,11 @@ export async function readExcel(file) {
   rows.slice(headerIdx + 1).forEach((r, i) => {
     const b = newBook({ status: '', createdAt: now - i, updatedAt: now });
     map.forEach((field, c) => {
-      if (!field || field === '_score') return;
+      if (!field || field === '_score' || field === '_quality') return;
       const v = r[c];
       if (v === null || v === undefined || v === '') return;
       if (field.startsWith('score:')) { const n = num(v); if (n !== null) b.scores[field.slice(6)] = n; }
+      else if (field.startsWith('qual:')) { const n = num(v); if (n !== null) (b.quality ||= {})[field.slice(5)] = n; }
       else if (['priority', 'seriesOrder', 'spicy', 'myRating', 'goodreadsVotes', 'pubYear'].includes(field)) b[field] = num(v);
       else if (field === 'trDate') b.trDate = v instanceof Date ? dateStr(v) : String(v).trim();
       else if (field === 'goodreads') b.goodreads = num(String(v).replace(',', '.'));
@@ -160,6 +164,8 @@ export async function exportExcel() {
   const header = COLUMNS.map(([, l]) => l);
   const rows = state.books.map(b => COLUMNS.map(([f]) => {
     if (f === '_score') return computeScore(b);
+    if (f === '_quality') return computeQuality(b);
+    if (f.startsWith('qual:')) return b.quality?.[f.slice(5)] ?? null;
     if (f.startsWith('score:')) return b.scores?.[f.slice(6)] ?? null;
     if (f === 'warnings' || f === 'tags') return (b[f] || []).join(', ');
     if (f === 'favorite') return b.favorite ? 'Evet' : '';

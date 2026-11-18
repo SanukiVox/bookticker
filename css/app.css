@@ -542,3 +542,8 @@ input[type=search]::-webkit-search-cancel-button { -webkit-appearance: none; dis
 .fbadge.up { bottom: 9px; }
 .ser-book .fbadge { left: auto; right: 4px; bottom: 4px; height: 17px; padding: 0 4px; font-size: 9px; }
 .chip.sub { font-size: 13px; padding-top: 5px; padding-bottom: 5px; }
+
+/* Genel puan */
+.score.q { background: color-mix(in srgb, #2f8f9a 16%, transparent); color: #2a7f8a; }
+.bigscore .n.q { color: #2a7f8a; }
+.bars.q .bar .track span { background: #2a7f8a; }
