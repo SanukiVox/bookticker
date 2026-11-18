@@ -31,6 +31,34 @@ export const SPICY_LABELS = [
   'Çok yoğun, sık ve oldukça açık yetişkin içerik',
 ];
 
+// Rehber tablosu: her kriterde 1–5 puan neye karşılık gelir (sıra: 1, 2, 3, 4, 5)
+export const LEVELS = {
+  chemistry: ['Çekim yok, ilişki inandırıcı değil', 'Zayıf; birkaç sahnede kıpırdanma', 'Belirgin çekim, keyifli etkileşim', 'Güçlü elektrik, gerilim sürekli', 'Unutulmaz; sayfalardan taşan kimya'],
+  male: ['Tek boyutlu, itici ya da silik', 'Klişe, az derinlik', 'Sevilebilir, tutarlı, geçmişi var', 'Karizmatik, katmanlı, gelişen', 'İkonik; türün en iyileri arasında'],
+  female: ['Pasif, tutarsız, sinir bozucu', 'Zayıf karar verici, az gelişim', 'Sağlam, kendi iradesi olan', 'Güçlü, katmanlı, belirgin gelişim', 'İkonik; okurla derin bağ kuran'],
+  world: ['Dünya yok ya da çelişkili', 'Yüzeysel, karton dekor', 'Tutarlı, işini gören', 'Zengin, özgün kurallar ve atmosfer', 'Başlı başına bir karakter; çok özgün'],
+  action: ['Olay yok ya da mantıksız', 'Zayıf çatışma, öngörülebilir', 'Tutarlı, ara ara heyecanlı', 'Gerilimli, sürprizli', 'Nefes kesen, kusursuz kurgulanmış'],
+  romance: ['Romantizm neredeyse yok', 'Arka planda, aceleye gelmiş', 'Yeterli ağırlık, makul gelişim', 'Hikâyenin kalbi, iyi işlenmiş gelişim', 'Mükemmel işlenmiş, tatmin edici yolculuk'],
+  literary: ['Özensiz dil, yüzeysel', 'Sade ama düz', 'Akıcı, yer yer derin', 'Güçlü üslup ve temalar', 'Edebî açıdan çok güçlü'],
+  pace: ['Sürünüyor, bırakma isteği', 'Yer yer yavaş, sarkmalar var', 'Rahat okunuyor', 'Elden bırakılmıyor', 'Bir oturuşta biten'],
+  writing: ['Özensiz, hatalı, düz', 'Sade ama tekdüze', 'Akıcı ve temiz', 'Belirgin, güçlü bir ses', 'Usta işi, kendine özgü'],
+  chars: ['Karton karakterler', 'Klişe, az derinlik', 'İnandırıcı, motivasyonları net', 'Katmanlı, akılda kalan', 'Gerçek insanlar gibi; unutulmaz'],
+  plot: ['Dağınık, büyük mantık boşlukları', 'Öngörülebilir, sarkan', 'Tutarlı, tatmin edici', 'İyi kurgulanmış, güçlü final', 'Kusursuz yapı, ustaca örülmüş'],
+  qpace: ['Okuması zor', 'Sarkmalar ya da acele var', 'Dengeli', 'Sürükleyici', 'Elden bırakılmıyor'],
+  orig: ['Tamamen klişe', 'Bilindik, az yenilik', 'Bilinen öğeleri iyi harmanlıyor', 'Belirgin şekilde taze', 'Türünü değiştiren'],
+  theme: ['Söylediği bir şey yok', 'Yüzeysel temalar', 'Anlamlı temalar', 'Düşündüren, derin', 'Uzun süre akılda kalan'],
+  impact: ['Hiç etkilemedi', 'Az etkiledi', 'Duygulandırdı', 'Güçlü duygular yaşattı', 'Sarsan, iz bırakan'],
+};
+// Puanın dayanağı: güven etiketleri neye göre verilir
+export const BASIS = [
+  ['Okunarak', 'Kitap (ya da metni) okunarak verilen puan; en güvenilir.'],
+  ['Araştırılmış', 'Birden çok kaynaktan (eleştiri, okur yorumları, Goodreads/StoryGraph, içerik siteleri) derlenen puan.'],
+  ['Ön değerlendirme', 'Bilinen eleştiri ve okur yorumlarına dayalı, okumadan yapılan tahmin.'],
+  ["Goodreads'ten tahmin", 'Yalnızca Goodreads ortalaması ve oy sayısından türetilmiş kaba tahmin (4,0 ≈ 3).'],
+  ['Otomatik tahmin', 'Romantizm kriterlerinden türetilmiş kaba tahmin; okununca düzeltilmeli.'],
+  ['Doğrulanacak', 'Henüz çıkmamış ya da hakkında çok az bilgi olan kitap; puan geçici.'],
+];
+
 // Genel Puan: türden bağımsız, "bu kitap iyi bir kitap mı?" — Goodreads benzeri 1–5 (çeyrek puan).
 export const QUALITY = [
   { key: 'writing', label: 'Yazım ve anlatım', weight: 20, desc: 'Dil ve üslup, cümle kalitesi, diyalogların doğallığı, anlatım tekniği (bakış açısı, ses), betimlemeler.' },

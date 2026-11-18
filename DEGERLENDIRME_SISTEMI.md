@@ -77,3 +77,11 @@ Ağırlıklar sabittir (`js/store.js` → `QUALITY`).
 
 Güven: **Ön değerlendirme** (bilinen eleştiri ve okur yorumlarına dayalı tahmin), **Otomatik tahmin** (romantizm
 kriterlerinden türetilmiş, 3'e doğru sıkıştırılmış kaba tahmin; okununca düzeltilmeli).
+
+## ℹ️ Puanların dayanağı
+
+Her kitabın sayfasında **Puanların dayanağı** bölümü, puanların neye dayandığını gösterir: romantizm puanının
+güven etiketi (+ isteğe bağlı not), spicy'nin dayanağı (`spicyNote`, örn. "Romance.io 3/5, 2 açık sahne"),
+genel puanın kaynağı (`qualityConf`) ve Goodreads oy sayısı. Dayanağı yazılmamış spicy "tahmin" olarak görünür.
+Her kriterin 1–5 seviye tablosu `js/store.js` → `LEVELS`, güven etiketleri `BASIS` içindedir ve
+📏 Puanlama rehberinde açılır tablolar olarak gösterilir.

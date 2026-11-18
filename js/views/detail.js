@@ -61,6 +61,7 @@ export async function renderDetail(view, [id]) {
 
   const scored = CRITERIA.filter(c => b.scores?.[c.key] !== undefined && b.scores?.[c.key] !== null && b.scores?.[c.key] !== '');
 
+  const hasSpicy = b.spicy !== null && b.spicy !== undefined && b.spicy !== '';
   const qual = computeQuality(b);
   const qscored = QUALITY.filter(c => b.quality?.[c.key] != null && b.quality[c.key] !== '');
   view.innerHTML = `
@@ -85,6 +86,13 @@ export async function renderDetail(view, [id]) {
       <div class="bars">${scored.map(c => `<div class="bar"><span>${c.label}</span><div class="track"><span style="width:${(Number(b.scores[c.key]) / 5) * 100}%"></span></div><b>${fmtScore(b.scores[c.key])}</b></div>`).join('')}</div></div>` : ''}
     ${qual !== null || qscored.length ? `<div class="section"><div class="bigscore"><div class="n q">${qual !== null ? qual.toFixed(2).replace('.', ',') : '—'}</div><div><b>⭐ Genel puan${qual !== null ? ` · ${qualityWord(qual)}` : ''}</b><div class="muted small">Kitabın kendi başına ne kadar iyi olduğu · 5 üzerinden${b.qualityConf ? ` · ${esc(b.qualityConf)}` : ''}</div></div></div>
       <div class="bars q">${qscored.map(c => `<div class="bar"><span>${c.label}</span><div class="track"><span style="width:${(Number(b.quality[c.key]) / 5) * 100}%"></span></div><b>${fmtScore(b.quality[c.key])}</b></div>`).join('')}</div></div>` : ''}
+    ${scored.length || qscored.length || hasSpicy || b.goodreads ? `<div class="section basis"><div style="display:flex;align-items:center;gap:8px"><h3 style="flex:1;margin:0">ℹ️ Puanların dayanağı</h3><button class="mini-btn" id="basis-guide">📏 Tablo</button></div>
+      <dl class="kv" style="margin-top:8px">
+        ${scored.length ? `<dt>💗 Romantizm</dt><dd>${esc(b.confidence || 'Belirtilmemiş')}${b.scoreNote ? ` — ${esc(b.scoreNote)}` : ''}</dd>` : ''}
+        ${hasSpicy ? `<dt>🌶️ Spicy ${fmtScore(b.spicy)}</dt><dd>${esc(SPICY_LABELS[Math.floor(b.spicy)] || '')}${b.spicyNote ? `<div class="muted small" style="margin-top:2px">Dayanak: ${esc(b.spicyNote)}</div>` : '<div class="muted small" style="margin-top:2px">Dayanak belirtilmemiş (tahmin)</div>'}</dd>` : ''}
+        ${qscored.length ? `<dt>⭐ Genel</dt><dd>${esc(b.qualityConf || 'Belirtilmemiş')}</dd>` : ''}
+        ${b.goodreads ? `<dt>📗 Goodreads</dt><dd>${String(b.goodreads.toFixed(2)).replace('.', ',')}${b.goodreadsVotes ? ` · ${formatVotes(b.goodreadsVotes)}` : ''}</dd>` : ''}
+      </dl></div>` : ''}
     ${b.summary ? `<div class="section"><h3>Özet</h3><div class="prose clampable">${esc(b.summary)}</div></div>`
       : `<a class="section" href="#/edit/${enc(b.id)}?summary=1" style="display:flex;align-items:center;gap:10px"><span style="font-size:22px">📝</span><span style="flex:1"><b>Özet / tanıtım yazısı ekle</b><br><span class="muted small">İnternetten bul ya da kopyaladığın yazıyı yapıştır</span></span><span class="chev" style="width:8px;height:8px;border-right:2px solid var(--text-3);border-top:2px solid var(--text-3);transform:rotate(45deg)"></span></a>`}
     ${b.review ? `<div class="section"><h3>Kısa değerlendirme</h3><div class="prose clampable">${esc(b.review)}</div></div>` : ''}
@@ -109,6 +117,7 @@ export async function renderDetail(view, [id]) {
 
   wireBack(view);
   hydrateCovers(view);
+  $('#basis-guide', view)?.addEventListener('click', async () => (await import('../ui.js')).openGuide());
   $('#ask-book', view).addEventListener('click', async () => { if (await (await import('../ai.js')).hasKey()) location.hash = `#/chat?book=${enc(b.id)}`; else (await import('./ask.js')).openAsk({ book: b }); });
   $('#gr-edit', view).addEventListener('click', () => sheet({
     title: 'Goodreads puanı',

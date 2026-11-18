@@ -206,17 +206,20 @@ export function applyTheme() {
 
 // 📏 Puanlama rehberi (DEGERLENDIRME_SISTEMI.md ile aynı içerik)
 export async function openGuide() {
-  const { CRITERIA, SPICY_LABELS, GUIDE_FIT, QUALITY, QUALITY_SCALE, GUIDE_QUALITY } = await import('./store.js');
+  const { CRITERIA, SPICY_LABELS, GUIDE_FIT, QUALITY, QUALITY_SCALE, GUIDE_QUALITY, LEVELS, BASIS } = await import('./store.js');
+  const lv = k => (LEVELS[k] ? `<table class="lv-table">${LEVELS[k].map((t, i) => `<tr><th>${i + 1}</th><td>${esc(t)}</td></tr>`).join('')}</table>` : '');
   sheet({
     title: 'Puanlama rehberi',
     body: `<h3 style="margin:0 0 6px">💗 Romantizm puanı</h3><p class="muted small">Senin zevkine göre: her kriter 1–5 (buçuklu verilebilir) ve birbirinden bağımsızdır.</p>
-      ${CRITERIA.map((c, i) => `<div class="section" style="margin-bottom:10px"><b>${i + 1}. ${esc(c.title || c.label)}</b><div class="small muted" style="margin-top:4px">${esc(c.desc || '')}</div></div>`).join('')}
+      ${CRITERIA.map((c, i) => `<details class="section lv" style="margin-bottom:10px"><summary><b>${i + 1}. ${esc(c.title || c.label)}</b> <span class="muted small">%${state.settings.weights?.[c.key] ?? c.weight} · 1–5 tablosu ▾</span></summary><div class="small muted" style="margin-top:4px">${esc(c.desc || '')}</div>${lv(c.key)}</details>`).join('')}
       <div class="section" style="margin-bottom:10px"><b>🌶️ Spicy / +18 (0–5)</b>
         <div class="small muted" style="margin:4px 0 6px">Sadece açık yetişkin içeriğin yoğunluğunu ölçer; ilişkinin kalitesini ya da kitabın başarısını göstermez.</div>
         ${SPICY_LABELS.map((l, i) => `<div class="small"><b>${i}</b> — ${esc(l)}</div>`).join('')}</div>
       <div class="section"><b>Romantizm puanı nasıl hesaplanır?</b><div class="small muted" style="margin-top:4px">${esc(GUIDE_FIT)}</div></div>
       <h3 style="margin:18px 0 6px">⭐ Genel puan</h3><p class="muted small">${esc(GUIDE_QUALITY)}</p>
-      ${QUALITY.map((c, i) => `<div class="section" style="margin-bottom:10px"><b>${i + 1}. ${esc(c.label)}</b> <span class="muted small">%${c.weight}</span><div class="small muted" style="margin-top:4px">${esc(c.desc)}</div></div>`).join('')}
-      <div class="section">${QUALITY_SCALE.map(([n, l]) => `<div class="small"><b>${n}</b> — ${esc(l)}</div>`).join('')}</div>`,
+      ${QUALITY.map((c, i) => `<details class="section lv" style="margin-bottom:10px"><summary><b>${i + 1}. ${esc(c.label)}</b> <span class="muted small">%${c.weight} · 1–5 tablosu ▾</span></summary><div class="small muted" style="margin-top:4px">${esc(c.desc)}</div>${lv(c.key)}</details>`).join('')}
+      <div class="section">${QUALITY_SCALE.map(([n, l]) => `<div class="small"><b>${n}</b> — ${esc(l)}</div>`).join('')}</div>
+      <h3 style="margin:18px 0 6px">ℹ️ Puanların dayanağı</h3><p class="muted small">Her kitabın sayfasında puanın neye dayandığı yazar.</p>
+      <div class="section">${BASIS.map(([n, l]) => `<div class="small" style="margin-bottom:6px"><b>${esc(n)}</b> — ${esc(l)}</div>`).join('')}</div>`,
   });
 }
