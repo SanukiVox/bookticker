@@ -88,8 +88,8 @@ export async function renderDetail(view, [id]) {
       <div class="bars q">${qscored.map(c => `<div class="bar"><span>${c.label}</span><div class="track"><span style="width:${(Number(b.quality[c.key]) / 5) * 100}%"></span></div><b>${fmtScore(b.quality[c.key])}</b></div>`).join('')}</div></div>` : ''}
     ${scored.length || qscored.length || hasSpicy || b.goodreads ? `<div class="section basis"><div style="display:flex;align-items:center;gap:8px"><h3 style="flex:1;margin:0">ℹ️ Puanların dayanağı</h3><button class="mini-btn" id="basis-guide">📏 Tablo</button></div>
       <dl class="kv" style="margin-top:8px">
-        ${scored.length ? `<dt>💗 Romantizm</dt><dd>${esc(b.confidence || 'Belirtilmemiş')}${b.scoreNote ? ` — ${esc(b.scoreNote)}` : ''}</dd>` : ''}
-        ${hasSpicy ? `<dt>🌶️ Spicy ${fmtScore(b.spicy)}</dt><dd>${esc(SPICY_LABELS[Math.floor(b.spicy)] || '')}${b.spicyNote ? `<div class="muted small" style="margin-top:2px">Dayanak: ${esc(b.spicyNote)}</div>` : '<div class="muted small" style="margin-top:2px">Dayanak belirtilmemiş (tahmin)</div>'}</dd>` : ''}
+        ${scored.length ? `<dt>💗 Romantizm</dt><dd>${esc(b.scoreNote || b.confidence || 'tahmin')}</dd>` : ''}
+        ${hasSpicy ? `<dt>🌶️ Spicy ${fmtScore(b.spicy)}</dt><dd>${esc(SPICY_LABELS[Math.floor(b.spicy)] || '')}<div class="muted small" style="margin-top:2px">Dayanak: ${esc(b.spicyNote || 'tahmin')}</div></dd>` : ''}
         ${qscored.length ? `<dt>⭐ Genel</dt><dd>${esc(b.qualityConf || 'Belirtilmemiş')}</dd>` : ''}
         ${b.goodreads ? `<dt>📗 Goodreads</dt><dd>${String(b.goodreads.toFixed(2)).replace('.', ',')}${b.goodreadsVotes ? ` · ${formatVotes(b.goodreadsVotes)}` : ''}</dd>` : ''}
       </dl></div>` : ''}
