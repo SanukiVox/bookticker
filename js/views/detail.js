@@ -89,7 +89,7 @@ export async function renderDetail(view, [id]) {
       <div class="bars">${scored.map(c => `<div class="bar"><span>${c.label}</span><div class="track"><span style="width:${(Number(b.scores[c.key]) / 5) * 100}%"></span></div><b>${fmtScore(b.scores[c.key])}</b></div>`).join('')}</div></div>` : ''}
     ${qual !== null || qscored.length ? `<div class="section"><div class="bigscore"><div class="n q">${qual !== null ? qual.toFixed(2).replace('.', ',') : '—'}</div><div><b>⭐ Genel puan${qual !== null ? ` · ${qualityWord(qual)}` : ''}</b><div class="muted small">Kitabın kendi başına ne kadar iyi olduğu · 5 üzerinden${b.qualityConf ? ` · ${esc(b.qualityConf)}` : ''}</div></div></div>
       <div class="bars q">${qscored.map(c => `<div class="bar"><span>${c.label}</span><div class="track"><span style="width:${(Number(b.quality[c.key]) / 5) * 100}%"></span></div><b>${fmtScore(b.quality[c.key])}</b></div>`).join('')}</div></div>` : ''}
-    ${scored.length || qscored.length || hasSpicy || b.goodreads ? `<div class="section basis"><div style="display:flex;align-items:center;gap:8px"><h3 style="flex:1;margin:0">ℹ️ Puanların dayanağı</h3><button class="mini-btn" id="basis-guide">📏 Tablo</button></div>
+    ${scored.length || qscored.length || hasSpicy || b.goodreads ? `<div class="section basis"><div style="display:flex;align-items:center;gap:8px"><h3 style="flex:1;margin:0">ℹ️ Puanların dayanağı</h3>${b.file || b.file2 ? '<button class="mini-btn" id="basis-reeval">🔎 Yeniden değerlendir</button>' : ''}<button class="mini-btn" id="basis-guide">📏 Tablo</button></div>
       <dl class="kv" style="margin-top:8px">
         ${scored.length ? `<dt>💗 Romantizm</dt><dd>${esc(cap(b.scoreNote || b.confidence || 'Tahmin'))}</dd>` : ''}
         ${hasSpicy ? `<dt>🌶️ Spicy ${fmtScore(b.spicy)}</dt><dd>${esc(SPICY_LABELS[Math.floor(b.spicy)] || '')}<div class="muted small" style="margin-top:2px">Dayanak: ${esc(cap(b.spicyNote || 'Tahmin'))}</div></dd>` : ''}
@@ -120,6 +120,11 @@ export async function renderDetail(view, [id]) {
 
   wireBack(view);
   hydrateCovers(view);
+  $('#basis-reeval', view)?.addEventListener('click', async () => {
+    const m = await import('../autoeval.js');
+    if (!m.canEvaluate(b)) { toast('Kitap dosyası bu cihazda yok'); return; }
+    m.openReEvaluate(b.id);
+  });
   $('#basis-guide', view)?.addEventListener('click', async () => (await import('../ui.js')).openGuide());
   $('#ask-book', view).addEventListener('click', async () => { if (await (await import('../ai.js')).hasKey()) location.hash = `#/chat?book=${enc(b.id)}`; else (await import('./ask.js')).openAsk({ book: b }); });
   $('#gr-edit', view).addEventListener('click', () => sheet({

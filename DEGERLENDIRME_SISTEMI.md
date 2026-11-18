@@ -85,3 +85,11 @@ güven etiketi (+ isteğe bağlı not), spicy'nin dayanağı (`spicyNote`, örn.
 genel puanın kaynağı (`qualityConf`) ve Goodreads oy sayısı. Dayanağı yazılmamış spicy "tahmin" olarak görünür.
 Her kriterin 1–5 seviye tablosu `js/store.js` → `LEVELS`, güven etiketleri `BASIS` içindedir ve
 📏 Puanlama rehberinde açılır tablolar olarak gösterilir.
+
+## 🔎 Metinden değerlendirme (ücretsiz, çevrimdışı)
+
+Kitaba PDF/EPUB eklenince `js/analyze.js` metni telefonda tarar (yapay zekâ değil, kurallarla):
+spicy (açık sahne sayısı, detay ve yoğunluk), sürükleyicilik (diyalog oranı, paragraf uzunluğu),
+romantizm ağırlığı ve aksiyon (ilgili kelime yoğunluğu). Yalnızca **boş** alanları doldurur
+(spicy dayanağı "Metin", diğerleri "Otomatik"). **🔎 Yeniden değerlendir** önerileri şimdiki değerlerle
+yan yana gösterir; yalnızca seçilen kriterler değişir. Kimya, karakterler, edebî derinlik gibi kriterler önerilmez.

@@ -96,6 +96,8 @@ export async function attachFile(book, file, lang) {
   await saveBook(book);
   // Drive bağlıysa arka planda yükle (bağlantı süresi dolmuşsa sonraki açılışta yüklenir)
   import('./gdrive.js').then(m => m.syncDrive({ download: false })).catch(() => {});
+  // Ücretsiz metin değerlendirmesi: yalnızca boş alanları doldurur (arka planda)
+  if (!sameFile) import('./autoeval.js').then(m => m.autoEvalAfterAttach(real.id)).catch(() => {});
   return { sameFile };
 }
 
