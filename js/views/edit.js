@@ -97,8 +97,8 @@ export async function renderEdit(view, [id], query) {
       <div class="form-group">
         ${CRITERIA.map(c => scoreRow(c.key, c.title || c.label, b.scores[c.key])).join('')}
         ${scoreRow('spicy', 'Spicy / +18 (0–5)', b.spicy, 0, false)}
-        <div class="field"><label for="f-spicyNote">🌶️ Spicy dayanağı</label><input id="f-spicyNote" data-field="spicyNote" placeholder="örn. metin · araştırma · tahmin" value="${esc(b.spicyNote || '')}"></div>
-        <div class="field"><label for="f-scoreNote">💗 Romantizm puanı notu</label><input id="f-scoreNote" data-field="scoreNote" placeholder="örn. metin · araştırma · tahmin" value="${esc(b.scoreNote || '')}"></div>
+        <div class="field"><label for="f-spicyNote">🌶️ Spicy dayanağı</label><input id="f-spicyNote" data-field="spicyNote" placeholder="örn. Metin · Araştırma · Tahmin" value="${esc(b.spicyNote || '')}"></div>
+        <div class="field"><label for="f-scoreNote">💗 Romantizm puanı notu</label><input id="f-scoreNote" data-field="scoreNote" placeholder="örn. Metin · Araştırma · Tahmin" value="${esc(b.scoreNote || '')}"></div>
         <div class="small muted" id="spicy-hint" style="padding:0 14px 10px">${b.spicy !== null && b.spicy !== undefined ? esc(SPICY_LABELS[Math.floor(b.spicy)]) : ''}</div>
       </div>
       <div class="form-group-title" style="display:flex;align-items:center;gap:8px"><span style="flex:1">⭐ Genel puan: <b id="live-quality">${computeQuality(b)?.toFixed(2) ?? '—'}</b> <span class="muted small">(türden bağımsız kalite)</span></span></div>
