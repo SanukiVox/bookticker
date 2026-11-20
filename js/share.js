@@ -50,8 +50,14 @@ export function sanitize(b) {
   const o = { status: 'Okunacak' };
   for (const k of PUBLIC) if (b[k] !== undefined) o[k] = b[k];
   o.coverOrig = b.coverOrig || null; o.coverTr = b.coverTr || null;
+  if (b.shareFile) for (const k of ['file', 'file2']) {
+    const f = b[k];
+    if (f?.key) o[k] = { key: f.key, hash: f.hash, name: f.name, type: f.type, size: f.size, lang: f.lang, path: filePath(f) };
+  }
   return o;
 }
+const FILE_DIR = 'files';
+const filePath = f => `${FILE_DIR}/${String(f.key).replace(/[^\w.-]/g, '_')}.${f.type === 'pdf' ? 'pdf' : 'epub'}`;
 // Bu cihazda yüklenmiş kapaklar (adres değil, anahtar) paylaşım deposuna resim dosyası olarak yüklenir;
 // kitaplar.json'da "share:covers/<anahtar>.jpg" diye geçer.
 const COVER_DIR = 'covers';
@@ -85,6 +91,51 @@ async function uploadCovers(token, owner, need) {
     await api(token, owner, SHARE_REPO, `/contents/${path}`, { method: 'PUT', body: { message: `Kapak: ${path}`, content: await bytesB64(blob) } });
   }
 }
+// "Dosyasını da paylaş" seçilen kitapların PDF/EPUB dosyaları paylaşım deposuna yüklenir (bir kez)
+async function uploadFiles(token, owner) {
+  const list = state.books.filter(b => b.shared && b.shareFile).flatMap(b => ['file', 'file2'].map(k => b[k]).filter(f => f?.key));
+  if (!list.length) return;
+  let have = new Set();
+  try { have = new Set((await api(token, owner, SHARE_REPO, `/contents/${FILE_DIR}`)).map(f => f.path)); }
+  catch (e) { if (e.status !== 404) throw e; }
+  const { db } = await import('./db.js');
+  const missing = [];
+  for (const f of list) {
+    const path = filePath(f);
+    if (have.has(path)) continue;
+    let blob = await db.getFile(f.key);
+    if (!blob && f.hash) blob = await db.getFile(`h-${f.hash.slice(0, 32)}`);
+    if (!blob) { missing.push(f.name || path); continue; }
+    if (blob.size > 45 * 1024 * 1024) throw new Error(`${f.name}: dosya çok büyük (en fazla 45 MB paylaşılabilir)`);
+    await api(token, owner, SHARE_REPO, `/contents/${path}`, { method: 'PUT', body: { message: `Dosya: ${f.name || path}`, content: await bytesB64(blob) } });
+  }
+  if (missing.length) throw new Error(`Şu dosyalar bu cihazda değil, paylaşılamadı: ${missing.join(', ')}`);
+}
+// Misafir: paylaşılan kitap dosyasını indirir ve bu cihaza kaydeder (okuyucu oradan açar)
+export async function downloadSharedFile(f, onProgress) {
+  const g = guest();
+  const res = await fetch(`${API}/repos/${g.owner}/${g.repo}/contents/${f.path}`, { headers: { Authorization: `Bearer ${g.token}`, Accept: 'application/vnd.github.raw+json', 'X-GitHub-Api-Version': '2022-11-28' } });
+  if (!res.ok) throw new Error(res.status === 404 ? 'Dosya henüz paylaşılmamış' : `İndirilemedi (${res.status})`);
+  const total = Number(res.headers.get('content-length')) || f.size || 0;
+  const reader = res.body.getReader(), parts = [];
+  let got = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parts.push(value); got += value.length;
+    if (total) onProgress?.(Math.min(1, got / total));
+  }
+  const { db } = await import('./db.js');
+  await db.putFile(f.key, new Blob(parts, { type: f.type === 'pdf' ? 'application/pdf' : 'application/epub+zip' }));
+}
+// Misafirin kendi okuma bilgisi (ilerleme, yer imi, vurgu) yalnızca kendi cihazında saklanır
+export const GUEST_FIELDS = ['progress', 'progress2', 'bookmarks', 'bookmarks2', 'bookmarksDel', 'bookmarksDel2', 'highlights', 'highlights2', 'highlightsDel', 'highlightsDel2', 'readingSeconds', 'status', 'startDate', 'endDate', 'vocab', 'vocabDel'];
+export async function saveGuestReading(book) {
+  const { db } = await import('./db.js');
+  const o = {};
+  for (const k of GUEST_FIELDS) if (book[k] !== undefined) o[k] = book[k];
+  await db.putMeta(`guest:${book.id}`, o);
+}
 // Misafir: paylaşım deposundaki kapağı bir kez indirir, sonra bu cihazdan gösterir
 export async function shareCoverBlob(ref) {
   const path = ref.replace(/^share:/, '');
@@ -104,6 +155,7 @@ export async function publishShare() {
   const { token, owner } = admin();
   const { text, need } = sharedData();
   await uploadCovers(token, owner, need);
+  await uploadFiles(token, owner);
   await putFile(token, owner, SHARE_REPO, SHARED_FILE, text, `Paylaşılan kitaplar: ${state.books.filter(b => b.shared).length}`);
   lastPublished = text.replace(/"savedAt":"[^"]*"/, '');
 }
@@ -193,7 +245,10 @@ export async function login(username, password) {
 export async function loadShared() {
   const g = guest();
   const text = await api(g.token, g.owner, g.repo, `/contents/${SHARED_FILE}`, { raw: true });
-  return JSON.parse(text).books || [];
+  const books = JSON.parse(text).books || [];
+  const { db } = await import('./db.js');
+  for (const b of books) { const mine = await db.getMeta(`guest:${b.id}`); if (mine) Object.assign(b, mine); }
+  return books;
 }
 
 // ---------- Yorumlar (paylaşım deposunda kitap başına bir "issue") ----------

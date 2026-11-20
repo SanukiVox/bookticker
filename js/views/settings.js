@@ -7,7 +7,7 @@ import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 import { driveSectionShell, fillDriveSection } from './drivesettings.js';
 
-export const APP_VERSION = '1.39.5';
+export const APP_VERSION = '1.40.0';
 
 export async function renderSettings(view) {
   { const sh = await import('../share.js'); if (sh.isGuest()) return (await import('./sharing.js')).renderGuestSettings(view, sh.guest()); }

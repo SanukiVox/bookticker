@@ -77,9 +77,10 @@ export async function renderDetail(view, [id]) {
       ${b.author ? `<a class="by" href="#/author/${enc(b.author)}" style="display:inline-block">${esc(b.author)}</a>` : ''}
       ${b.series ? `<div class="ser">${esc(b.series)}${b.seriesOrder ? ` · ${b.seriesOrder}. kitap` : ''}</div>` : ''}
       ${b.owned ? '<div class="owned-tag">📚 Kütüphanemde</div>' : ''}
-      <div class="admin-only" style="margin-top:8px"><button class="chip ${b.shared ? 'on' : ''}" id="share-tg">👥 ${b.shared ? 'Paylaşıldı' : 'Paylaş'}</button></div></div>
+      <div class="admin-only" style="margin-top:8px"><button class="chip ${b.shared ? 'on' : ''}" id="share-tg">👥 ${b.shared ? 'Paylaşıldı' : 'Paylaş'}</button>${b.shared && (b.file || b.file2) ? ` <button class="chip ${b.shareFile ? 'on' : ''}" id="sharefile-tg">📄 ${b.shareFile ? 'Dosyası paylaşıldı' : 'Dosyasını da paylaş'}</button>` : ''}</div></div>
     <div class="status-pick">${state.options.statuses.map(s => `<button class="chip ${b.status === s.name ? 'on' : ''}" data-st="${esc(s.name)}">${s.emoji} ${esc(s.name)}</button>`).join('')}</div>
     ${seriesWarn}
+    ${state.guest && (b.file || b.file2) ? `<div class="section" id="guest-read"><h3>📖 Oku</h3>${[1, 2].filter(s => (s === 2 ? b.file2 : b.file)).map(s => `<button class="btn primary block" data-gread="${s}" style="margin-top:6px">📖 ${b.file && b.file2 ? (s === 2 ? b.file2 : b.file).lang === 'tr' ? 'Türkçesini oku' : 'Orijinalini oku' : 'Kitabı oku'} <span class="muted small">(${((s === 2 ? b.file2 : b.file).type || '').toUpperCase()})</span></button>`).join('')}<div class="muted small" id="gread-msg" style="margin-top:6px"></div></div>` : ''}
     ${fileSectionShell()}
     ${vocabSection(b)}
     ${highlightsSection(b)}
@@ -129,6 +130,27 @@ export async function renderDetail(view, [id]) {
     m.openReEvaluate(b.id);
   });
   $('#basis-guide', view)?.addEventListener('click', async () => (await import('../ui.js')).openGuide());
+  $('#sharefile-tg', view)?.addEventListener('click', async e => {
+    const btn = e.currentTarget;
+    b.shareFile = !b.shareFile; await saveBook(b);
+    btn.disabled = true; btn.textContent = b.shareFile ? '📤 Dosya yükleniyor…' : '…';
+    try { await (await import('../share.js')).publishShare(); toast(b.shareFile ? '📄 Dosya paylaşıldı' : 'Dosya paylaşımı kapatıldı'); }
+    catch (err) { toast(`Paylaşım güncellenemedi: ${err.message}`); }
+    route_refresh(view, b);
+  });
+  $$('[data-gread]', view).forEach(x => x.addEventListener('click', async () => {
+    const slot = Number(x.dataset.gread), f = slot === 2 ? b.file2 : b.file;
+    const { db } = await import('../db.js');
+    const go = () => { location.hash = `#/read/${enc(b.id)}${slot === 2 ? '?f=2' : ''}`; };
+    if (await db.getFile(f.key)) return go();
+    const msg = $('#gread-msg', view);
+    $$('[data-gread]', view).forEach(y => { y.disabled = true; });
+    try {
+      await (await import('../share.js')).downloadSharedFile(f, p => { msg.textContent = `İndiriliyor… %${Math.round(p * 100)}`; });
+      await db.loadFileKeys();
+      go();
+    } catch (err) { msg.textContent = err.message; $$('[data-gread]', view).forEach(y => { y.disabled = false; }); }
+  }));
   $('#share-tg', view)?.addEventListener('click', async () => {
     b.shared = !b.shared; await saveBook(b);
     try { await (await import('../share.js')).publishShare(); toast(b.shared ? '👥 Paylaşıldı' : 'Paylaşımdan çıkarıldı'); }
@@ -190,3 +212,5 @@ export async function renderDetail(view, [id]) {
     sheet({ title: displayTitle(b), body: `<img src="${img.src}" alt="" style="width:100%;border-radius:10px">` });
   }));
 }
+
+function route_refresh(view, b) { renderDetail(view, [b.id]); }
