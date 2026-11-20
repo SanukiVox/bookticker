@@ -3,7 +3,7 @@ import { state, getBook, saveBook, saveSettings, displayTitle, statusInfo } from
 import { db } from '../db.js';
 import { esc, ICON, sheet, toast, $, $$ } from '../ui.js';
 import { getFileBlob, addReadingTime, formatDuration, slotBook, slotFile, langLabel, realBook } from '../files.js';
-import { watchSelection } from './wordpick.js';
+import { watchSelection, SEL_DELAYS } from './wordpick.js';
 import { addWord, findWord } from './vocab.js';
 import { HL_COLORS, newHighlight, removeHighlight } from './highlights.js';
 import { openFinished } from './finished.js';
@@ -36,10 +36,12 @@ function typoBlocks(st) {
   const chips = (key, list, cur) => list.map(([k, l]) => `<button class="chip ${String(cur) === k ? 'on' : ''}" data-${key}="${k}">${l}</button>`).join('');
   return `<div class="f-block"><h3>Satır aralığı</h3><div class="chip-wrap">${chips('lh', LINE_HEIGHTS, st.lineHeight || 'pub')}</div></div>
     <div class="f-block"><h3>Kenar boşluğu</h3><div class="chip-wrap">${chips('mg', Object.entries(MARGINS).map(([k, [l]]) => [k, l]), st.margin || 's')}</div></div>
-    <div class="f-block"><h3>Hizalama</h3><div class="chip-wrap">${chips('al', ALIGNS, st.align || 'pub')}</div></div>`;
+    <div class="f-block"><h3>Hizalama</h3><div class="chip-wrap">${chips('al', ALIGNS, st.align || 'pub')}</div></div>
+    <div class="f-block"><h3>Seçim penceresi (vurgula, not, çeviri)</h3><div class="chip-wrap">${chips('sd', SEL_DELAYS, st.selDelay || '1.5')}</div>
+      <div class="muted small" style="margin-top:6px">Kelimeye basılı tutup seçtikten sonra pencerenin açılması için seçimin bu kadar süre kalması gerekir.</div></div>`;
 }
 function wireTypo(el, st, apply) {
-  for (const [key, prop] of [['lh', 'lineHeight'], ['mg', 'margin'], ['al', 'align']]) {
+  for (const [key, prop] of [['lh', 'lineHeight'], ['mg', 'margin'], ['al', 'align'], ['sd', 'selDelay']]) {
     $$(`[data-${key}]`, el).forEach(b => b.addEventListener('click', () => {
       st[prop] = b.dataset[key];
       $$(`[data-${key}]`, el).forEach(x => x.classList.toggle('on', x === b));

@@ -2,6 +2,11 @@
 // Sayfa sayfa modunda sayfanın üstünde dokunma katmanı olduğu için tarayıcının kendi seçimi çalışmaz:
 // basılı tutunca altındaki kelimeyi biz seçeriz, parmak kaldırılmadan sürüklenirse seçim genişler.
 import { esc, sheet, toast, $ } from '../ui.js';
+import { state } from '../store.js';
+
+// Seçim penceresi, seçim bu kadar süre değişmeden kalınca açılır (Aa → Seçim penceresi)
+export const SEL_DELAYS = [['0.6', 'Hemen'], ['1.5', '1,5 sn'], ['2.5', '2,5 sn'], ['4', '4 sn']];
+const selDelay = () => (Number(state.settings.reader?.selDelay) || 1.5) * 1000;
 
 const LONG_MS = 450;
 const WORD = /[\p{L}\p{N}'’\-]/u;
@@ -220,7 +225,7 @@ export function watchSelection(stage, mount, { lang = () => 'orig', onSave, isSa
   const card = document.createElement('div');
   card.className = 'sel-card hidden';
   mount.appendChild(card);
-  let last = '', pending = '', shownFor = '', dismissed = '', ctxNow = '', trNow = '';
+  let last = '', pending = '', pendingAt = 0, shownFor = '', dismissed = '', ctxNow = '', trNow = '';
   const hide = () => { card.classList.add('hidden'); shownFor = ''; };
   const show = async text => {
     shownFor = text;
@@ -279,11 +284,13 @@ export function watchSelection(stage, mount, { lang = () => 'orig', onSave, isSa
     const t = clean(cur.text);
     if (t) ctxNow = cur.ctx;
     if (!t) { last = pending = ''; dismissed = ''; if (shownFor) hide(); return; }
-    // Seçim parmakla genişletilirken her adımda çevirmesin: iki yoklamada aynı kalınca göster
-    if (t !== pending) { pending = t; return; }
+    // Kısa dokunuşta açılmasın: seçim, ayarlanan süre boyunca değişmeden kalınca göster
+    if (t !== pending) { pending = t; pendingAt = Date.now(); return; }
     if (t === last || t === dismissed) return;
+    if (Date.now() - pendingAt < selDelay()) return;
     last = t;
+    navigator.vibrate?.(10);
     show(t);
-  }, 450);
+  }, 150);
   return () => { clearInterval(timer); card.remove(); };
 }
