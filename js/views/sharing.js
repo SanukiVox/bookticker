@@ -34,38 +34,16 @@ export async function renderLogin(view, { landing = false } = {}) {
 // Misafir için ayarlar: okuma istatistikleri, görünüm tercihleri, indirilen dosyalar
 export async function renderGuestSettings(view, g) {
   const { state: st, saveSettings } = await import('../store.js');
-  const { readingStats, formatDuration, formatSize, progressOf } = await import('../files.js');
-  const { goalCard, wireGoal } = await import('./reading.js');
+  const { formatSize } = await import('../files.js');
   const { applyTheme } = await import('../ui.js');
   const { db } = await import('../db.js');
-  const s = st.settings, r = readingStats();
-  const books = st.books;
-  const reading = books.filter(b => b.status === 'Okunuyor');
-  const done = books.filter(b => b.status === 'Okundu');
-  const byTime = books.filter(b => b.readingSeconds > 0).sort((a, b) => b.readingSeconds - a.readingSeconds);
+  const s = st.settings, books = st.books;
   const keys = new Set(await db.allFileKeys());
   const local = books.flatMap(b => [b.file, b.file2]).filter(f => f?.key && keys.has(f.key));
   const localBytes = local.reduce((t, f) => t + (f.size || 0), 0);
-  const max = Math.max(...r.last7.map(x => x.sec), 1);
-  const days = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
   const sel = (id, cur, opts) => `<select id="${id}">${opts.map(([v, l]) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
   view.innerHTML = `<div class="page-head"><h1>Ayarlar</h1></div>
-    <div class="section"><p>👋 Merhaba <b>${esc(g.name || g.user)}</b></p><p class="muted small">Seninle paylaşılan ${books.length} kitabı görüyorsun. Kitap sayfalarının altından yorum ve yıldız bırakabilirsin.</p></div>
-
-    <h3 style="margin:20px 0 10px">📊 Okuma istatistiklerim</h3>
-    ${goalCard()}
-    <div class="section"><h3>Okuma süresi</h3>
-      <div class="stat-grid" style="margin-bottom:6px;grid-template-columns:repeat(3,1fr)">
-        <div><div class="n" style="font:700 22px/1.1 var(--serif)">${formatDuration(r.todaySec)}</div><div class="muted small">Bugün</div></div>
-        <div><div class="n" style="font:700 22px/1.1 var(--serif)">${formatDuration(r.weekSec)}</div><div class="muted small">Son 7 gün</div></div>
-        <div><div class="n" style="font:700 22px/1.1 var(--serif)">${r.streak ? `🔥 ${r.streak} gün` : '—'}</div><div class="muted small">Art arda okuma</div></div></div>
-      <div class="week-bars">${r.last7.map(x => `<div><i class="${x.sec ? '' : 'zero'}" style="height:${x.sec ? Math.max(6, (x.sec / max) * 70) : 3}px" title="${formatDuration(x.sec)}"></i>${days[x.d.getDay()]}</div>`).join('')}</div>
-      <div class="muted small" style="margin-top:8px">Bu ay ${formatDuration(r.monthSec)} · ${r.monthDays} gün okudun · Toplam ${formatDuration(r.totalSec)}${r.best > 1 ? ` · En uzun seri ${r.best} gün` : ''}</div></div>
-    <div class="stat-grid">
-      <div class="stat"><div class="n">${reading.length}</div><div class="l">📖 Okuyorum</div></div>
-      <div class="stat"><div class="n">${done.length}</div><div class="l">✅ Okudum</div></div>
-      <div class="stat"><div class="n">${books.length - reading.length - done.length}</div><div class="l">📚 Okunacak</div></div></div>
-    ${byTime.length ? `<div class="section"><h3>Kitaplarım</h3>${byTime.map(b => { const p = progressOf(b); return `<a class="hbar" href="#/book/${enc(b.id)}"><span>${esc(displayTitle(b))}</span><b>${formatDuration(b.readingSeconds)}</b><div class="track"><span style="width:${p ?? 0}%"></span></div></a>`; }).join('')}<div class="muted small" style="margin-top:6px">Çubuk: kitapta ne kadar ilerlediğin</div></div>` : '<div class="section muted small">Bir kitabı açıp okumaya başlayınca istatistiklerin burada birikir.</div>'}
+    <div class="section"><p>👋 Merhaba <b>${esc(g.name || g.user)}</b></p><p class="muted small">Seninle paylaşılan ${books.length} kitabı görüyorsun. Kitap sayfalarının altından yorum ve yıldız bırakabilirsin. Okuma istatistiklerin <a href="#/reading" style="text-decoration:underline">Okuma</a> sekmesinde.</p></div>
 
     <div class="form-group-title">Görünüm</div>
     <div class="form-group">
@@ -84,7 +62,6 @@ export async function renderGuestSettings(view, g) {
     </div>
 
     <div class="form-group"><button class="set-row" id="lo" style="width:100%;border:0;background:none;color:var(--danger)">Çıkış yap</button></div>`;
-  wireGoal(view);
   const set = (id, fn) => $(id, view).addEventListener('change', async e => { fn(e.target); await saveSettings(); });
   set('#g-theme', t => { s.theme = t.value; applyTheme(); });
   set('#g-cover', t => { s.coverPref = t.value; });
@@ -214,4 +191,37 @@ function openAddAdmin(sh, done) {
       });
     },
   });
+}
+
+// Misafir: Okuma sekmesi — okuduğu kitaplar ve istatistikleri (yalnız kendi cihazında)
+export async function renderGuestReading(view) {
+  const { readingStats, formatDuration, progressOf } = await import('../files.js');
+  const { goalCard, wireGoal } = await import('./reading.js');
+  const { coverHTML, hydrateCovers } = await import('../ui.js');
+  const r = readingStats(), books = state.books;
+  const reading = books.filter(b => b.status === 'Okunuyor');
+  const done = books.filter(b => b.status === 'Okundu');
+  const byTime = books.filter(b => b.readingSeconds > 0).sort((a, b) => b.readingSeconds - a.readingSeconds);
+  const max = Math.max(...r.last7.map(x => x.sec), 1);
+  const days = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
+  view.innerHTML = `<div class="page-head"><h1>Okuma</h1></div>
+    ${reading.length ? `<h3 style="margin:4px 0 10px">📖 Okuduklarım</h3>${reading.map(b => { const p = progressOf(b); return `<a class="section" href="#/book/${enc(b.id)}" style="display:flex;gap:12px;align-items:center;color:inherit"><div style="width:52px;flex:none">${coverHTML(b, { badge: false })}</div><div style="flex:1;min-width:0"><b>${esc(displayTitle(b))}</b><div class="muted small">${esc(b.author || '')}</div>${p != null ? `<div class="progress" style="margin-top:6px"><span style="width:${p}%"></span></div><div class="muted small">%${Math.round(p)}</div>` : ''}</div></a>`; }).join('')}` : ''}
+    <h3 style="margin:20px 0 10px">İstatistik</h3>
+    ${goalCard()}
+    <div class="section"><h3>Okuma süresi</h3>
+      <div class="stat-grid" style="margin-bottom:6px;grid-template-columns:repeat(3,1fr)">
+        <div><div class="n" style="font:700 22px/1.1 var(--serif)">${formatDuration(r.todaySec)}</div><div class="muted small">Bugün</div></div>
+        <div><div class="n" style="font:700 22px/1.1 var(--serif)">${formatDuration(r.weekSec)}</div><div class="muted small">Son 7 gün</div></div>
+        <div><div class="n" style="font:700 22px/1.1 var(--serif)">${r.streak ? `🔥 ${r.streak} gün` : '—'}</div><div class="muted small">Art arda okuma</div></div></div>
+      <div class="week-bars">${r.last7.map(x => `<div><i class="${x.sec ? '' : 'zero'}" style="height:${x.sec ? Math.max(6, (x.sec / max) * 70) : 3}px" title="${formatDuration(x.sec)}"></i>${days[x.d.getDay()]}</div>`).join('')}</div>
+      <div class="muted small" style="margin-top:8px">Bu ay ${formatDuration(r.monthSec)} · ${r.monthDays} gün okudun · Toplam ${formatDuration(r.totalSec)}${r.best > 1 ? ` · En uzun seri ${r.best} gün` : ''}</div></div>
+    <div class="stat-grid">
+      <div class="stat"><div class="n">${reading.length}</div><div class="l">📖 Okuyorum</div></div>
+      <div class="stat"><div class="n">${done.length}</div><div class="l">✅ Okudum</div></div>
+      <div class="stat"><div class="n">${books.length - reading.length - done.length}</div><div class="l">📚 Okunacak</div></div></div>
+    ${byTime.length ? `<div class="section"><h3>Kitaplarım</h3>${byTime.map(b => { const p = progressOf(b); return `<a class="hbar" href="#/book/${enc(b.id)}"><span>${esc(displayTitle(b))}</span><b>${formatDuration(b.readingSeconds)}</b><div class="track"><span style="width:${p ?? 0}%"></span></div></a>`; }).join('')}<div class="muted small" style="margin-top:6px">Çubuk: kitapta ne kadar ilerlediğin</div></div>` : '<div class="section muted small">Bir kitabı açıp okumaya başlayınca istatistiklerin burada birikir.</div>'}
+
+`;
+  hydrateCovers(view);
+  wireGoal(view);
 }

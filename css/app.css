@@ -568,7 +568,7 @@ details.lv summary::-webkit-details-marker { display: none; }
 .owned-tag { display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
 
 /* Kullanıcı girişi (misafir): salt okunur görünüm */
-body.guest .tab-add, body.guest #tabbar a[data-tab="reading"], body.guest .admin-only, body.guest #fav, body.guest a[aria-label="Düzenle"],
+body.guest .tab-add, body.guest .admin-only, body.guest #fav, body.guest a[aria-label="Düzenle"],
 body.guest #file-sec, body.guest .my-reading, body.guest #ask-book, body.guest #gr-edit, body.guest #basis-reeval,
 body.guest .fbadge, body.guest a[href*="?summary=1"] { display: none !important; }
 /* Yorumlar */

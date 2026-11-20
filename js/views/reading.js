@@ -36,6 +36,7 @@ export function suggestions(limit = 5) {
 }
 
 export async function renderReading(view) {
+  if (state.guest) return (await import('./sharing.js')).renderGuestReading(view);
   const reading = state.books.filter(b => b.status === 'Okunuyor');
   const sugg = suggestions(6);
   const taste = tasteRecommendations(10).filter(t => !sugg.some(s => s.b.id === t.b.id));
