@@ -580,3 +580,8 @@ body.guest .fbadge, body.guest a[href*="?summary=1"] { display: none !important;
 .cm-new textarea { min-height: 70px; }
 .cm-new .stars button.on { color: #e3a529; }
 .login-hero { text-align: center; padding: 28px 0 8px; } .login-hero .big { font-size: 46px; } .login-hero h1 { margin: 6px 0 2px; font-family: var(--serif); }
+
+/* Şifreyi göster düğmesi */
+.pw-wrap { position: relative; }
+.pw-wrap input { padding-right: 46px; width: 100%; }
+.pw-eye { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); background: none; border: 0; font-size: 20px; padding: 6px 8px; cursor: pointer; line-height: 1; }

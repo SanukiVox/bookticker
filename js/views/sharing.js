@@ -11,7 +11,7 @@ export async function renderLogin(view, { landing = false } = {}) {
     <div class="section"><p class="muted small">Kullanıcı adın ve şifrenle gir.</p>
       <div class="form-group">
         <div class="field"><label for="lg-u">Kullanıcı adı</label><input id="lg-u" autocomplete="username" autocapitalize="off" autocorrect="off"></div>
-        <div class="field"><label for="lg-p">Şifre</label><input id="lg-p" type="password" autocomplete="current-password"></div>
+        <div class="field"><label for="lg-p">Şifre</label><div class="pw-wrap"><input id="lg-p" type="password" autocomplete="current-password"><button type="button" class="pw-eye" id="lg-eye" aria-label="Şifreyi göster">👁</button></div></div>
       </div>
       <button class="btn primary block" id="lg-go">Giriş yap</button>
       <div class="muted small" id="lg-msg" style="margin-top:8px"></div></div>`;
@@ -22,6 +22,12 @@ export async function renderLogin(view, { landing = false } = {}) {
     catch (e) { msg.textContent = e.message; btn.disabled = false; }
   };
   $('#lg-go', view).addEventListener('click', go);
+  $('#lg-eye', view).addEventListener('click', () => {
+    const p = $('#lg-p', view), show = p.type === 'password';
+    p.type = show ? 'text' : 'password';
+    $('#lg-eye', view).textContent = show ? '🙈' : '👁';
+    $('#lg-eye', view).setAttribute('aria-label', show ? 'Şifreyi gizle' : 'Şifreyi göster');
+  });
   $('#lg-p', view).addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
 }
 
