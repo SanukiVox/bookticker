@@ -285,6 +285,7 @@ function stampFields(b, now) {
 }
 
 export async function saveBook(book) {
+  if (state.guest) return; // misafir: salt okunur
   book = book?.__real || book; // 2. dosya görünümü (files.js slotBook)
   book.updatedAt = Date.now();
   if (book.status === 'Okundu' && !book.endDate) book.endDate = today();
@@ -305,6 +306,7 @@ export async function saveBooks(books) {
 }
 
 export async function deleteBook(id) {
+  if (state.guest) return;
   const b = getBook(id);
   await db.deleteBook(id);
   if (b?.coverTr) await db.deleteCover(b.coverTr);

@@ -566,3 +566,16 @@ details.lv summary::-webkit-details-marker { display: none; }
 .re-stats { margin-top: 10px; padding: 8px 10px; border-radius: 8px; background: var(--surface-2); }
 .btn:disabled { opacity: .45; }
 .owned-tag { display: inline-block; margin-top: 6px; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+
+/* Kullanıcı girişi (misafir): salt okunur görünüm */
+body.guest .tab-add, body.guest #tabbar a[data-tab="reading"], body.guest .admin-only, body.guest #fav, body.guest a[aria-label="Düzenle"],
+body.guest .status-pick, body.guest #file-sec, body.guest .my-reading, body.guest #ask-book, body.guest #gr-edit, body.guest #basis-reeval,
+body.guest .fbadge, body.guest a[href*="?summary=1"] { display: none !important; }
+/* Yorumlar */
+.cm { padding: 10px 0; border-top: 1px solid var(--line); }
+.cm-h { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; margin-bottom: 4px; }
+.cm-h .muted { margin-left: auto; }
+.cm-st { color: #e3a529; letter-spacing: 1px; }
+.cm-new { border-top: 1px solid var(--line); padding-top: 10px; display: grid; gap: 8px; }
+.cm-new textarea { min-height: 70px; }
+.cm-new .stars button.on { color: #e3a529; }

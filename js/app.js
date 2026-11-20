@@ -32,6 +32,8 @@ const routes = [
   [/^\/vocab(?:\/([^/]+))?$/, renderVocab, 'reading'],
   [/^\/upcoming$/, renderUpcoming, 'reading'],
   [/^\/year(?:\/(\d{4}))?$/, renderYear, 'reading'],
+  [/^\/giris$/, async v => (await import('./views/sharing.js')).renderLogin(v), 'settings'],
+  [/^\/paylasim$/, async v => (await import('./views/sharing.js')).renderSharingAdmin(v), 'settings'],
 ];
 
 const scrollMemory = new Map();
@@ -86,6 +88,17 @@ onSyncChange(() => {
 
 async function start() {
   await Promise.all([load(), loadSync(), (async () => { try { await (await import('./db.js')).db.loadFileKeys(); } catch { /* yok */ } })()]);
+  // Kullanıcı girişi yapılmışsa: yalnızca paylaşılan kitaplar, salt okunur; eşitleme ve Drive çalışmaz
+  const share = await import('./share.js');
+  if (share.isGuest()) {
+    state.guest = true; document.body.classList.add('guest');
+    try { state.books = await share.loadShared(); } catch (e) { state.books = []; toast(`Paylaşılan kitaplar alınamadı: ${e.message}`); }
+    applyTheme();
+    window.addEventListener('hashchange', () => { const sh = $('#sheet-root'); if (sh.children.length) { sh.replaceChildren(); document.body.style.overflow = ''; } route(); });
+    await route();
+    return;
+  }
+  onChange(() => share.schedulePublish());
   // Google Drive girişinden dönüş (#access_token=…): adresi düzelt, anahtarı sakla
   try { await (await import('./gdrive.js')).handleRedirect(); } catch { /* yok */ }
   applyTheme();

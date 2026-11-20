@@ -1,6 +1,6 @@
 // Çevrimdışı çalışma: uygulama dosyalarını telefona önbelleğe al.
 // Yeni sürüm yayınlarken VERSION değerini artır.
-const VERSION = 'v1.37.1';
+const VERSION = 'v1.38.0';
 const IMG_CACHE = 'kitapligim-kapaklar';
 const CACHE = `kitapligim-${VERSION}`;
 const FILES = [
@@ -8,7 +8,7 @@ const FILES = [
   'js/app.js', 'js/db.js', 'js/store.js', 'js/ui.js', 'js/io.js', 'js/sync.js', 'js/lookup.js',
   'js/views/library.js', 'js/views/search.js', 'js/views/detail.js', 'js/views/edit.js',
   'js/views/group.js', 'js/views/reading.js', 'js/views/settings.js', 'js/views/github.js', 'js/views/autofill.js',
-  'js/files.js', 'js/views/reader.js', 'js/views/wordpick.js', 'js/views/vocab.js', 'js/views/highlights.js', 'js/views/finished.js', 'js/views/estimate.js', 'js/views/chapsum.js', 'js/views/upcoming.js', 'js/views/yearreview.js', 'js/filebackup.js', 'js/gdrive.js', 'js/views/drivesettings.js', 'js/views/bookfile.js', 'js/views/cropper.js', 'js/views/ask.js', 'js/similar.js', 'js/ai.js', 'js/views/chat.js', 'js/views/aisettings.js', 'js/booktext.js', 'js/analyze.js', 'js/autoeval.js', 'js/views/sendbook.js', 'vendor/anthropic-sdk.min.mjs',
+  'js/files.js', 'js/views/reader.js', 'js/views/wordpick.js', 'js/views/vocab.js', 'js/views/highlights.js', 'js/views/finished.js', 'js/views/estimate.js', 'js/views/chapsum.js', 'js/views/upcoming.js', 'js/views/yearreview.js', 'js/filebackup.js', 'js/gdrive.js', 'js/views/drivesettings.js', 'js/views/bookfile.js', 'js/views/cropper.js', 'js/views/ask.js', 'js/similar.js', 'js/ai.js', 'js/views/chat.js', 'js/views/aisettings.js', 'js/booktext.js', 'js/share.js', 'js/views/sharing.js', 'js/analyze.js', 'js/autoeval.js', 'js/views/sendbook.js', 'vendor/anthropic-sdk.min.mjs',
   'vendor/xlsx.full.min.js', 'vendor/jszip.min.js', 'vendor/epub.min.js',
   'vendor/pdfjs/pdf.min.mjs', 'vendor/pdfjs/pdf.worker.min.mjs',
   ...['FoxitDingbats.pfb', 'FoxitFixed.pfb', 'FoxitFixedBold.pfb', 'FoxitFixedBoldItalic.pfb', 'FoxitFixedItalic.pfb',
@@ -36,6 +36,7 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  if (new URL(req.url).pathname.endsWith('/users.json')) return; // kullanıcı listesi hep güncel
   // İnternetten bulunan kapak görsellerini çevrimdışı için sakla.
   if (new URL(req.url).origin !== location.origin) {
     if (req.destination !== 'image') return;

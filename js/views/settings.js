@@ -7,9 +7,10 @@ import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 import { driveSectionShell, fillDriveSection } from './drivesettings.js';
 
-export const APP_VERSION = '1.37.1';
+export const APP_VERSION = '1.38.0';
 
 export async function renderSettings(view) {
+  { const sh = await import('../share.js'); if (sh.isGuest()) return (await import('./sharing.js')).renderGuestSettings(view, sh.guest()); }
   const s = state.settings;
   const lastBackup = s.lastBackup ? new Date(s.lastBackup).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'hiç alınmadı';
   let storage = '';
@@ -56,6 +57,12 @@ export async function renderSettings(view) {
       <div class="set-row muted small">Toplam: <b id="wsum">${CRITERIA.reduce((t, c) => t + (Number(s.weights[c.key]) || 0), 0)}</b> · Boş kriterler hesaba katılmaz.</div></div>
 
     ${(s.savedFilters || []).length ? `<div class="form-group-title">Kayıtlı filtreler</div><div class="form-group">${s.savedFilters.map((f, i) => `<div class="opt-item"><span class="lbl">⭐ ${esc(f.name)}</span><button class="del" data-delf="${i}" aria-label="Sil">🗑</button></div>`).join('')}</div>` : ''}
+
+    <div class="form-group-title">👥 Paylaşım</div>
+    <div class="form-group">
+      <a class="set-row" href="#/paylasim">👥 Paylaşım, kullanıcılar ve yorumlar<span class="chev"></span></a>
+      <a class="set-row" href="#/giris">🔑 Kullanıcı girişi (paylaşılan kitapları görmek için)<span class="chev"></span></a>
+    </div>
 
     <div class="form-group-title">Verilerim</div>
     <div class="form-group">

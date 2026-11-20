@@ -76,7 +76,8 @@ export async function renderDetail(view, [id]) {
       ${b.originalTitle && b.originalTitle !== b.title ? `<div class="orig">${esc(b.originalTitle)}</div>` : ''}
       ${b.author ? `<a class="by" href="#/author/${enc(b.author)}" style="display:inline-block">${esc(b.author)}</a>` : ''}
       ${b.series ? `<div class="ser">${esc(b.series)}${b.seriesOrder ? ` · ${b.seriesOrder}. kitap` : ''}</div>` : ''}
-      ${b.owned ? '<div class="owned-tag">📚 Kütüphanemde</div>' : ''}</div>
+      ${b.owned ? '<div class="owned-tag">📚 Kütüphanemde</div>' : ''}
+      <div class="admin-only" style="margin-top:8px"><button class="chip ${b.shared ? 'on' : ''}" id="share-tg">👥 ${b.shared ? 'Paylaşıldı' : 'Paylaş'}</button></div></div>
     <div class="status-pick">${state.options.statuses.map(s => `<button class="chip ${b.status === s.name ? 'on' : ''}" data-st="${esc(s.name)}">${s.emoji} ${esc(s.name)}</button>`).join('')}</div>
     ${seriesWarn}
     ${fileSectionShell()}
@@ -103,7 +104,7 @@ export async function renderDetail(view, [id]) {
     ${info.length ? `<div class="section"><h3>Bilgiler</h3><dl class="kv">${info.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl></div>` : ''}
     ${(b.warnings || []).length ? `<div class="section"><h3>İçerik uyarıları</h3><div class="tags">${b.warnings.map(w => `<span class="tag">⚠️ ${esc(w)}</span>`).join('')}</div></div>` : ''}
     ${(b.tags || []).length ? `<div class="section"><h3>Etiketler</h3><div class="tags">${b.tags.map(w => `<span class="tag"># ${esc(w)}</span>`).join('')}</div></div>` : ''}
-    <div class="section"><h3>Benim okumam</h3>
+    <div class="section my-reading"><h3>Benim okumam</h3>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><span>Puanım</span>
         <div style="display:flex;align-items:center;gap:8px"><div class="stars" id="stars">${[1, 2, 3, 4, 5].map(n => `<button class="${(b.myRating || 0) >= n ? 'on' : (b.myRating || 0) >= n - 0.5 ? 'half' : ''}" data-r="${n}" aria-label="${n} yıldız">★</button>`).join('')}</div>
         <b class="small" style="min-width:24px">${b.myRating ? fmtScore(b.myRating) : ''}</b></div></div>
@@ -115,6 +116,7 @@ export async function renderDetail(view, [id]) {
     ${seriesBooks.length > 1 ? `<div class="section"><h3>Serinin kitapları · ${seriesBooks.filter(x => x.status === 'Okundu').length}/${seriesBooks.length}</h3>
       <div class="strip">${seriesBooks.map(x => bookCard(x, x.id === b.id ? 'current' : '')).join('')}</div></div>` : ''}
     ${authorBooks.length ? `<div class="section"><h3>Yazarın diğer kitapları</h3><div class="strip">${authorBooks.map(x => bookCard(x)).join('')}</div></div>` : ''}
+    ${state.guest || b.shared ? '<div class="section" id="comments-sec"></div>' : ''}
     <button class="section" id="ask-book" style="display:flex;align-items:center;gap:10px;width:100%;border:0;text-align:left;color:inherit"><span style="font-size:22px">🤖</span><span style="flex:1"><b>Bu kitap hakkında asistana sor</b><br><span class="muted small">Benzer kitaplar, bana uygun mu, notlarımın özeti…</span></span></button>
     ${similar.length ? `<div class="section"><h3>Buna benzer kitaplar</h3><div class="strip">${similar.map(r => bookCard(r.b, '', r.why.slice(0, 2).join(' · '))).join('')}</div></div>` : ''}
   `;
@@ -127,6 +129,12 @@ export async function renderDetail(view, [id]) {
     m.openReEvaluate(b.id);
   });
   $('#basis-guide', view)?.addEventListener('click', async () => (await import('../ui.js')).openGuide());
+  $('#share-tg', view)?.addEventListener('click', async () => {
+    b.shared = !b.shared; await saveBook(b);
+    try { await (await import('../share.js')).publishShare(); toast(b.shared ? '👥 Paylaşıldı' : 'Paylaşımdan çıkarıldı'); }
+    catch (e) { toast(`Paylaşım güncellenemedi: ${e.message}`); }
+  });
+  if ($('#comments-sec', view)) (await import('./sharing.js')).fillComments($('#comments-sec', view), b, { guestMode: !!state.guest });
   $('#ask-book', view).addEventListener('click', async () => { if (await (await import('../ai.js')).hasKey()) location.hash = `#/chat?book=${enc(b.id)}`; else (await import('./ask.js')).openAsk({ book: b }); });
   $('#gr-edit', view).addEventListener('click', () => sheet({
     title: 'Goodreads puanı',

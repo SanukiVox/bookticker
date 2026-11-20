@@ -32,7 +32,7 @@ export async function renderLibrary(view, [tab = 'books']) {
   if (!total) {
     body = `<div class="empty"><div class="big">📚</div><h2>Kitaplığın boş</h2>
       <p>İlk kitabını ekleyerek başla. Elinde Excel listesi varsa onu da tek seferde aktarabilirsin.</p>
-      <div class="btn-row" style="justify-content:center"><a class="btn primary" href="#/edit/new">Kitap ekle</a><a class="btn" href="#/settings">Excel'den aktar</a></div></div>`;
+      <div class="btn-row" style="justify-content:center"><a class="btn primary" href="#/edit/new">Kitap ekle</a><a class="btn" href="#/settings">Excel'den aktar</a></div><p class="muted small" style="margin-top:14px">Sana kullanıcı adı ve şifre verildiyse: <a href="#/giris" style="text-decoration:underline">Kullanıcı girişi</a></p></div>`;
   } else if (tab === 'books') body = booksTab();
   else if (tab === 'authors') body = authorsTab();
   else body = seriesTab();
