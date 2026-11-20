@@ -8,6 +8,15 @@
    "ct": "Xj3LUBgFYtXBeHiQo/qX6aG1N0ZZAhVmpunGhi6piO1ettZJYlu0mhKd/BrLPWibBo/VqvlYpGqt6QfQ44dgvHVJn1dzKyVVs0nhE+8lojsUaVHfqaHuvUH3tNIaQ3Xfhd7lRJXJ1KOSzhnsF+c9rbWFaVrdsPIQ0EquLlXpD4mjF/S9mC7z0M7UI3G7rQ7fUSQkbOR8r9ikh3t7rkHQbUPU/WwJ85nOkX0mEB21U1jRlnrqYAAWfg==",
    "iter": 310000,
    "created": "2026-11-20T14:53:29.545Z"
+  },
+  "sanukivox": {
+   "name": "Yönetici",
+   "role": "admin",
+   "salt": "Xj23shbgHPhLZehqAO3FyA==",
+   "iv": "V+Qd9l0SxONQ4qhE",
+   "ct": "RTg3BXwlaJxJ2tcn7hkYIoF7GEJY1n9HaLPE7wIsZYkkFtu59GhmWxlCEIxCMKOiOwa9QMJ/mjWlagZ+Hpb5jcE3P6/F7c19sO5M30Kyy0O7YYZuZA2GuqjBsG1ydG6CjoOuRwwkAU+GAMIoXh/aJfOFAQKKH6fWheO8OmVC1bYXF8JxXfI7NHjsKr0ApuqPFZ1enAes43gG9h6ainHI8XULONd/IJnApTeGdcauWARFilwBRw2dPBWd+blJPOMZ2JL1jmV3DW6mY7Bo7XR3yZb4z9YyVFAF",
+   "iter": 310000,
+   "created": "2026-11-20T15:15:36.013Z"
   }
  }
 }
