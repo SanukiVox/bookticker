@@ -215,6 +215,7 @@ function sentenceAround(sel, text) {
   } catch { return ''; }
 }
 
+const TR_TEXT = /[ğışĞİŞ]/;
 export function watchSelection(stage, mount, { lang = () => 'orig', onSave, isSaved, onHighlight } = {}) {
   const card = document.createElement('div');
   card.className = 'sel-card hidden';
@@ -223,6 +224,8 @@ export function watchSelection(stage, mount, { lang = () => 'orig', onSave, isSa
   const hide = () => { card.classList.add('hidden'); shownFor = ''; };
   const show = async text => {
     shownFor = text;
+    // Türkçe metin (dosya Türkçe işaretli ya da metinde ğ/ı/ş var): sözlük yok, yalnız vurgula / not / kopyala
+    if (lang() === 'tr' || TR_TEXT.test(`${text} ${ctxNow}`)) return showTr(text);
     const to = lang() === 'tr' ? 'en' : 'tr', from = to === 'tr' ? 'en' : 'tr';
     const single = !/\s/.test(text) && text.length < 40;
     const q = encodeURIComponent(text);
@@ -254,6 +257,22 @@ export function watchSelection(stage, mount, { lang = () => 'orig', onSave, isSa
     out.innerHTML = res
       ? `<b>${esc(res.main)}</b>${single && res.alts.length ? `<div class="small muted">${res.alts.slice(0, 2).map(a => `${esc(POS[a.pos] || a.pos)}: ${esc(a.words.slice(0, 4).join(', '))}`).join(' · ')}</div>` : ''}`
       : '<span class="muted">Çeviri alınamadı; DeepL ya da Google düğmesini kullan.</span>';
+  };
+  const showTr = text => {
+    card.innerHTML = `<div class="sel-row"><div class="sel-src">${esc(text.length > 160 ? `${text.slice(0, 160)}…` : text)}</div><button class="sel-x" aria-label="Kapat">✕</button></div>
+      ${onHighlight ? `<div class="sel-acts"><button data-hl="yellow"><i style="background:#ffd84d"></i>Vurgula</button><button data-hl="green"><i style="background:#8fdc8f"></i></button><button data-hl="blue"><i style="background:#8cc8ff"></i></button><button data-hl="pink"><i style="background:#ffa3c4"></i></button><button data-note>📝 Not</button></div>` : ''}
+      <div class="sel-links"><button class="sel-copy">📋 Kopyala</button></div>`;
+    card.classList.remove('hidden');
+    card.querySelector('.sel-x').addEventListener('click', () => { dismissed = text; hide(); });
+    card.querySelectorAll('[data-hl]').forEach(b => b.addEventListener('click', async () => {
+      if (await onHighlight({ color: b.dataset.hl })) { dismissed = text; hide(); }
+    }));
+    card.querySelector('[data-note]')?.addEventListener('click', async () => {
+      if (await onHighlight({ color: 'yellow', askNote: true })) { dismissed = text; hide(); }
+    });
+    card.querySelector('.sel-copy').addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(text); toast('📋 Kopyalandı'); } catch { toast('Kopyalanamadı'); }
+    });
   };
   const timer = setInterval(() => {
     const cur = currentSelection(stage);
