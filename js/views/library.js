@@ -5,6 +5,7 @@ import { esc, enc, ICON, booksView, hydrateCovers, $, $$, coverHTML } from '../u
 let statusFilter = '';
 let trOnly = false; // yalnızca Türkçesi olanlar (durum filtresiyle birlikte çalışır)
 let fileOnly = false; // yalnızca dosyası (PDF/EPUB) eklenmiş olanlar
+let ownedOnly = false; // yalnızca kütüphanemde (basılı) olanlar
 const hasFile = b => !!(b.file || b.file2);
 const hasTr = b => b.translation === 'Var';
 let sortBy = 'recent';
@@ -48,6 +49,7 @@ export async function renderLibrary(view, [tab = 'books']) {
   $$('[data-status]', view).forEach(c => c.addEventListener('click', () => { statusFilter = c.dataset.status; renderLibrary(view, [tab]); }));
   $('#tr-only', view)?.addEventListener('click', () => { trOnly = !trOnly; renderLibrary(view, [tab]); });
   $('#file-only', view)?.addEventListener('click', () => { fileOnly = !fileOnly; renderLibrary(view, [tab]); });
+  $('#owned-only', view)?.addEventListener('click', () => { ownedOnly = !ownedOnly; renderLibrary(view, [tab]); });
   $('#tip-go', view)?.addEventListener('click', async () => (await import('./autofill.js')).openAutofill());
   $('#tip-x', view)?.addEventListener('click', () => { state.settings.hideCoverTip = true; saveSettings(); });
   $('#sort', view)?.addEventListener('change', e => { sortBy = e.target.value; renderLibrary(view, [tab]); });
@@ -55,7 +57,8 @@ export async function renderLibrary(view, [tab = 'books']) {
 }
 
 function booksTab() {
-  const pool = state.books.filter(b => (!trOnly || hasTr(b)) && (!fileOnly || hasFile(b)));
+  const pool = state.books.filter(b => (!trOnly || hasTr(b)) && (!fileOnly || hasFile(b)) && (!ownedOnly || b.owned));
+  const ownedCount = state.books.filter(b => b.owned).length;
   const fileCount = state.books.filter(hasFile).length;
   const trCount = state.books.filter(hasTr).length;
   const counts = {};
@@ -77,10 +80,11 @@ function booksTab() {
     <div class="chips">
       <button class="chip ${trOnly ? 'on' : ''}" id="tr-only" aria-pressed="${trOnly}">🇹🇷 Türkçesi olanlar · ${trCount}</button>
       ${fileCount || fileOnly ? `<button class="chip ${fileOnly ? 'on' : ''}" id="file-only" aria-pressed="${fileOnly}">📄 Dosyası olanlar · ${fileCount}</button>` : ''}
+      ${ownedCount || ownedOnly ? `<button class="chip ${ownedOnly ? 'on' : ''}" id="owned-only" aria-pressed="${ownedOnly}">📚 Kütüphanemde · ${ownedCount}</button>` : ''}
     </div>
     <div class="result-bar"><span>${books.length} kitap</span>
       <label>Sırala: <select id="sort">${Object.entries(SORTS).map(([k, [l]]) => `<option value="${k}" ${k === sortBy ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
-    ${books.length ? booksView(books, state.settings.view) : `<div class="empty">${trOnly || fileOnly ? 'Seçili filtrelere uyan kitap yok.' : 'Bu durumda kitap yok.'}</div>`}`;
+    ${books.length ? booksView(books, state.settings.view) : `<div class="empty">${trOnly || fileOnly || ownedOnly ? 'Seçili filtrelere uyan kitap yok.' : 'Bu durumda kitap yok.'}</div>`}`;
 }
 
 function initials(name) {

@@ -14,7 +14,7 @@ const SCOPES = [
 
 const emptyFilters = () => ({
   status: [], genre: [], translation: [], publisher: [], confidence: [], tags: [], noWarnings: [],
-  spicyMin: '', spicyMax: '', scoreMin: '', qualMin: '', grMin: '', favorite: false, cover: '',
+  spicyMin: '', spicyMax: '', scoreMin: '', qualMin: '', grMin: '', favorite: false, owned: false, cover: '',
 });
 
 const S = {
@@ -41,6 +41,7 @@ function activeCount(f) {
   for (const k of ['status', 'genre', 'translation', 'publisher', 'confidence', 'tags', 'noWarnings']) n += f[k].length;
   for (const k of ['spicyMin', 'spicyMax', 'scoreMin', 'qualMin', 'grMin', 'cover']) if (f[k] !== '') n++;
   if (f.favorite) n++;
+  if (f.owned) n++;
   return n;
 }
 
@@ -66,6 +67,7 @@ export function applyFilters(books, f, q = '', scope = 'all') {
     if (f.scoreMin !== '') { const s = computeScore(b); if (s === null || s < Number(f.scoreMin)) return false; }
     if (f.qualMin !== '' && f.qualMin != null) { const q = computeQuality(b); if (q === null || q < Number(f.qualMin)) return false; }
     if (f.favorite && !b.favorite) return false;
+    if (f.owned && !b.owned) return false;
     if (f.cover === 'yes' && !(b.coverTr || b.coverOrig)) return false;
     if (f.cover === 'no' && (b.coverTr || b.coverOrig)) return false;
     return true;
@@ -124,6 +126,7 @@ function renderFilterBar(view) {
   if (S.f.qualMin !== '' && S.f.qualMin != null) pills.push(['qualMin', '', `Genel ≥ ${S.f.qualMin}`]);
   if (S.f.grMin !== '') pills.push(['grMin', '', S.f.grMin === 'none' ? 'Goodreads puanı yok' : `Goodreads ≥ ${S.f.grMin}`]);
   if (S.f.favorite) pills.push(['favorite', '', '❤️ Favori']);
+  if (S.f.owned) pills.push(['owned', '', '📚 Kütüphanemde']);
   if (S.f.cover) pills.push(['cover', '', S.f.cover === 'yes' ? 'Kapaklı' : 'Kapaksız']);
 
   bar.innerHTML = `<div class="chips">
@@ -215,6 +218,7 @@ function openFilterSheet(view) {
     ${state.options.warnings.length ? `<div class="f-block"><h3>Bu içerik uyarıları OLMASIN</h3><div class="chip-wrap">${state.options.warnings.map(o => `<button class="chip ${f.noWarnings.includes(o.name) ? 'on' : ''}" data-k="noWarnings" data-v="${esc(o.name)}">${esc(o.name)}</button>`).join('')}</div></div>` : ''}
     <div class="f-block"><h3>Diğer</h3><div class="chip-wrap">
       <button class="chip ${f.favorite ? 'on' : ''}" data-flag="favorite">❤️ Sadece favoriler</button>
+      <button class="chip ${f.owned ? 'on' : ''}" data-flag2="owned">📚 Kütüphanemde</button>
       <button class="chip ${f.cover === 'yes' ? 'on' : ''}" data-cover="yes">🖼️ Kapağı olan</button>
       <button class="chip ${f.cover === 'no' ? 'on' : ''}" data-cover="no">▫️ Kapağı olmayan</button></div></div>`;
   sheet({
@@ -230,6 +234,7 @@ function openFilterSheet(view) {
       }));
       $$('[data-num]', el).forEach(s => s.addEventListener('change', () => { f[s.dataset.num] = s.value; count(); }));
       $('[data-flag]', el).addEventListener('click', e => { f.favorite = !f.favorite; e.currentTarget.classList.toggle('on'); count(); });
+      $('[data-flag2]', el).addEventListener('click', e => { f.owned = !f.owned; e.currentTarget.classList.toggle('on'); count(); });
       $$('[data-cover]', el).forEach(c => c.addEventListener('click', () => {
         f.cover = f.cover === c.dataset.cover ? '' : c.dataset.cover;
         $$('[data-cover]', el).forEach(x => x.classList.toggle('on', x.dataset.cover === f.cover)); count();

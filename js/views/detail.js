@@ -75,7 +75,8 @@ export async function renderDetail(view, [id]) {
     <div class="d-title"><h1>${esc(displayTitle(b))}</h1>
       ${b.originalTitle && b.originalTitle !== b.title ? `<div class="orig">${esc(b.originalTitle)}</div>` : ''}
       ${b.author ? `<a class="by" href="#/author/${enc(b.author)}" style="display:inline-block">${esc(b.author)}</a>` : ''}
-      ${b.series ? `<div class="ser">${esc(b.series)}${b.seriesOrder ? ` · ${b.seriesOrder}. kitap` : ''}</div>` : ''}</div>
+      ${b.series ? `<div class="ser">${esc(b.series)}${b.seriesOrder ? ` · ${b.seriesOrder}. kitap` : ''}</div>` : ''}
+      ${b.owned ? '<div class="owned-tag">📚 Kütüphanemde</div>' : ''}</div>
     <div class="status-pick">${state.options.statuses.map(s => `<button class="chip ${b.status === s.name ? 'on' : ''}" data-st="${esc(s.name)}">${s.emoji} ${esc(s.name)}</button>`).join('')}</div>
     ${seriesWarn}
     ${fileSectionShell()}

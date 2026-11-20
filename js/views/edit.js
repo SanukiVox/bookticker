@@ -91,6 +91,7 @@ export async function renderEdit(view, [id], query) {
         <div class="field"><label for="f-inVisuals">Görsellerde var mı</label><input id="f-inVisuals" data-field="inVisuals" data-suggest="inVisuals" value="${esc(b.inVisuals)}"></div>
         <div class="field inline"><label for="f-priority">Okuma önceliği (1, 2, 3…)</label><input id="f-priority" data-field="priority" type="number" inputmode="numeric" min="1" value="${b.priority ?? ''}"></div>
         <div class="field inline"><label>❤️ Favori</label><span class="toggle"><input type="checkbox" id="f-favorite" ${b.favorite ? 'checked' : ''}><span></span></span></div>
+        <div class="field inline"><label>📚 Kütüphanemde var</label><span class="toggle"><input type="checkbox" id="f-owned" ${b.owned ? 'checked' : ''}><span></span></span></div>
       </div>
 
       <div class="form-group-title" style="display:flex;align-items:center;gap:8px"><span style="flex:1">💗 Romantizm puanı: <b id="live-score">${computeScore(b)?.toFixed(1) ?? '—'}</b></span><button type="button" class="mini-btn" id="est-open">🤖 Tahmin et</button><button type="button" class="mini-btn" id="open-guide">📏 Rehber</button></div>
@@ -146,6 +147,7 @@ export async function renderEdit(view, [id], query) {
     if (f === 'title' || f === 'originalTitle') checkDup();
   }));
   $('#f-favorite', form).addEventListener('change', e => { b.favorite = e.target.checked; dirty = true; });
+  $('#f-owned', form).addEventListener('change', e => { b.owned = e.target.checked; dirty = true; });
 
   function checkDup() {
     const t = norm(b.title), o = norm(b.originalTitle);

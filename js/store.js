@@ -242,7 +242,7 @@ export function newBook(partial = {}) {
     title: '', originalTitle: '', author: '', series: '', seriesOrder: null,
     genre: '', translation: '', publisher: '', status: 'Okunacak', priority: null,
     scores: {}, quality: {}, spicy: null, goodreads: null, goodreadsVotes: null, pubYear: null, trDate: '', confidence: '', review: '', summary: '',
-    warnings: [], tags: [], inVisuals: '', favorite: false,
+    warnings: [], tags: [], inVisuals: '', favorite: false, owned: false,
     coverTr: null, coverOrig: null,
     startDate: '', endDate: '', myRating: null, notes: '', quotes: '',
     createdAt: Date.now(), updatedAt: Date.now(),
