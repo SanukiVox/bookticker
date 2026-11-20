@@ -3,6 +3,7 @@ import { goodreadsUrl, formatVotes, formatPubDate, isUpcoming, computeQuality, Q
 import { state, getBook, saveBook, computeScore, CRITERIA, SPICY_LABELS, statusInfo, displayTitle, booksInSeries, booksByAuthor } from '../store.js';
 import { esc, enc, ICON, coverHTML, bookCard, hydrateCovers, peppers, toast, sheet, $, $$, coverKeyOf, fmtScore } from '../ui.js';
 import { fileSectionShell, fillFileSection } from './bookfile.js';
+import { formatDuration } from '../files.js';
 import { similarTo } from '../similar.js';
 import { vocabSection } from './vocab.js';
 import { openFinished } from './finished.js';
@@ -80,7 +81,7 @@ export async function renderDetail(view, [id]) {
       <div class="admin-only" style="margin-top:8px"><button class="chip ${b.shared ? 'on' : ''}" id="share-tg">👥 ${b.shared ? 'Paylaşıldı' : 'Paylaş'}</button>${b.shared && (b.file || b.file2) ? ` <button class="chip ${b.shareFile ? 'on' : ''}" id="sharefile-tg">📄 ${b.shareFile ? 'Dosyası paylaşıldı' : 'Dosyasını da paylaş'}</button>` : ''}</div></div>
     <div class="status-pick">${state.options.statuses.map(s => `<button class="chip ${b.status === s.name ? 'on' : ''}" data-st="${esc(s.name)}">${s.emoji} ${esc(s.name)}</button>`).join('')}</div>
     ${seriesWarn}
-    ${state.guest && (b.file || b.file2) ? `<div class="section" id="guest-read"><h3>📖 Oku</h3>${[1, 2].filter(s => (s === 2 ? b.file2 : b.file)).map(s => `<button class="btn primary block" data-gread="${s}" style="margin-top:6px">📖 ${b.file && b.file2 ? (s === 2 ? b.file2 : b.file).lang === 'tr' ? 'Türkçesini oku' : 'Orijinalini oku' : 'Kitabı oku'} <span class="muted small">(${((s === 2 ? b.file2 : b.file).type || '').toUpperCase()})</span></button>`).join('')}<div class="muted small" id="gread-msg" style="margin-top:6px"></div></div>` : ''}
+    ${state.guest && (b.file || b.file2) ? guestReadHTML(b) : ''}
     ${fileSectionShell()}
     ${vocabSection(b)}
     ${highlightsSection(b)}
@@ -214,3 +215,22 @@ export async function renderDetail(view, [id]) {
 }
 
 function route_refresh(view, b) { renderDetail(view, [b.id]); }
+
+// Misafir: kitabı okuma / devam etme düğmesi ve ilerlemesi
+function guestReadHTML(b) {
+  const slots = [1, 2].filter(s => (s === 2 ? b.file2 : b.file));
+  const rows = slots.map(s => {
+    const f = s === 2 ? b.file2 : b.file, p = s === 2 ? b.progress2 : b.progress;
+    const pct = p && typeof p.percent === 'number' ? Math.max(0, Math.min(100, p.percent)) : null;
+    const name = b.file && b.file2 ? (f.lang === 'tr' ? 'Türkçesi' : 'Orijinali') : '';
+    const started = pct !== null || p?.loc || p?.page;
+    const label = started ? `▶ ${name ? `${name}: ` : ''}Devam et` : `📖 ${name ? `${name === 'Türkçesi' ? 'Türkçesini' : 'Orijinalini'} oku` : 'Kitabı oku'}`;
+    return `${started ? `<div style="margin-top:10px"><div style="display:flex;justify-content:space-between;align-items:baseline"><span class="small">${name ? `<b>${name}</b> · ` : ''}${esc(p.chapter || p.label || '')}</span><b>%${Math.round(pct || 0)}</b></div>
+        <div class="progress" style="height:8px;margin-top:4px"><span style="width:${pct || 0}%"></span></div>
+        ${p.updatedAt ? `<div class="muted small" style="margin-top:2px">Son okuma: ${new Date(p.updatedAt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long' })}</div>` : ''}</div>` : ''}
+      <button class="btn primary block" data-gread="${s}" style="margin-top:8px">${label} <span class="small" style="opacity:.75">(${(f.type || '').toUpperCase()})</span></button>`;
+  }).join('');
+  return `<div class="section" id="guest-read"><h3>📖 Oku</h3>${rows}
+    ${b.readingSeconds ? `<div class="muted small" style="margin-top:8px">⏱ Bu kitapta toplam ${formatDuration(b.readingSeconds)} okudun</div>` : ''}
+    <div class="muted small" id="gread-msg" style="margin-top:6px"></div></div>`;
+}
