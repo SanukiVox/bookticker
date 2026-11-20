@@ -288,6 +288,8 @@ function stampFields(b, now) {
 export async function saveBook(book) {
   if (state.guest) { // misafir: kitap bilgileri salt okunur; yalnız kendi okuma ilerlemesi bu cihazda saklanır
     book = book?.__real || book;
+    if (book.status === 'Okundu' && !book.endDate) book.endDate = today();
+    if (book.status === 'Okunuyor' && !book.startDate) book.startDate = today();
     return (await import('./share.js')).saveGuestReading(book);
   }
   book = book?.__real || book; // 2. dosya görünümü (files.js slotBook)

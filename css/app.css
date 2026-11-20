@@ -569,7 +569,7 @@ details.lv summary::-webkit-details-marker { display: none; }
 
 /* Kullanıcı girişi (misafir): salt okunur görünüm */
 body.guest .tab-add, body.guest #tabbar a[data-tab="reading"], body.guest .admin-only, body.guest #fav, body.guest a[aria-label="Düzenle"],
-body.guest .status-pick, body.guest #file-sec, body.guest .my-reading, body.guest #ask-book, body.guest #gr-edit, body.guest #basis-reeval,
+body.guest #file-sec, body.guest .my-reading, body.guest #ask-book, body.guest #gr-edit, body.guest #basis-reeval,
 body.guest .fbadge, body.guest a[href*="?summary=1"] { display: none !important; }
 /* Yorumlar */
 .cm { padding: 10px 0; border-top: 1px solid var(--line); }

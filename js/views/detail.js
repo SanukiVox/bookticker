@@ -195,7 +195,7 @@ export async function renderDetail(view, [id]) {
     b.status = c.dataset.st;
     await saveBook(b);
     toast(`${statusInfo(b.status).emoji} ${b.status}`);
-    if (b.status === 'Okundu') openFinished(b);
+    if (b.status === 'Okundu') { if (state.guest) toast('✅ Okundu! Aşağıdan yorum ve yıldız bırakabilirsin'); else openFinished(b); }
   }));
   $('#fav', view).addEventListener('click', async () => { b.favorite = !b.favorite; await saveBook(b); toast(b.favorite ? '❤️ Favorilere eklendi' : 'Favorilerden çıkarıldı'); });
   // Yıldızın sol yarısı yarım puan, sağ yarısı tam puan; aynı değere tekrar basınca silinir

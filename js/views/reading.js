@@ -220,7 +220,7 @@ function setupDrag(view, queue) {
 
 
 // ---------- Günlük okuma hedefi ve seri ----------
-function goalCard() {
+export function goalCard() {
   const r = readingStats();
   const goal = Number(state.settings.dailyGoalMin) || 0;
   if (!goal) return `<button class="section goal-card" id="goal-set" style="width:100%;border:0;text-align:left;color:inherit;display:flex;align-items:center;gap:12px">
