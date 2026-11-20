@@ -7,7 +7,7 @@ import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 import { driveSectionShell, fillDriveSection } from './drivesettings.js';
 
-export const APP_VERSION = '1.39.1';
+export const APP_VERSION = '1.39.2';
 
 export async function renderSettings(view) {
   { const sh = await import('../share.js'); if (sh.isGuest()) return (await import('./sharing.js')).renderGuestSettings(view, sh.guest()); }
@@ -75,6 +75,7 @@ export async function renderSettings(view) {
       <div class="set-row muted small" style="display:block">Son yedek: ${lastBackup}${storage ? `<br>${storage}` : ''}${fu.count ? `<br>📄 Kitap dosyaları: ${fu.count} dosya · ${formatSize(fu.bytes)} (sadece bu telefonda; yedeğe ve GitHub'a dahil değil)` : ''}<br>Veriler yalnızca bu telefonda saklanır. Ara sıra yedek alıp Dosyalar'a ya da iCloud Drive'a kaydetmeni öneririm.</div>
     </div>
 
+    ${(await import('../sync.js')).isConfigured() ? '<div class="form-group"><button class="set-row" id="logout" style="width:100%;border:0;background:none;text-align:left">🚪 Çıkış yap<span class="chev"></span></button></div>' : ''}
     <div class="form-group"><button class="set-row" id="wipe" style="width:100%;border:0;background:none;color:var(--danger)">Tüm verileri sil</button></div>
     <p class="muted small" style="text-align:center">Kitaplığım ${APP_VERSION} · ${state.books.length} kitap<br><button class="mini-btn" id="check-upd" style="margin-top:8px">🔄 Güncellemeleri denetle</button></p>`;
 
@@ -160,6 +161,18 @@ export async function renderSettings(view) {
     if (!(await confirmSheet('Yedekten geri yükle', 'Şu anki bütün veriler yedektekilerle değiştirilecek.', 'Geri yükle'))) return;
     const { restore } = await import('../io.js');
     try { const n = await restore(file); applyTheme(); toast(`${n} kitap geri yüklendi`); location.hash = '#/'; } catch (err) { toast(err.message); }
+  });
+  // Yönetici çıkışı: değişiklikler GitHub'a gönderilir, bu cihazdaki kitaplık ve bağlantı silinir; giriş sayfası açılır
+  $('#logout', view)?.addEventListener('click', async e => {
+    if (e.currentTarget.dataset.busy) return; // ekran iki kez çizildiyse iki dinleyici olabilir
+    e.currentTarget.dataset.busy = '1'; const btn = e.currentTarget; setTimeout(() => delete btn.dataset.busy, 500);
+    if (!(await confirmSheet('Çıkış yap', 'Bekleyen değişikliklerin önce GitHub\'a gönderilir, sonra bu cihazdaki kitaplık bilgileri ve GitHub bağlantısı silinir. Tekrar girmek için kullanıcı adın ve şifren gerekecek. Kitap dosyaların (PDF/EPUB) bu cihazda kalır; yeniden girince yerlerine oturur.', 'Çıkış yap'))) return;
+    const sy = await import('../sync.js');
+    try { if (sy.sync.cfg?.dirty) { toast('Değişiklikler gönderiliyor…'); await sy.push(); } }
+    catch (e) { toast(`Gönderilemedi, çıkış yapılmadı: ${e.message}`); return; }
+    await sy.disconnect();
+    await db.clearBooks();
+    history.replaceState(null, '', location.pathname + '#/'); location.reload();
   });
   $('#wipe', view).addEventListener('click', async () => {
     if (!(await confirmSheet('Tüm verileri sil', 'Bütün kitaplar, kapaklar, kitap dosyaları ve notlar bu telefondan silinecek. Bu işlem geri alınamaz.', 'Hepsini sil'))) return;
