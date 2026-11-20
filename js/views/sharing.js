@@ -116,7 +116,24 @@ export async function renderSharingAdmin(view) {
       <button class="btn" id="add-admin">🔐 Yönetici hesabı oluştur / şifreyi değiştir</button></div>
     <div class="section"><h3>🔑 Kullanıcılar</h3><div id="users" class="muted small">Yükleniyor…</div>
       <button class="btn primary" id="add-user" style="margin-top:10px">＋ Kullanıcı ekle</button></div>
+    <div class="section"><h3>💌 Kitap istekleri</h3><div id="reqs" class="muted small">Yükleniyor…</div></div>
     <div class="section"><h3>💬 Gelen yorumlar</h3><div id="recent" class="muted small">Yükleniyor…</div></div>`;
+  const loadReqs = async () => {
+    const el = $('#reqs', view);
+    try {
+      el.innerHTML = reqListHTML(await sh.listRequests(), true) || 'Henüz istek yok.';
+      $$('[data-rq-reply]', el).forEach(x => x.addEventListener('click', async () => {
+        const n = x.dataset.rqReply, t = $(`[data-rq-text="${n}"]`, el).value;
+        if (!t.trim()) { toast('Yanıt yaz'); return; }
+        try { await sh.replyRequest(n, t, null); toast('💬 Yanıtlandı'); loadReqs(); } catch (e) { toast(e.message); }
+      }));
+      $$('[data-rq-done]', el).forEach(x => x.addEventListener('click', async () => {
+        const n = x.dataset.rqDone, t = $(`[data-rq-text="${n}"]`, el).value;
+        try { await sh.replyRequest(n, t, x.dataset.done !== '1'); toast(x.dataset.done === '1' ? 'Yeniden açıldı' : '✅ Eklendi olarak işaretlendi'); loadReqs(); } catch (e) { toast(e.message); }
+      }));
+    } catch (e) { el.textContent = e.message; }
+  };
+  loadReqs();
   $('#pub', view).addEventListener('click', async () => { try { await sh.publishShare(); toast('📤 Paylaşım güncellendi'); } catch (e) { toast(e.message); } });
   const loadUsers = async () => {
     try {
@@ -199,6 +216,7 @@ export async function renderGuestReading(view) {
   const { goalCard, wireGoal } = await import('./reading.js');
   const { coverHTML, hydrateCovers } = await import('../ui.js');
   const r = readingStats(), books = state.books;
+  const recs = await guestRecs();
   const reading = books.filter(b => b.status === 'Okunuyor');
   const done = books.filter(b => b.status === 'Okundu');
   const byTime = books.filter(b => b.readingSeconds > 0).sort((a, b) => b.readingSeconds - a.readingSeconds);
@@ -206,6 +224,12 @@ export async function renderGuestReading(view) {
   const days = ['Paz', 'Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'];
   view.innerHTML = `<div class="page-head"><h1>Okuma</h1></div>
     ${reading.length ? `<h3 style="margin:4px 0 10px">📖 Okuduklarım</h3>${reading.map(b => { const p = progressOf(b); return `<a class="section" href="#/book/${enc(b.id)}" style="display:flex;gap:12px;align-items:center;color:inherit"><div style="width:52px;flex:none">${coverHTML(b, { badge: false })}</div><div style="flex:1;min-width:0"><b>${esc(displayTitle(b))}</b><div class="muted small">${esc(b.author || '')}</div>${p != null ? `<div class="progress" style="margin-top:6px"><span style="width:${p}%"></span></div><div class="muted small">%${Math.round(p)}</div>` : ''}</div></a>`; }).join('')}` : ''}
+    ${recs.length ? `<h3 style="margin:20px 0 10px">✨ Sana önerilenler</h3><div class="hscroll" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:6px">${recs.map(x => `<a href="#/book/${enc(x.b.id)}" style="flex:none;width:112px;color:inherit"><div style="width:112px">${coverHTML(x.b, { badge: false })}</div><div class="small" style="margin-top:6px;font-weight:600;line-height:1.25">${esc(displayTitle(x.b))}</div><div class="muted small" style="line-height:1.25">${esc(x.why)}</div></a>`).join('')}</div>` : ''}
+    <div class="section" id="req-sec"><h3>💌 Kitap iste</h3>
+      <p class="muted small">Okumak istediğin bir kitap mı var? Adını yaz, sana iletilsin. Eklenince burada ✅ olarak görürsün.</p>
+      <textarea id="req-text" placeholder="Örn. Hayvan Çiftliği — George Orwell" style="min-height:64px;width:100%"></textarea>
+      <button class="btn primary" id="req-send" style="margin-top:8px">Gönder</button>
+      <div id="req-list" class="muted small" style="margin-top:10px">Yükleniyor…</div></div>
     <h3 style="margin:20px 0 10px">İstatistik</h3>
     ${goalCard()}
     <div class="section"><h3>Okuma süresi</h3>
@@ -224,4 +248,50 @@ export async function renderGuestReading(view) {
 `;
   hydrateCovers(view);
   wireGoal(view);
+  const sh = await import('../share.js');
+  const loadReq = async () => {
+    const el = $('#req-list', view);
+    try { el.innerHTML = reqListHTML(await sh.listRequests(), false) || 'Henüz isteğin yok.'; }
+    catch (e) { el.textContent = e.message; }
+  };
+  $('#req-send', view).addEventListener('click', async () => {
+    const btn = $('#req-send', view); btn.disabled = true;
+    try { await sh.addRequest($('#req-text', view).value); $('#req-text', view).value = ''; toast('💌 İsteğin gönderildi'); await loadReq(); }
+    catch (e) { toast(e.message); }
+    btn.disabled = false;
+  });
+  loadReq();
 }
+
+const reqListHTML = (list, admin) => list.map(r => `<div class="cm"><div class="cm-h">${r.done ? '✅' : '⏳'} ${admin ? `<b>${esc(r.name)}</b>` : `<b>${r.done ? 'Eklendi' : 'Bekliyor'}</b>`}<span class="muted small">${when(r.at)}</span></div>
+  <div class="prose">${esc(r.text)}</div>
+  ${r.replies.map(x => `<div class="small" style="margin-top:4px">💬 <b>${esc(x.name === 'Ben' ? (admin ? 'Sen' : 'Yanıt') : x.name)}:</b> ${esc(x.text)}</div>`).join('')}
+  ${admin ? `<div class="btn-row" style="margin-top:6px"><input data-rq-text="${r.number}" placeholder="Yanıt yaz…" style="flex:1;min-width:0"><button class="mini-btn" data-rq-reply="${r.number}">Yanıtla</button><button class="mini-btn" data-rq-done="${r.number}" data-done="${r.done ? 1 : 0}">${r.done ? '↩︎ Geri aç' : '✅ Eklendi'}</button></div>` : ''}</div>`).join('');
+
+// Misafir için öneri: okumadığı paylaşılan kitaplar; okuduklarına benzerlik, seri devamı, genel puan, dosyası olması
+async function guestRecs(limit = 8) {
+  const { similarity } = await import('../similar.js');
+  const { computeQuality } = await import('../store.js');
+  const seeds = state.books.filter(b => b.status === 'Okundu' || b.status === 'Okunuyor');
+  const out = [];
+  for (const b of state.books) {
+    if (b.status === 'Okundu' || b.status === 'Okunuyor') continue;
+    let pts = (computeQuality(b) ?? 2.5) * 10 + (Number(b.goodreads) || 0) * 3;
+    const why = [];
+    if (b.series) {
+      const s = state.books.filter(x => x.series === b.series).sort((x, y) => (x.seriesOrder || 0) - (y.seriesOrder || 0));
+      const before = s.slice(0, s.findIndex(x => x.id === b.id));
+      if (before.some(x => x.status !== 'Okundu')) continue;
+      if (before.length) { pts += 60; why.push('seriye devam'); }
+    }
+    let best = null;
+    for (const a of seeds) { const r = similarity(a, b); if (!best || r.pts > best.pts) best = { ...r, a }; }
+    if (best && best.pts >= 3) { pts += best.pts * 6; why.push(`${displayTitle(best.a)} gibi`); }
+    if (b.file || b.file2) { pts += 8; why.push('📖 hemen okunabilir'); }
+    const q = computeQuality(b);
+    if (!why.length && q != null) why.push(`⭐ ${q.toFixed(1)}`);
+    out.push({ b, pts, why: why[0] || '' });
+  }
+  return out.sort((x, y) => y.pts - x.pts).slice(0, limit);
+}
+

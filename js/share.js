@@ -290,5 +290,36 @@ export async function recentComments() {
   const list = await api(c.token, c.owner, c.repo, `/issues/comments?sort=created&direction=desc&per_page=50`);
   const map = await issues(c, true);
   const byUrl = new Map([...map.entries()].map(([id, i]) => [i.url, id]));
-  return list.map(x => ({ ...parseComment(x), bookId: byUrl.get(x.issue_url) }));
+  return list.map(x => ({ ...parseComment(x), bookId: byUrl.get(x.issue_url) })).filter(x => x.bookId);
+}
+
+// ---------- Kitap istekleri ----------
+// Kullanıcı bir istek yazınca "istek: …" başlıklı bir issue açılır; yönetici yanıt yazar ya da "eklendi" diye kapatır.
+const REQ = /^istek:/;
+export async function addRequest(text) {
+  const c = ctx(), t = String(text || '').trim();
+  if (!t) throw new Error('Bir kitap adı ya da mesaj yaz');
+  const title = `istek: ${t.split('\n')[0].slice(0, 70)}`;
+  await api(c.token, c.owner, c.repo, '/issues', { method: 'POST', body: { title, body: `${t}\n\n<!--kitapligim ${JSON.stringify({ name: c.name })}-->` } });
+}
+export async function listRequests() {
+  const c = ctx(), out = [];
+  for (let page = 1; page < 5; page++) {
+    const list = await api(c.token, c.owner, c.repo, `/issues?state=all&per_page=100&page=${page}`);
+    for (const i of list) if (REQ.test(i.title || '')) out.push(i);
+    if (list.length < 100) break;
+  }
+  const res = [];
+  for (const i of out) {
+    const p = parseComment({ id: i.number, created_at: i.created_at, body: i.body });
+    let replies = [];
+    if (i.comments) replies = (await api(c.token, c.owner, c.repo, `/issues/${i.number}/comments?per_page=100`)).map(parseComment);
+    res.push({ number: i.number, name: p.name, at: p.at, text: p.text, done: i.state === 'closed', replies });
+  }
+  return res.sort((a, b) => (a.done - b.done) || (b.at > a.at ? 1 : -1));
+}
+export async function replyRequest(number, text, close) {
+  const c = ctx();
+  if (String(text || '').trim()) await api(c.token, c.owner, c.repo, `/issues/${number}/comments`, { method: 'POST', body: { body: `${text.trim()}\n\n<!--kitapligim ${JSON.stringify({ name: 'Ben' })}-->` } });
+  if (close != null) await api(c.token, c.owner, c.repo, `/issues/${number}`, { method: 'PATCH', body: { state: close ? 'closed' : 'open' } });
 }
