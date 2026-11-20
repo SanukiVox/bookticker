@@ -98,6 +98,7 @@ async function start() {
     state.guest = true; document.body.classList.add('guest');
     try { state.books = await share.loadShared(); } catch (e) { state.books = []; toast(`Paylaşılan kitaplar alınamadı: ${e.message}`); }
     applyTheme();
+    pullToRefresh(async () => { state.books = await share.loadShared(); });
     window.addEventListener('hashchange', () => { const sh = $('#sheet-root'); if (sh.children.length) { sh.replaceChildren(); document.body.style.overflow = ''; } route(); });
     await route();
     return;
@@ -106,6 +107,12 @@ async function start() {
   // Google Drive girişinden dönüş (#access_token=…): adresi düzelt, anahtarı sakla
   try { await (await import('./gdrive.js')).handleRedirect(); } catch { /* yok */ }
   applyTheme();
+  pullToRefresh(async () => {
+    const sy = await import('./sync.js');
+    if (!sy.isConfigured()) return;
+    const n = await sy.pull();
+    if (n == null) throw new Error('Eşitleme zaten sürüyor');
+  });
   window.addEventListener('hashchange', () => {
     // Sayfa değişince açık panelleri kapat
     const sheets = $('#sheet-root');
@@ -154,3 +161,50 @@ start().catch(err => {
   }
   $('#view').innerHTML = `<div class="empty"><div class="big">⚠️</div><h2>Uygulama açılamadı</h2><p>${String(err?.message || err)}</p></div>`;
 });
+
+// ---------- Aşağı çekip yenile ----------
+// Sayfanın en üstündeyken parmakla aşağı çekip bırakınca veriler yenilenir (okuyucu, düzenleme ve sohbette kapalı).
+function pullToRefresh(refresh) {
+  const ind = document.createElement('div');
+  ind.className = 'ptr';
+  ind.innerHTML = '<span class="ptr-i">↓</span>';
+  document.body.appendChild(ind);
+  const MAX = 110, GO = 70;
+  let y0 = null, x0 = 0, d = 0, busy = false;
+  const blocked = () => {
+    const p = parse().path;
+    return busy || p.startsWith('/read/') || p.startsWith('/edit/') || p === '/chat' || $('#sheet-root').children.length > 0;
+  };
+  const set = (px, anim) => {
+    ind.style.transition = anim ? 'transform .25s, opacity .25s' : 'none';
+    ind.style.transform = `translate(-50%, ${px - 50}px)`;
+    ind.style.opacity = px > 8 ? Math.min(1, px / GO) : 0;
+    ind.classList.toggle('ready', px >= GO);
+  };
+  window.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1 || window.scrollY > 0 || blocked()) { y0 = null; return; }
+    y0 = e.touches[0].clientY; x0 = e.touches[0].clientX; d = 0;
+  }, { passive: true });
+  window.addEventListener('touchmove', e => {
+    if (y0 == null) return;
+    const t = e.touches[0], dy = t.clientY - y0;
+    if (window.scrollY > 0 || dy <= 0 || Math.abs(t.clientX - x0) > dy) { if (d) set(0, true); y0 = null; d = 0; return; }
+    d = Math.min(MAX, dy * 0.55);
+    set(d);
+  }, { passive: true });
+  window.addEventListener('touchend', async () => {
+    if (y0 == null) return;
+    y0 = null;
+    if (d < GO) { set(0, true); d = 0; return; }
+    d = 0; busy = true;
+    set(GO * 0.8, true); ind.classList.add('spin'); ind.firstChild.textContent = '↻';
+    try {
+      await refresh();
+      navigator.serviceWorker?.getRegistration?.().then(r => r?.update()).catch(() => {});
+      await route();
+      toast('🔄 Yenilendi');
+    } catch (e) { toast(e.message || 'Yenilenemedi'); }
+    ind.classList.remove('spin'); set(0, true); busy = false;
+    setTimeout(() => { ind.firstChild.textContent = '↓'; }, 250);
+  });
+}
