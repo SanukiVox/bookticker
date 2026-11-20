@@ -31,7 +31,12 @@ export async function renderLibrary(view, [tab = 'books']) {
   </div>`;
 
   let body = '';
-  if (!total) {
+  const sy = await import('../sync.js');
+  if (!total && sy.isConfigured()) {
+    body = `<div class="empty"><div class="big">📥</div><h2>Kitaplığın GitHub'dan alınıyor</h2>
+      <p class="muted" id="pull-msg">${sy.sync.cfg?.error ? `Son deneme olmadı: ${esc(sy.sync.cfg.error)}` : 'Birkaç saniye sürebilir. Gelmezse aşağıdaki düğmeye bas.'}</p>
+      <div class="btn-row" style="justify-content:center"><button class="btn primary" id="pull-now">📥 GitHub'dan çek</button></div></div>`;
+  } else if (!total) {
     body = `<div class="empty"><div class="big">📚</div><h2>Kitaplığın boş</h2>
       <p>İlk kitabını ekleyerek başla. Elinde Excel listesi varsa onu da tek seferde aktarabilirsin.</p>
       <div class="btn-row" style="justify-content:center"><a class="btn primary" href="#/edit/new">Kitap ekle</a><a class="btn" href="#/settings">Excel'den aktar</a></div><p class="muted small" style="margin-top:14px">Sana kullanıcı adı ve şifre verildiyse: <a href="#/giris" style="text-decoration:underline">Kullanıcı girişi</a></p></div>`;
@@ -47,6 +52,12 @@ export async function renderLibrary(view, [tab = 'books']) {
     ${tabs}${body}`;
 
   $$('[data-go]', view).forEach(b => b.addEventListener('click', () => location.replace(`#/library/${b.dataset.go}`)));
+  $('#pull-now', view)?.addEventListener('click', async e => {
+    const btn = e.currentTarget, msg = $('#pull-msg', view);
+    btn.disabled = true; msg.textContent = 'Alınıyor…';
+    try { const n = await sy.pull(); if (n == null) { msg.textContent = 'Eşitleme zaten sürüyor, birazdan tekrar dene.'; btn.disabled = false; return; } renderLibrary(view, [tab]); }
+    catch (err) { msg.textContent = `Olmadı: ${err.message}`; btn.disabled = false; }
+  });
   $('#toggle-view', view)?.addEventListener('click', () => { state.settings.view = v === 'grid' ? 'list' : 'grid'; saveSettings(); });
   $$('[data-status]', view).forEach(c => c.addEventListener('click', () => { statusFilter = c.dataset.status; renderLibrary(view, [tab]); }));
   $('#tr-only', view)?.addEventListener('click', () => { trOnly = !trOnly; renderLibrary(view, [tab]); });
