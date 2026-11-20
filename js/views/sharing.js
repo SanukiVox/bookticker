@@ -8,19 +8,17 @@ const when = iso => new Date(iso).toLocaleDateString('tr-TR', { day: 'numeric', 
 export async function renderLogin(view, { landing = false } = {}) {
   document.getElementById('tabbar')?.classList.toggle('hidden', landing);
   view.innerHTML = `<div class="login-hero"><div class="big">📚</div><h1>Kitaplığım</h1><p class="muted">Giriş yap</p></div>
-    <div class="section"><p class="muted small">Sana verilen kullanıcı adı ve şifreyle gir. Yalnızca seninle paylaşılan kitapları görür, yorum ve yıldız bırakabilirsin.</p>
+    <div class="section"><p class="muted small">Kullanıcı adın ve şifrenle gir.</p>
       <div class="form-group">
         <div class="field"><label for="lg-u">Kullanıcı adı</label><input id="lg-u" autocomplete="username" autocapitalize="off" autocorrect="off"></div>
         <div class="field"><label for="lg-p">Şifre</label><input id="lg-p" type="password" autocomplete="current-password"></div>
       </div>
       <button class="btn primary block" id="lg-go">Giriş yap</button>
-      <div class="muted small" id="lg-msg" style="margin-top:8px"></div></div>
-    <p class="muted small" style="text-align:center;margin-top:18px"><a href="#/settings" id="lg-admin" style="text-decoration:underline">Yönetici girişi (kendi kitaplığını GitHub ile bağla)</a></p>`;
-  $('#lg-admin', view).addEventListener('click', () => document.getElementById('tabbar')?.classList.remove('hidden'));
+      <div class="muted small" id="lg-msg" style="margin-top:8px"></div></div>`;
   const go = async () => {
     const btn = $('#lg-go', view), msg = $('#lg-msg', view);
     btn.disabled = true; msg.textContent = 'Kontrol ediliyor…';
-    try { await (await import('../share.js')).login($('#lg-u', view).value, $('#lg-p', view).value); location.hash = '#/'; location.reload(); }
+    try { await (await import('../share.js')).login($('#lg-u', view).value, $('#lg-p', view).value); history.replaceState(null, '', location.pathname + '#/'); location.reload(); }
     catch (e) { msg.textContent = e.message; btn.disabled = false; }
   };
   $('#lg-go', view).addEventListener('click', go);
@@ -66,6 +64,9 @@ export async function renderSharingAdmin(view) {
       <p class="muted small">Kitap sayfasındaki <b>👥 Paylaş</b> düğmesiyle eklenir. Yalnızca kitap bilgileri ve puanlar paylaşılır; notların, puanın, ilerlemen ve dosyaların paylaşılmaz.</p>
       ${shared.length ? `<div class="tags">${shared.map(b => `<a class="tag" href="#/book/${enc(b.id)}">${esc(displayTitle(b))}</a>`).join('')}</div>` : ''}
       <button class="btn" id="pub" style="margin-top:10px">📤 Şimdi yayınla</button></div>
+    <div class="section"><h3>🔐 Yönetici girişi</h3>
+      <p class="muted small">Yeni bir cihazda kitaplığını açmak için kullanıcı adı ve şifre. Bu cihazdaki GitHub bağlantın bu şifreyle kilitlenir; şifreyi kimseyle paylaşma.</p>
+      <button class="btn" id="add-admin">🔐 Yönetici hesabı oluştur / şifreyi değiştir</button></div>
     <div class="section"><h3>🔑 Kullanıcılar</h3><div id="users" class="muted small">Yükleniyor…</div>
       <button class="btn primary" id="add-user" style="margin-top:10px">＋ Kullanıcı ekle</button></div>
     <div class="section"><h3>💬 Gelen yorumlar</h3><div id="recent" class="muted small">Yükleniyor…</div></div>`;
@@ -74,7 +75,7 @@ export async function renderSharingAdmin(view) {
     try {
       const u = await sh.listUsers();
       const keys = Object.keys(u);
-      $('#users', view).innerHTML = keys.length ? keys.map(k => `<div class="opt-item"><span class="lbl">👤 <b>${esc(k)}</b> · ${esc(u[k].name || '')}</span><button class="del" data-del="${esc(k)}" aria-label="Sil">🗑</button></div>`).join('') : 'Henüz kullanıcı yok.';
+      $('#users', view).innerHTML = keys.length ? keys.map(k => `<div class="opt-item"><span class="lbl">${u[k].role === 'admin' ? '🔐' : '👤'} <b>${esc(k)}</b> · ${esc(u[k].role === 'admin' ? 'Yönetici' : u[k].name || '')}</span><button class="del" data-del="${esc(k)}" aria-label="Sil">🗑</button></div>`).join('') : 'Henüz kullanıcı yok.';
       $$('[data-del]', view).forEach(x => x.addEventListener('click', async () => {
         if (!(await confirmSheet('Kullanıcıyı sil', `${x.dataset.del} artık giriş yapamaz. Erişimi tamamen kapatmak için GitHub'da onun davet anahtarını da sil.`, 'Sil'))) return;
         try { await sh.deleteUser(x.dataset.del); toast('Silindi'); loadUsers(); } catch (e) { toast(e.message); }
@@ -83,6 +84,7 @@ export async function renderSharingAdmin(view) {
   };
   loadUsers();
   $('#add-user', view).addEventListener('click', () => openAddUser(sh, loadUsers));
+  $('#add-admin', view).addEventListener('click', () => openAddAdmin(sh, loadUsers));
   try {
     const rc = await sh.recentComments();
     $('#recent', view).innerHTML = rc.length ? rc.map(c => { const b = getBook(c.bookId); return `<a class="cm" href="${b ? `#/book/${enc(b.id)}` : '#'}" style="display:block;color:inherit"><div class="cm-h"><b>${esc(c.name)}</b>${c.stars ? ` <span class="cm-st">${stars(c.stars)}</span>` : ''}<span class="muted small">${when(c.at)}</span></div><div class="small"><b>${esc(b ? displayTitle(b) : 'Kitap')}</b>${c.text ? ` — ${esc(c.text.slice(0, 140))}` : ''}</div></a>`; }).join('') : 'Henüz yorum yok.';
@@ -120,6 +122,25 @@ function openAddUser(sh, done) {
           close(); done();
           sheet({ title: 'Kullanıcı hazır', body: `<p>Arkadaşına şunları gönder:</p><div class="section"><b>Adres:</b> ${esc(location.origin + location.pathname)}<br><b>Kullanıcı adı:</b> ${esc(v('#u-user').trim().toLowerCase())}<br><b>Şifre:</b> ${esc(v('#u-pass'))}</div><p class="muted small">Uygulamayı açınca Ayarlar → <b>Kullanıcı girişi</b>. Girişin çalışması 1–2 dakika sürebilir (GitHub Pages güncellenirken).</p>`, foot: '<button class="btn primary" data-close>Tamam</button>' });
         } catch (e) { toast(e.message); btn.disabled = false; btn.textContent = 'Oluştur'; }
+      });
+    },
+  });
+}
+
+function openAddAdmin(sh, done) {
+  sheet({
+    title: 'Yönetici hesabı',
+    body: `<div class="form-group">
+        <div class="field"><label for="a-user">Kullanıcı adı</label><input id="a-user" autocapitalize="off" autocorrect="off" placeholder="örn. yonetici"></div>
+        <div class="field"><label for="a-pass">Şifre (en az 14 karakter)</label><input id="a-pass" value="${genPassword()}${genPassword().slice(0, 4)}"><button class="mini-btn" id="a-gen" type="button" style="margin-top:6px">🎲 Yeni şifre üret</button></div></div>
+      <p class="muted small">Şifreyi bir yere not et (örneğin iPhone Parolalar). Unutursan bu ekrandan yenisini oluşturursun.</p>`,
+    foot: '<button class="btn" data-close>Vazgeç</button><button class="btn primary" id="a-save">Kaydet</button>',
+    onMount: (el, close) => {
+      $('#a-gen', el).addEventListener('click', () => { $('#a-pass', el).value = genPassword() + genPassword().slice(0, 4); });
+      $('#a-save', el).addEventListener('click', async () => {
+        const btn = $('#a-save', el); btn.disabled = true;
+        try { await sh.createAdmin({ username: $('#a-user', el).value, password: $('#a-pass', el).value }); close(); done(); toast('🔐 Yönetici hesabı kaydedildi'); }
+        catch (e) { toast(e.message); btn.disabled = false; }
       });
     },
   });

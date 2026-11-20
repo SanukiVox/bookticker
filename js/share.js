@@ -100,6 +100,21 @@ export async function createUser({ username, name, password, guestToken }) {
   data.users[u] = { name: name.trim() || username, salt: b64(salt), iv: b64(iv), ct: b64(ct), iter: ITER, created: new Date().toISOString() };
   await putFile(token, owner, APP_REPO, USERS_FILE, JSON.stringify(data, null, 1), `Kullanıcı: ${u}`, APP_BRANCH);
 }
+// Yönetici: bu cihazdaki GitHub eşitleme bilgisi (veri deposu + anahtar) şifreyle kilitlenir
+export async function createAdmin({ username, password }) {
+  const u = normUser(username);
+  if (!/^[a-z0-9çğıöşü._-]{3,30}$/.test(u)) throw new Error('Kullanıcı adı 3–30 karakter olmalı (harf, rakam, . _ -)');
+  if (String(password).length < 14) throw new Error('Yönetici şifresi en az 14 karakter olmalı');
+  const { token, owner } = admin();
+  const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const payload = JSON.stringify({ role: 'admin', token, owner, repo: sync.cfg.repo, branch: sync.cfg.branch || 'main', name: 'Yönetici' });
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await keyFrom(password, salt), new TextEncoder().encode(payload)));
+  const f = await getFile(token, owner, APP_REPO, USERS_FILE, APP_BRANCH);
+  const data = f.text ? JSON.parse(f.text) : { app: 'kitapligim-users', users: {} };
+  data.users[u] = { name: 'Yönetici', role: 'admin', salt: b64(salt), iv: b64(iv), ct: b64(ct), iter: ITER, created: new Date().toISOString() };
+  await putFile(token, owner, APP_REPO, USERS_FILE, JSON.stringify(data, null, 1), `Yönetici: ${u}`, APP_BRANCH);
+}
+
 export async function deleteUser(username) {
   const { token, owner } = admin();
   const f = await getFile(token, owner, APP_REPO, USERS_FILE, APP_BRANCH);
@@ -117,6 +132,14 @@ export async function login(username, password) {
     const key = await keyFrom(password, unb64(e.salt));
     payload = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(e.iv) }, key, unb64(e.ct))));
   } catch { throw new Error('Kullanıcı adı ya da şifre hatalı'); }
+  if (payload.role === 'admin') {
+    // Yönetici: eşitlemeyi kur ve kitaplığı GitHub'dan çek
+    const sy = await import('./sync.js');
+    await sy.configure({ owner: payload.owner, repo: payload.repo, branch: payload.branch, token: payload.token });
+    await sy.testConnection();
+    try { await sy.pull(); } catch { /* veri sonra otomatik eşitlemeyle gelir */ }
+    return payload;
+  }
   await api(payload.token, payload.owner, payload.repo, ''); // anahtar hâlâ geçerli mi?
   localStorage.setItem(GUEST_KEY, JSON.stringify({ ...payload, user: normUser(username) }));
   return payload;

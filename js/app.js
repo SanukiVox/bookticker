@@ -2,7 +2,7 @@
 import { load, state, onChange } from './store.js';
 import { requestPersistence } from './db.js';
 import { $, $$, applyTheme, toast } from './ui.js';
-import { loadSync, startAutoSync, onSyncChange, onAutoPush, onAutoPull } from './sync.js';
+import { loadSync, startAutoSync, onSyncChange, onAutoPush, onAutoPull, isConfigured } from './sync.js';
 import { renderLibrary } from './views/library.js';
 import { renderSearch } from './views/search.js';
 import { renderDetail } from './views/detail.js';
@@ -52,6 +52,9 @@ async function route() {
   if (current) scrollMemory.set(current, window.scrollY);
   const { path, query, raw } = parse();
   const view = $('#view');
+  if (!state.guest && !state.books.length && !isConfigured() && path !== '/giris') {
+    current = raw; return (await import('./views/sharing.js')).renderLogin(view, { landing: true });
+  }
   for (const [re, fn, tab] of routes) {
     const m = path.match(re);
     if (!m) continue;
