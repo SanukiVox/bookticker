@@ -52,41 +52,58 @@ export function sanitize(b) {
   o.coverOrig = b.coverOrig || null; o.coverTr = b.coverTr || null;
   return o;
 }
-// Bu cihazda yüklenmiş kapaklar (adres değil, anahtar) paylaşım dosyasına küçültülüp gömülür
-const coverCache = new Map();
-async function embedCover(v) {
-  if (!v || /^(https?:|data:)/.test(v)) return v || null;
-  if (coverCache.has(v)) return coverCache.get(v);
-  let out = null;
-  try {
-    const { db } = await import('./db.js');
-    const blob = await db.getCover(v);
-    if (blob) out = await shrink(blob);
-  } catch { /* kapak yoksa yer tutucu */ }
-  coverCache.set(v, out);
-  return out;
+// Bu cihazda yüklenmiş kapaklar (adres değil, anahtar) paylaşım deposuna resim dosyası olarak yüklenir;
+// kitaplar.json'da "share:covers/<anahtar>.jpg" diye geçer.
+const COVER_DIR = 'covers';
+const coverPath = key => `${COVER_DIR}/${String(key).replace(/[^\w.-]/g, '_')}.jpg`;
+function shareCoverRef(v, need) {
+  if (!v || /^(https?:|data:|share:)/.test(v)) return v || null;
+  const p = coverPath(v);
+  need.set(p, v);
+  return `share:${p}`;
 }
-async function shrink(blob, max = 480) {
-  const bmp = await createImageBitmap(blob);
-  const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
-  const c = document.createElement('canvas');
-  c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
-  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
-  return c.toDataURL('image/jpeg', 0.82);
-}
-async function sharedJSON() {
-  const books = [];
+function sharedData() {
+  const need = new Map(), books = [];
   for (const b of state.books.filter(x => x.shared)) {
     const o = sanitize(b);
-    o.coverTr = await embedCover(o.coverTr); o.coverOrig = await embedCover(o.coverOrig);
+    o.coverTr = shareCoverRef(o.coverTr, need); o.coverOrig = shareCoverRef(o.coverOrig, need);
     books.push(o);
   }
-  return JSON.stringify({ app: 'kitapligim-share', savedAt: new Date().toISOString(), books }, null, 1);
+  return { text: JSON.stringify({ app: 'kitapligim-share', savedAt: new Date().toISOString(), books }, null, 1), need };
+}
+const bytesB64 = async blob => { const b = new Uint8Array(await blob.arrayBuffer()); let t = ''; for (let i = 0; i < b.length; i += 0x8000) t += String.fromCharCode(...b.subarray(i, i + 0x8000)); return btoa(t); };
+async function uploadCovers(token, owner, need) {
+  if (!need.size) return;
+  let have = new Set();
+  try { have = new Set((await api(token, owner, SHARE_REPO, `/contents/${COVER_DIR}`)).map(f => f.path)); }
+  catch (e) { if (e.status !== 404) throw e; }
+  const { db } = await import('./db.js');
+  for (const [path, key] of need) {
+    if (have.has(path)) continue;
+    const blob = await db.getCover(key);
+    if (!blob) continue;
+    await api(token, owner, SHARE_REPO, `/contents/${path}`, { method: 'PUT', body: { message: `Kapak: ${path}`, content: await bytesB64(blob) } });
+  }
+}
+// Misafir: paylaşım deposundaki kapağı bir kez indirir, sonra bu cihazdan gösterir
+export async function shareCoverBlob(ref) {
+  const path = ref.replace(/^share:/, '');
+  const { db } = await import('./db.js');
+  const cached = await db.getCover(ref);
+  if (cached) return cached;
+  const g = guest();
+  if (!g?.token) return null;
+  const res = await fetch(`${API}/repos/${g.owner}/${g.repo}/contents/${path}`, { headers: { Authorization: `Bearer ${g.token}`, Accept: 'application/vnd.github.raw+json', 'X-GitHub-Api-Version': '2022-11-28' } });
+  if (!res.ok) return null;
+  const blob = new Blob([await res.arrayBuffer()], { type: 'image/jpeg' });
+  try { await db.putCover(ref, blob); } catch { /* önbelleğe yazılamazsa her seferinde indirir */ }
+  return blob;
 }
 let lastPublished = null, timer = null;
 export async function publishShare() {
   const { token, owner } = admin();
-  const text = await sharedJSON();
+  const { text, need } = sharedData();
+  await uploadCovers(token, owner, need);
   await putFile(token, owner, SHARE_REPO, SHARED_FILE, text, `Paylaşılan kitaplar: ${state.books.filter(b => b.shared).length}`);
   lastPublished = text.replace(/"savedAt":"[^"]*"/, '');
 }
@@ -95,7 +112,7 @@ export function schedulePublish() {
   if (isGuest() || !sync.cfg?.token || !state.books.some(b => b.shared) && lastPublished === null) return;
   clearTimeout(timer);
   timer = setTimeout(async () => {
-    const now = (await sharedJSON()).replace(/"savedAt":"[^"]*"/, '');
+    const now = sharedData().text.replace(/"savedAt":"[^"]*"/, '');
     if (now === lastPublished) return;
     try { await publishShare(); } catch { /* bir sonraki değişiklikte tekrar denenir */ }
   }, 8000);

@@ -26,7 +26,7 @@ const urlCache = new Map();
 async function coverUrl(key) {
   if (/^(https?:|data:)/.test(key)) return key; // internetten bulunan kapak (adres) ya da paylaşımda gömülü kapak
   if (urlCache.has(key)) return urlCache.get(key);
-  const blob = await db.getCover(key);
+  const blob = key.startsWith('share:') ? await (await import('./share.js')).shareCoverBlob(key) : await db.getCover(key);
   const url = blob ? URL.createObjectURL(blob) : null;
   urlCache.set(key, url);
   return url;
