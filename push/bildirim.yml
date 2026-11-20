@@ -1,0 +1,35 @@
+# Kitaplığım bildirimleri (uygulamadaki "Bildirim sistemini kur" düğmesiyle yüklenir)
+name: Bildirimler
+on:
+  schedule:
+    - cron: '2 * * * *'
+  push:
+    paths: ['kitaplar.json']
+  issues:
+    types: [opened, closed]
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: bildirim
+  cancel-in-progress: false
+jobs:
+  gonder:
+    if: ${{ !startsWith(github.event.issue.title, 'bildirim:') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-save --no-audit --no-fund web-push@3.6.7
+      - run: node push/send.mjs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}

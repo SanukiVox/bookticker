@@ -18,7 +18,7 @@ export function guest() { try { return JSON.parse(localStorage.getItem(GUEST_KEY
 export const isGuest = () => !!guest()?.token;
 export function logout() { try { localStorage.removeItem(GUEST_KEY); } catch { /* yok */ } location.hash = '#/'; location.reload(); }
 
-async function api(token, owner, repo, path, { method = 'GET', body, raw } = {}) {
+export async function api(token, owner, repo, path, { method = 'GET', body, raw } = {}) {
   const res = await fetch(`${API}/repos/${owner}/${repo}${path}`, {
     method,
     headers: { Authorization: `Bearer ${token}`, Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28', ...(body ? { 'Content-Type': 'application/json' } : {}) },
@@ -34,11 +34,11 @@ const admin = () => { if (!sync.cfg?.token) throw new Error('Önce Ayarlar → G
 const enc64 = s => { const b = new TextEncoder().encode(s); let t = ''; for (let i = 0; i < b.length; i += 0x8000) t += String.fromCharCode(...b.subarray(i, i + 0x8000)); return btoa(t); };
 const dec64 = s => new TextDecoder().decode(Uint8Array.from(atob(s.replace(/\s/g, '')), c => c.charCodeAt(0)));
 
-async function getFile(token, owner, repo, path, ref) {
+export async function getFile(token, owner, repo, path, ref) {
   try { const f = await api(token, owner, repo, `/contents/${path}${ref ? `?ref=${encodeURIComponent(ref)}` : ''}`); return { sha: f.sha, text: dec64(f.content) }; }
   catch (e) { if (e.status === 404) return { sha: null, text: null }; throw e; }
 }
-async function putFile(token, owner, repo, path, text, message, branch) {
+export async function putFile(token, owner, repo, path, text, message, branch) {
   const cur = await getFile(token, owner, repo, path, branch);
   return api(token, owner, repo, `/contents/${path}`, { method: 'PUT', body: { message, content: enc64(text), ...(cur.sha ? { sha: cur.sha } : {}), ...(branch ? { branch } : {}) } });
 }

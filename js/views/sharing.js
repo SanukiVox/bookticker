@@ -54,6 +54,9 @@ export async function renderGuestSettings(view, g) {
       <div class="set-row"><span>Kitap görünümü</span>${sel('g-view', s.view || 'grid', [['grid', 'Kapaklar'], ['list', 'Liste']])}</div>
     </div>
 
+    <div class="form-group-title">Bildirimler</div>
+    <div class="form-group"><a class="set-row" href="#/bildirim">🔔 Okuma hatırlatıcısı ve bildirimler<span class="chev"></span></a></div>
+
     <div class="form-group-title">Kitap dosyaları</div>
     <div class="form-group">
       <div class="set-row muted small" style="display:block">📄 Bu telefona indirilen: ${local.length} dosya · ${formatSize(localBytes)}<br>Silinse de kaldığın yer korunur; kitabı yeniden açınca dosya tekrar iner.</div>

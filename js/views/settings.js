@@ -7,7 +7,7 @@ import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 import { driveSectionShell, fillDriveSection } from './drivesettings.js';
 
-export const APP_VERSION = '1.42.2';
+export const APP_VERSION = '1.43.0';
 
 export async function renderSettings(view) {
   { const sh = await import('../share.js'); if (sh.isGuest()) return (await import('./sharing.js')).renderGuestSettings(view, sh.guest()); }
@@ -61,6 +61,7 @@ export async function renderSettings(view) {
     <div class="form-group-title">👥 Paylaşım</div>
     <div class="form-group">
       <a class="set-row" href="#/paylasim">👥 Paylaşım, kullanıcılar ve yorumlar<span class="chev"></span></a>
+      <a class="set-row" href="#/bildirim">🔔 Bildirimler<span class="chev"></span></a>
       <a class="set-row" href="#/giris">🔑 Kullanıcı girişi (paylaşılan kitapları görmek için)<span class="chev"></span></a>
     </div>
 

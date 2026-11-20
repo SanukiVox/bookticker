@@ -34,6 +34,7 @@ const routes = [
   [/^\/year(?:\/(\d{4}))?$/, renderYear, 'reading'],
   [/^\/giris$/, async v => (await import('./views/sharing.js')).renderLogin(v), 'settings'],
   [/^\/paylasim$/, async v => (await import('./views/sharing.js')).renderSharingAdmin(v), 'settings'],
+  [/^\/bildirim$/, async v => (await import('./views/notify.js')).renderNotify(v), 'settings'],
 ];
 
 const scrollMemory = new Map();
