@@ -5,15 +5,18 @@ import { esc, enc, toast, sheet, confirmSheet, $, $$ } from '../ui.js';
 const stars = n => (n ? '★'.repeat(n) + '☆'.repeat(5 - n) : '');
 const when = iso => new Date(iso).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' });
 
-export async function renderLogin(view) {
-  view.innerHTML = `<div class="page-head"><h1>Giriş</h1></div>
+export async function renderLogin(view, { landing = false } = {}) {
+  document.getElementById('tabbar')?.classList.toggle('hidden', landing);
+  view.innerHTML = `<div class="login-hero"><div class="big">📚</div><h1>Kitaplığım</h1><p class="muted">Giriş yap</p></div>
     <div class="section"><p class="muted small">Sana verilen kullanıcı adı ve şifreyle gir. Yalnızca seninle paylaşılan kitapları görür, yorum ve yıldız bırakabilirsin.</p>
       <div class="form-group">
         <div class="field"><label for="lg-u">Kullanıcı adı</label><input id="lg-u" autocomplete="username" autocapitalize="off" autocorrect="off"></div>
         <div class="field"><label for="lg-p">Şifre</label><input id="lg-p" type="password" autocomplete="current-password"></div>
       </div>
       <button class="btn primary block" id="lg-go">Giriş yap</button>
-      <div class="muted small" id="lg-msg" style="margin-top:8px"></div></div>`;
+      <div class="muted small" id="lg-msg" style="margin-top:8px"></div></div>
+    <p class="muted small" style="text-align:center;margin-top:18px"><a href="#/settings" id="lg-admin" style="text-decoration:underline">Yönetici girişi (kendi kitaplığını GitHub ile bağla)</a></p>`;
+  $('#lg-admin', view).addEventListener('click', () => document.getElementById('tabbar')?.classList.remove('hidden'));
   const go = async () => {
     const btn = $('#lg-go', view), msg = $('#lg-msg', view);
     btn.disabled = true; msg.textContent = 'Kontrol ediliyor…';

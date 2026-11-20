@@ -24,6 +24,8 @@ export const SORTS = {
 
 export async function renderLibrary(view, [tab = 'books']) {
   const total = state.books.length;
+  // Yeni cihaz (veri yok, eşitleme kurulmamış): doğrudan giriş sayfası
+  if (!total && !state.guest && !(await import('../sync.js')).isConfigured()) return (await import('./sharing.js')).renderLogin(view, { landing: true });
   const tabs = `<div class="seg" role="tablist">
     ${[['books', 'Kitaplar'], ['authors', 'Yazarlar'], ['series', 'Seriler']].map(([k, l]) => `<button role="tab" class="${tab === k ? 'on' : ''}" data-go="${k}">${l}</button>`).join('')}
   </div>`;
