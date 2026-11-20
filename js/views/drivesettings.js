@@ -2,7 +2,7 @@
 import { esc, toast, sheet, confirmSheet, $ } from '../ui.js';
 
 const ORIGIN = () => location.origin;
-const REDIRECT = () => location.origin + location.pathname;
+const REDIRECT = () => { let p = location.pathname.replace(/index\.html$/, ''); if (!p.endsWith('/')) p += '/'; return location.origin + p; }; // gdrive.js ile aynı
 
 export const driveSectionShell = () => `<div class="form-group-title">Google Drive (kitap dosyaları)</div><div class="form-group" id="drive-sec"><div class="set-row muted small">…</div></div>`;
 

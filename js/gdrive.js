@@ -12,7 +12,13 @@ const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const API = 'https://www.googleapis.com/drive/v3';
 const UP = 'https://www.googleapis.com/upload/drive/v3';
 const FOLDER = 'Kitaplığım';
-const redirectUri = () => location.origin + location.pathname;
+// Google'a hep aynı dönüş adresi gitsin: .../bookticker, .../bookticker/index.html → .../bookticker/
+// (Google Cloud'daki "Authorized redirect URIs" ile birebir aynı olmalı)
+export const redirectUri = () => {
+  let p = location.pathname.replace(/index\.html$/, '');
+  if (!p.endsWith('/')) p += '/';
+  return location.origin + p;
+};
 
 let conf = null;
 const listeners = new Set();

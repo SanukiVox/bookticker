@@ -7,7 +7,7 @@ import { applyTheme } from '../ui.js';
 import { githubSection, wireGithub } from './github.js';
 import { driveSectionShell, fillDriveSection } from './drivesettings.js';
 
-export const APP_VERSION = '1.37.0';
+export const APP_VERSION = '1.37.1';
 
 export async function renderSettings(view) {
   const s = state.settings;
