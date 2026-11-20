@@ -1,0 +1,13 @@
+{
+ "app": "kitapligim-users",
+ "users": {
+  "nurella": {
+   "name": "Nurella",
+   "salt": "hq/GTLdJ2qQAFCyVoAmXgA==",
+   "iv": "t+o1X8gOiyn53Oe5",
+   "ct": "Xj3LUBgFYtXBeHiQo/qX6aG1N0ZZAhVmpunGhi6piO1ettZJYlu0mhKd/BrLPWibBo/VqvlYpGqt6QfQ44dgvHVJn1dzKyVVs0nhE+8lojsUaVHfqaHuvUH3tNIaQ3Xfhd7lRJXJ1KOSzhnsF+c9rbWFaVrdsPIQ0EquLlXpD4mjF/S9mC7z0M7UI3G7rQ7fUSQkbOR8r9ikh3t7rkHQbUPU/WwJ85nOkX0mEB21U1jRlnrqYAAWfg==",
+   "iter": 310000,
+   "created": "2026-11-20T14:53:29.545Z"
+  }
+ }
+}
