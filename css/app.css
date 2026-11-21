@@ -595,3 +595,15 @@ body.guest .fbadge, body.guest a[href*="?summary=1"] { display: none !important;
 .ptr-i { display: inline-block; transition: transform .2s; }
 .ptr.spin .ptr-i { animation: ptr-spin .8s linear infinite; }
 @keyframes ptr-spin { to { transform: rotate(360deg); } }
+
+/* Tablet / yatay ekran: daha geniş içerik alanı */
+@media (min-width: 1000px) { #view { max-width: 1100px; } }
+@media (orientation: landscape) and (max-height: 500px) { .hero .cv { max-width: 140px; } .hero.single .cv { max-width: 160px; } }
+/* Yatay telefon: alt menü ince, yazısız */
+@media (orientation: landscape) and (max-height: 500px) {
+  :root { --tabbar-h: 44px; }
+  .tabbar a { flex-direction: row; justify-content: center; gap: 6px; font-size: 12px; padding: 4px 0; }
+  .tabbar a svg { width: 21px; height: 21px; }
+  .tabbar a.tab-add { width: 40px; height: 40px; transform: translateY(-4px); }
+  .tabbar a.tab-add svg { width: 21px; height: 21px; }
+}
