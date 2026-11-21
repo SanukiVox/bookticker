@@ -27,6 +27,12 @@ const emit = () => listeners.forEach(f => { try { f(); } catch { /* yok */ } });
 
 export async function driveConf() {
   conf ||= { clientId: '', token: '', exp: 0, folderId: '', autoDownload: true, connected: false, ...((await db.getMeta('gdrive')) || {}) };
+  if (!conf.clientId && state.settings?.driveClientId) conf.clientId = state.settings.driveClientId;
+  // Eski kurulum: kimlik yalnızca bu cihazdaysa ayarlara da yaz (GitHub ile öbür cihazlara gitsin)
+  else if (conf.clientId && state.settings && !state.guest && state.settings.driveClientId !== conf.clientId) {
+    state.settings.driveClientId = conf.clientId;
+    import('./store.js').then(m => m.saveSettings()).catch(() => {});
+  }
   return conf;
 }
 async function saveConf(patch) { conf = { ...(await driveConf()), ...patch }; await db.putMeta('gdrive', conf); emit(); return conf; }
@@ -38,6 +44,7 @@ export async function connect({ silent = false, returnTo } = {}) {
   if (!c.clientId) throw new Error('Önce Google istemci kimliğini (Client ID) gir');
   const st = { r: returnTo ?? (location.hash || '#/'), s: silent ? 1 : 0, n: Math.random().toString(36).slice(2) };
   sessionStorage.setItem('gdrive-state', st.n);
+  try { localStorage.setItem('gdrive-state', JSON.stringify({ n: st.n, at: Date.now() })); } catch { /* yok */ }
   const q = new URLSearchParams({ client_id: c.clientId, redirect_uri: redirectUri(), response_type: 'token', scope: SCOPE, include_granted_scopes: 'true', state: JSON.stringify(st) });
   if (silent) q.set('prompt', 'none');
   if (c.email) q.set('login_hint', c.email);
@@ -51,9 +58,13 @@ export async function handleRedirect() {
   const p = new URLSearchParams(h.slice(1));
   let st = {};
   try { st = JSON.parse(p.get('state') || '{}'); } catch { /* yok */ }
-  const expected = sessionStorage.getItem('gdrive-state');
+  let expected = sessionStorage.getItem('gdrive-state');
+  if (!expected) { try { const l = JSON.parse(localStorage.getItem('gdrive-state') || 'null'); if (l && Date.now() - l.at < 15 * 60000) expected = l.n; } catch { /* yok */ } }
   sessionStorage.removeItem('gdrive-state');
-  if (p.get('access_token') && st.n && st.n === expected) {
+  try { localStorage.removeItem('gdrive-state'); } catch { /* yok */ }
+  if (p.get('access_token') && !(st.n && st.n === expected)) {
+    await saveConf({ lastError: 'Google girişi tamamlanamadı (dönüş doğrulanamadı). "Google Drive\'a bağlan"a uygulamanın içinden tekrar bas.' });
+  } else if (p.get('access_token') && st.n && st.n === expected) {
     await saveConf({ token: p.get('access_token'), exp: Date.now() + (Number(p.get('expires_in')) || 3600) * 1000, connected: true, lastError: '' });
     try { const me = await api('/about?fields=user(emailAddress)'); if (me?.user?.emailAddress) await saveConf({ email: me.user.emailAddress }); } catch { /* yok */ }
   } else if (p.get('error')) {

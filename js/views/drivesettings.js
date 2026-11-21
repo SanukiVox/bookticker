@@ -37,6 +37,7 @@ export async function fillDriveSection(view, rerender) {
     if (!/\.apps\.googleusercontent\.com$/.test(id)) { toast('İstemci kimliği …apps.googleusercontent.com ile bitmeli'); return; }
     const conf = await gd.driveConf();
     await (await import('../db.js')).db.putMeta('gdrive', { ...conf, clientId: id });
+    await saveClientId(id);
     location.reload(); // ayarı tazele, sonra bağlan düğmesi
   });
   $('#gd-connect', box)?.addEventListener('click', () => gd.connect({ returnTo: '#/settings' }).catch(e => toast(e.message)));
@@ -91,8 +92,16 @@ function openHelp(current = '') {
         const gd = await import('../gdrive.js');
         const conf = await gd.driveConf();
         await (await import('../db.js')).db.putMeta('gdrive', { ...conf, clientId: id });
+        await saveClientId(id);
         close(); location.reload();
       });
     },
   });
+}
+
+// İstemci kimliği gizli değildir; ayarlarla GitHub'a gider, böylece öbür cihazlarda yeniden girmek gerekmez
+async function saveClientId(id) {
+  const st = await import('../store.js');
+  st.state.settings.driveClientId = id;
+  await st.saveSettings();
 }
