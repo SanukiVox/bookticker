@@ -111,14 +111,21 @@ export async function renderSharingAdmin(view) {
   const shared = state.books.filter(b => b.shared);
   view.innerHTML = `<div class="topbar"><a class="icon-btn" href="#/settings" aria-label="Geri">‹</a><div class="title">Paylaşım ve kullanıcılar</div></div>
     <div class="section"><h3>👥 Paylaşılan kitaplar · ${shared.length}</h3>
-      <p class="muted small">Kitap sayfasındaki <b>👥 Paylaş</b> düğmesiyle eklenir. Yalnızca kitap bilgileri ve puanlar paylaşılır; notların, puanın, ilerlemen ve dosyaların paylaşılmaz.</p>
-      ${shared.length ? `<div class="tags">${shared.map(b => `<a class="tag" href="#/book/${enc(b.id)}">${esc(displayTitle(b))}</a>`).join('')}</div>` : ''}
+      <p class="muted small">Kitap sayfasındaki <b>👥 Paylaş</b> düğmesiyle eklenir; herkesle ya da seçtiğin kişilerle paylaşabilirsin. Yalnızca kitap bilgileri ve puanlar paylaşılır; notların, puanın, ilerlemen ve dosyaların paylaşılmaz.</p>
+      ${shared.length ? `<div class="tags">${shared.map(b => `<a class="tag" href="#/book/${enc(b.id)}">${esc(displayTitle(b))}${b.sharedWith?.length ? ` · 👤 ${esc(b.sharedWith.join(', '))}` : ''}</a>`).join('')}</div>` : ''}
       <button class="btn" id="pub" style="margin-top:10px">📤 Şimdi yayınla</button></div>
     <div class="section"><h3>🔐 Yönetici girişi</h3>
       <p class="muted small">Yeni bir cihazda kitaplığını açmak için kullanıcı adı ve şifre. Bu cihazdaki GitHub bağlantın bu şifreyle kilitlenir; şifreyi kimseyle paylaşma.</p>
       <button class="btn" id="add-admin">🔐 Yönetici hesabı oluştur / şifreyi değiştir</button></div>
     <div class="section"><h3>🔑 Kullanıcılar</h3><div id="users" class="muted small">Yükleniyor…</div>
       <button class="btn primary" id="add-user" style="margin-top:10px">＋ Kullanıcı ekle</button></div>
+    <div class="section" id="ann-sec"><h3>📣 Bildirim gönder</h3>
+      <p class="muted small">Herkese ya da seçtiğin kişilere mesaj gönder. Okuma sekmelerinde görünür; bildirimleri açık olanların telefonuna bildirim olarak da gider.</p>
+      <div class="form-group"><div class="field"><label for="ann-title">Başlık</label><input id="ann-title" placeholder="örn. Yeni kitaplar geldi"></div>
+        <div class="field"><label for="ann-text">Mesaj</label><textarea id="ann-text" style="min-height:64px" placeholder="Mesajın…"></textarea></div></div>
+      <div class="chip-wrap" id="ann-to" style="margin-top:8px"><button class="chip on" data-to="all">🌍 Herkes</button></div>
+      <button class="btn primary" id="ann-send" style="margin-top:8px">📣 Gönder</button>
+      <div id="ann-list" class="muted small" style="margin-top:10px"></div></div>
     <div class="section"><h3>💌 Kitap istekleri</h3><div id="reqs" class="muted small">Yükleniyor…</div></div>
     <div class="section"><h3>💬 Gelen yorumlar</h3><div id="recent" class="muted small">Yükleniyor…</div></div>`;
   const loadReqs = async () => {
@@ -137,6 +144,36 @@ export async function renderSharingAdmin(view) {
     } catch (e) { el.textContent = e.message; }
   };
   loadReqs();
+  // Duyuru: alıcı seçimi ve gönderim
+  try {
+    const u = await sh.listUsers();
+    const names = Object.keys(u).filter(k => u[k].role !== 'admin');
+    $('#ann-to', view).insertAdjacentHTML('beforeend', names.map(k => `<button class="chip" data-to="${esc(k)}">👤 ${esc(u[k].name || k)}</button>`).join(''));
+  } catch { /* kullanıcı listesi alınamadı */ }
+  $$('#ann-to [data-to]', view).forEach(x => x.addEventListener('click', () => {
+    const all = $('#ann-to [data-to="all"]', view);
+    if (x.dataset.to === 'all') { $$('#ann-to [data-to]', view).forEach(y => y.classList.toggle('on', y === x)); return; }
+    x.classList.toggle('on');
+    const any = $$('#ann-to [data-to]:not([data-to="all"]).on', view).length;
+    all.classList.toggle('on', !any);
+  }));
+  const loadAnn = async () => {
+    try {
+      const l = await sh.listAnnouncements(5);
+      $('#ann-list', view).innerHTML = l.length ? `<b>Son gönderilenler</b>${l.map(a => `<div class="cm"><div class="cm-h"><b>${esc(a.title)}</b><span class="muted small">${when(a.at)} · ${a.to === 'all' ? 'herkes' : esc((a.to || []).join(', '))}</span></div><div class="small">${esc(a.text)}</div></div>`).join('')}` : '';
+    } catch { /* yok */ }
+  };
+  loadAnn();
+  $('#ann-send', view).addEventListener('click', async () => {
+    const to = $$('#ann-to [data-to]:not([data-to="all"]).on', view).map(x => x.dataset.to);
+    const btn = $('#ann-send', view); btn.disabled = true;
+    try {
+      await sh.sendAnnouncement({ title: $('#ann-title', view).value, text: $('#ann-text', view).value, to });
+      $('#ann-title', view).value = ''; $('#ann-text', view).value = '';
+      toast(to.length ? `📣 ${to.join(', ')} kişisine gönderildi` : '📣 Herkese gönderildi'); loadAnn();
+    } catch (e) { toast(e.message); }
+    btn.disabled = false;
+  });
   $('#pub', view).addEventListener('click', async () => { try { await sh.publishShare(); toast('📤 Paylaşım güncellendi'); } catch (e) { toast(e.message); } });
   const loadUsers = async () => {
     try {
@@ -228,6 +265,7 @@ export async function renderGuestReading(view) {
   view.innerHTML = `<div class="page-head"><h1>Okuma</h1></div>
     ${reading.length ? `<h3 style="margin:4px 0 10px">📖 Okuduklarım</h3>${reading.map(b => { const p = progressOf(b); return `<a class="section" href="#/book/${enc(b.id)}" style="display:flex;gap:12px;align-items:center;color:inherit"><div style="width:52px;flex:none">${coverHTML(b, { badge: false })}</div><div style="flex:1;min-width:0"><b>${esc(displayTitle(b))}</b><div class="muted small">${esc(b.author || '')}</div>${p != null ? `<div class="progress" style="margin-top:6px"><span style="width:${p}%"></span></div><div class="muted small">%${Math.round(p)}</div>` : ''}</div></a>`; }).join('')}` : ''}
     ${recs.length ? `<h3 style="margin:20px 0 10px">✨ Sana önerilenler</h3><div class="hscroll" style="display:flex;gap:12px;overflow-x:auto;padding-bottom:6px">${recs.map(x => `<a href="#/book/${enc(x.b.id)}" style="flex:none;width:112px;color:inherit"><div style="width:112px">${coverHTML(x.b, { badge: false })}</div><div class="small" style="margin-top:6px;font-weight:600;line-height:1.25">${esc(displayTitle(x.b))}</div><div class="muted small" style="line-height:1.25">${esc(x.why)}</div></a>`).join('')}</div>` : ''}
+    <div id="ann-box"></div>
     <div class="section" id="req-sec"><h3>💌 Kitap iste</h3>
       <p class="muted small">Okumak istediğin bir kitap mı var? Adını yaz, sana iletilsin. Eklenince burada ✅ olarak görürsün.</p>
       <textarea id="req-text" placeholder="Örn. Hayvan Çiftliği — George Orwell" style="min-height:64px;width:100%"></textarea>
@@ -252,6 +290,10 @@ export async function renderGuestReading(view) {
   hydrateCovers(view);
   wireGoal(view);
   const sh = await import('../share.js');
+  sh.listAnnouncements(5).then(l => {
+    if (!l.length) return;
+    $('#ann-box', view).innerHTML = `<div class="section"><h3>📣 Duyurular</h3>${l.map(x => `<div class="cm"><div class="cm-h"><b>${esc(x.title)}</b><span class="muted small">${when(x.at)}</span></div><div class="prose">${esc(x.text)}</div></div>`).join('')}</div>`;
+  }).catch(() => {});
   const loadReq = async () => {
     const el = $('#req-list', view);
     try { el.innerHTML = reqListHTML(await sh.listRequests(), false) || 'Henüz isteğin yok.'; }

@@ -69,7 +69,7 @@ export async function enable(opts) {
   if (sub && sub.options?.applicationServerKey && b64url(sub.options.applicationServerKey) !== cfg.publicKey) { await sub.unsubscribe(); sub = null; }
   if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: key });
   const w = who(), p = { ...prefs(), ...opts, on: true };
-  const body = JSON.stringify({ sub: sub.toJSON(), role: w.role, name: w.name, remindHour: p.remindHour ?? null, tzOffset: new Date().getTimezoneOffset(), newBooks: p.newBooks !== false, requests: p.requests !== false, comments: p.comments !== false, at: new Date().toISOString() });
+  const body = JSON.stringify({ sub: sub.toJSON(), role: w.role, name: w.name, user: w.user, remindHour: p.remindHour ?? null, tzOffset: new Date().getTimezoneOffset(), newBooks: p.newBooks !== false, requests: p.requests !== false, comments: p.comments !== false, at: new Date().toISOString() });
   const title = `bildirim: ${w.user}@${deviceId()}`;
   if (p.issue) {
     try { await api(w.token, w.owner, w.repo, `/issues/${p.issue}`, { method: 'PATCH', body: { title, body, state: 'open' } }); }

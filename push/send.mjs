@@ -65,19 +65,27 @@ if (GITHUB_EVENT_NAME === 'schedule' || GITHUB_EVENT_NAME === 'workflow_dispatch
   let before = [];
   try { before = JSON.parse(execSync('git show HEAD~1:kitaplar.json', { encoding: 'utf8', maxBuffer: 1 << 28 })).books || []; } catch { /* ilk yayın */ }
   const after = JSON.parse(fs.readFileSync('kitaplar.json', 'utf8')).books || [];
-  const had = new Set(before.map(b => b.id));
-  const added = after.filter(b => !had.has(b.id));
-  const filesBefore = new Set(before.filter(b => b.file || b.file2).map(b => b.id));
-  const newFiles = after.filter(b => (b.file || b.file2) && !filesBefore.has(b.id) && had.has(b.id));
-  if (added.length) {
-    const names = added.slice(0, 3).map(b => b.title).join(', ') + (added.length > 3 ? ` ve ${added.length - 3} kitap daha` : '');
-    for (const s of guests.filter(x => x.newBooks !== false)) await send(s, { title: added.length > 1 ? `📚 ${added.length} yeni kitap paylaşıldı` : '📚 Yeni kitap paylaşıldı', body: names, url: added.length === 1 ? `#/book/${added[0].id}` : '#/', tag: 'yeni-kitap' });
-  }
-  if (newFiles.length) {
-    for (const s of guests.filter(x => x.newBooks !== false)) await send(s, { title: '📖 Okumaya hazır', body: `${newFiles.slice(0, 3).map(b => b.title).join(', ')} artık uygulamada okunabilir`, url: newFiles.length === 1 ? `#/book/${newFiles[0].id}` : '#/', tag: 'yeni-dosya' });
+  // Kişiye özel paylaşım: b.to yoksa herkes, varsa yalnız listedeki kullanıcılar görür
+  const sees = (b, s) => !Array.isArray(b.to) || !b.to.length || b.to.includes(s.user) || (!s.user && b.to.includes(String(s.name || '').toLocaleLowerCase('tr')));
+  for (const s of guests.filter(x => x.newBooks !== false)) {
+    const had = new Set(before.filter(b => sees(b, s)).map(b => b.id));
+    const mine = after.filter(b => sees(b, s));
+    const added = mine.filter(b => !had.has(b.id));
+    const filesBefore = new Set(before.filter(b => sees(b, s) && (b.file || b.file2)).map(b => b.id));
+    const newFiles = mine.filter(b => (b.file || b.file2) && !filesBefore.has(b.id) && had.has(b.id));
+    if (added.length) {
+      const names = added.slice(0, 3).map(b => b.title).join(', ') + (added.length > 3 ? ` ve ${added.length - 3} kitap daha` : '');
+      await send(s, { title: added.length > 1 ? `📚 ${added.length} yeni kitap paylaşıldı` : '📚 Yeni kitap paylaşıldı', body: names, url: added.length === 1 ? `#/book/${added[0].id}` : '#/', tag: 'yeni-kitap' });
+    }
+    if (newFiles.length) await send(s, { title: '📖 Okumaya hazır', body: `${newFiles.slice(0, 3).map(b => b.title).join(', ')} artık uygulamada okunabilir`, url: newFiles.length === 1 ? `#/book/${newFiles[0].id}` : '#/', tag: 'yeni-dosya' });
   }
 } else if (GITHUB_EVENT_NAME === 'issues') {
   const i = ev.issue || {}, who = meta(i.body).name || 'Biri';
+  if (/^duyuru:/.test(i.title || '') && ev.action === 'opened') {
+    const m = meta(i.body), to = m.to;
+    const targets = guests.filter(s => to === 'all' || !to || (Array.isArray(to) && (to.includes(s.user) || (!s.user && to.includes(String(s.name || '').toLocaleLowerCase('tr'))))));
+    for (const s of targets) await send(s, { title: `📣 ${m.title || 'Kitaplığım'}`, body: plain(i.body).slice(0, 200), url: '#/reading', tag: `duyuru-${i.number}` });
+  }
   if (/^istek:/.test(i.title || '')) {
     if (ev.action === 'opened') for (const s of admins.filter(x => x.requests !== false)) await send(s, { title: `💌 ${who} kitap istedi`, body: plain(i.body).slice(0, 160), url: '#/paylasim', tag: `istek-${i.number}` });
     if (ev.action === 'closed') for (const s of guests.filter(x => x.requests !== false && x.name === who)) await send(s, { title: '✅ İsteğin eklendi', body: plain(i.body).slice(0, 160), url: '#/reading', tag: `istek-${i.number}` });

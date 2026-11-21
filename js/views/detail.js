@@ -78,7 +78,7 @@ export async function renderDetail(view, [id]) {
       ${b.author ? `<a class="by" href="#/author/${enc(b.author)}" style="display:inline-block">${esc(b.author)}</a>` : ''}
       ${b.series ? `<div class="ser">${esc(b.series)}${b.seriesOrder ? ` · ${b.seriesOrder}. kitap` : ''}</div>` : ''}
       ${b.owned ? '<div class="owned-tag">📚 Kütüphanemde</div>' : ''}
-      <div class="admin-only" style="margin-top:8px"><button class="chip ${b.shared ? 'on' : ''}" id="share-tg">👥 ${b.shared ? 'Paylaşıldı' : 'Paylaş'}</button>${b.shared && (b.file || b.file2) ? ` <button class="chip ${b.shareFile ? 'on' : ''}" id="sharefile-tg">📄 ${b.shareFile ? 'Dosyası paylaşıldı' : 'Dosyasını da paylaş'}</button>` : ''}</div></div>
+      <div class="admin-only" style="margin-top:8px"><button class="chip ${b.shared ? 'on' : ''}" id="share-tg">👥 ${b.shared ? (b.sharedWith?.length ? esc(b.sharedWith.join(', ')) : 'Herkesle paylaşıldı') : 'Paylaş'}</button>${b.shared && (b.file || b.file2) ? ` <button class="chip ${b.shareFile ? 'on' : ''}" id="sharefile-tg">📄 ${b.shareFile ? 'Dosyası paylaşıldı' : 'Dosyasını da paylaş'}</button>` : ''}</div></div>
     <div class="status-pick">${state.options.statuses.map(s => `<button class="chip ${b.status === s.name ? 'on' : ''}" data-st="${esc(s.name)}">${s.emoji} ${esc(s.name)}</button>`).join('')}</div>
     ${seriesWarn}
     ${state.guest && (b.file || b.file2) ? guestReadHTML(b) : ''}
@@ -152,11 +152,7 @@ export async function renderDetail(view, [id]) {
       go();
     } catch (err) { msg.textContent = err.message; $$('[data-gread]', view).forEach(y => { y.disabled = false; }); }
   }));
-  $('#share-tg', view)?.addEventListener('click', async () => {
-    b.shared = !b.shared; await saveBook(b);
-    try { await (await import('../share.js')).publishShare(); toast(b.shared ? '👥 Paylaşıldı' : 'Paylaşımdan çıkarıldı'); }
-    catch (e) { toast(`Paylaşım güncellenemedi: ${e.message}`); }
-  });
+  $('#share-tg', view)?.addEventListener('click', () => openShareTo(b, view));
   if ($('#comments-sec', view)) (await import('./sharing.js')).fillComments($('#comments-sec', view), b, { guestMode: !!state.guest });
   $('#ask-book', view).addEventListener('click', async () => { if (await (await import('../ai.js')).hasKey()) location.hash = `#/chat?book=${enc(b.id)}`; else (await import('./ask.js')).openAsk({ book: b }); });
   $('#gr-edit', view).addEventListener('click', () => sheet({
@@ -233,4 +229,44 @@ function guestReadHTML(b) {
   return `<div class="section" id="guest-read"><h3>📖 Oku</h3>${rows}
     ${b.readingSeconds ? `<div class="muted small" style="margin-top:8px">⏱ Bu kitapta toplam ${formatDuration(b.readingSeconds)} okudun</div>` : ''}
     <div class="muted small" id="gread-msg" style="margin-top:6px"></div></div>`;
+}
+
+// Yönetici: kitabı kimlerle paylaşacağını seç (paylaşma / herkes / seçili kişiler)
+async function openShareTo(b, view) {
+  const sh = await import('../share.js');
+  let users = {};
+  try { users = await sh.listUsers(); } catch (e) { toast(e.message); }
+  const names = Object.keys(users).filter(k => users[k].role !== 'admin');
+  const cur = !b.shared ? 'none' : (b.sharedWith?.length ? 'some' : 'all');
+  sheet({
+    title: '👥 Kimlerle paylaşılsın?',
+    body: `<div class="chip-wrap">
+        <button class="chip ${cur === 'none' ? 'on' : ''}" data-mode="none">🚫 Paylaşma</button>
+        <button class="chip ${cur === 'all' ? 'on' : ''}" data-mode="all">🌍 Herkes</button>
+        <button class="chip ${cur === 'some' ? 'on' : ''}" data-mode="some">👤 Seçili kişiler</button></div>
+      <div id="st-users" class="form-group" style="margin-top:10px;${cur === 'some' ? '' : 'display:none'}">
+        ${names.length ? names.map(k => `<label class="set-row"><span>👤 <b>${esc(k)}</b> · ${esc(users[k].name || '')}</span><span class="toggle"><input type="checkbox" data-u="${esc(k)}" ${b.sharedWith?.includes(k) ? 'checked' : ''}><span></span></span></label>`).join('') : '<div class="set-row muted small">Henüz kullanıcı yok. Paylaşım sayfasından ekleyebilirsin.</div>'}</div>
+      <p class="muted small">"Herkes" seçilirse şimdiki ve sonradan eklenecek bütün kullanıcılar görür.</p>`,
+    foot: '<button class="btn" data-close>Vazgeç</button><button class="btn primary" id="st-save">Kaydet</button>',
+    onMount: (el, close) => {
+      let mode = cur;
+      el.querySelectorAll('[data-mode]').forEach(x => x.addEventListener('click', () => {
+        mode = x.dataset.mode;
+        el.querySelectorAll('[data-mode]').forEach(y => y.classList.toggle('on', y === x));
+        $('#st-users', el).style.display = mode === 'some' ? '' : 'none';
+      }));
+      $('#st-save', el).addEventListener('click', async () => {
+        const picked = [...el.querySelectorAll('[data-u]:checked')].map(x => x.dataset.u);
+        if (mode === 'some' && !picked.length) { toast('En az bir kişi seç'); return; }
+        b.shared = mode !== 'none';
+        b.sharedWith = mode === 'some' ? picked : [];
+        if (!b.shared) b.shareFile = false;
+        const btn = $('#st-save', el); btn.disabled = true;
+        await saveBook(b);
+        try { await sh.publishShare(); toast(!b.shared ? 'Paylaşımdan çıkarıldı' : mode === 'all' ? '🌍 Herkesle paylaşıldı' : `👤 ${picked.join(', ')} ile paylaşıldı`); }
+        catch (e) { toast(`Paylaşım güncellenemedi: ${e.message}`); }
+        close(); renderDetail(view, [b.id]);
+      });
+    },
+  });
 }

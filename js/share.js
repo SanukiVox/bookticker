@@ -50,6 +50,7 @@ export function sanitize(b) {
   const o = { status: 'Okunacak' };
   for (const k of PUBLIC) if (b[k] !== undefined) o[k] = b[k];
   o.coverOrig = b.coverOrig || null; o.coverTr = b.coverTr || null;
+  if (Array.isArray(b.sharedWith) && b.sharedWith.length) o.to = b.sharedWith;
   if (b.shareFile) for (const k of ['file', 'file2']) {
     const f = b[k];
     if (f?.key) o[k] = { key: f.key, hash: f.hash, name: f.name, type: f.type, size: f.size, lang: f.lang, path: filePath(f) };
@@ -245,7 +246,8 @@ export async function login(username, password) {
 export async function loadShared() {
   const g = guest();
   const text = await api(g.token, g.owner, g.repo, `/contents/${SHARED_FILE}`, { raw: true });
-  const books = JSON.parse(text).books || [];
+  const me = normUser(g.user);
+  const books = (JSON.parse(text).books || []).filter(b => !Array.isArray(b.to) || !b.to.length || b.to.includes(me));
   const { db } = await import('./db.js');
   for (const b of books) { const mine = await db.getMeta(`guest:${b.id}`); if (mine) Object.assign(b, mine); }
   return books;
@@ -322,4 +324,28 @@ export async function replyRequest(number, text, close) {
   const c = ctx();
   if (String(text || '').trim()) await api(c.token, c.owner, c.repo, `/issues/${number}/comments`, { method: 'POST', body: { body: `${text.trim()}\n\n<!--kitapligim ${JSON.stringify({ name: 'Ben' })}-->` } });
   if (close != null) await api(c.token, c.owner, c.repo, `/issues/${number}`, { method: 'PATCH', body: { state: close ? 'closed' : 'open' } });
+}
+
+// ---------- Duyurular (yöneticiden herkese ya da seçilen kişilere) ----------
+// "duyuru: …" başlıklı issue; bildirim sistemi kuruluysa telefonlara bildirim olarak da gider.
+const ANN = /^duyuru:/;
+export async function sendAnnouncement({ title, text, to }) {
+  const { token, owner } = admin();
+  const t = String(text || '').trim(), h = String(title || '').trim() || 'Kitaplığım';
+  if (!t) throw new Error('Bir mesaj yaz');
+  const meta = { name: 'Ben', title: h, to: to?.length ? to.map(normUser) : 'all' };
+  await api(token, owner, SHARE_REPO, '/issues', { method: 'POST', body: { title: `duyuru: ${h}`.slice(0, 120), body: `${t}\n\n<!--kitapligim ${JSON.stringify(meta)}-->` } });
+}
+export async function listAnnouncements(limit = 20) {
+  const c = ctx(), me = guest()?.user ? normUser(guest().user) : null, out = [];
+  const list = await api(c.token, c.owner, c.repo, `/issues?state=all&per_page=100`);
+  for (const i of list) {
+    if (!ANN.test(i.title || '')) continue;
+    const m = MARK.exec(i.body || ''); let meta = {};
+    try { meta = m ? JSON.parse(m[1]) : {}; } catch { /* yok */ }
+    if (me && meta.to !== 'all' && !(Array.isArray(meta.to) && meta.to.includes(me))) continue;
+    out.push({ number: i.number, at: i.created_at, title: meta.title || i.title.replace(ANN, '').trim(), text: (i.body || '').replace(MARK, '').trim(), to: meta.to });
+    if (out.length >= limit) break;
+  }
+  return out;
 }
