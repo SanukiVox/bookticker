@@ -181,7 +181,7 @@ export async function downloadOne(b, slot, onProgress) {
 
 let running = null;
 // Yüklenmemişleri yükle; ayar açıksa eksikleri indir. needAuth: bağlantı yenilenmeli mi
-export function syncDrive({ download } = {}) {
+export function syncDrive({ download, onProgress } = {}) {
   running ||= (async () => {
     const c = await driveConf();
     if (!c.connected || !c.clientId) return { skipped: true };
@@ -190,16 +190,28 @@ export function syncDrive({ download } = {}) {
     if (!up.length && !down.length) return { up: 0, down: 0 };
     if (!tokenValid(c)) return { needAuth: true, up: up.length, down: down.length };
     let nu = 0, nd = 0;
+    const failed = [];
+    // Bir dosyadaki hata diğerlerini durdurmasın; yalnız bağlantı hatası tümünü durdurur
+    const each = async (list, fn, label) => {
+      for (const [i, x] of list.entries()) {
+        onProgress?.(`${label} ${i + 1}/${list.length}: ${displayTitle(x.b)}`);
+        try { if (await fn(x)) label === '⬆️' ? nu++ : nd++; }
+        catch (e) {
+          if (e instanceof AuthError) throw e;
+          failed.push(`${displayTitle(x.b)}: ${e.name === 'QuotaExceededError' ? 'cihazda yer yok' : e.message}`);
+        }
+      }
+    };
     try {
-      for (const x of up) if (await uploadOne(x)) nu++;
-      for (const x of down) if (await downloadOne(x.b, x.slot)) nd++;
-      await saveConf({ lastSync: Date.now(), lastError: '' });
+      await each(up, uploadOne, '⬆️');
+      await each(down, x => downloadOne(x.b, x.slot), '⬇️');
+      await saveConf({ lastSync: Date.now(), lastError: failed.length ? `${failed.length} dosya alınamadı · ${failed[0]}` : '' });
     } catch (e) {
       await saveConf({ lastError: e.message });
       if (e instanceof AuthError) return { needAuth: true, up: nu, down: nd };
       throw e;
     }
-    return { up: nu, down: nd };
+    return { up: nu, down: nd, failed };
   })().finally(() => { running = null; });
   return running;
 }

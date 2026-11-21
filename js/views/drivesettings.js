@@ -50,9 +50,10 @@ export async function fillDriveSection(view, rerender) {
   $('#gd-sync', box)?.addEventListener('click', async e => {
     const btn = e.currentTarget; btn.firstChild.textContent = '🔄 Eşitleniyor…';
     try {
-      const r = await gd.syncDrive({ download: true });
+      const r = await gd.syncDrive({ download: true, onProgress: m => { btn.firstChild.textContent = m.length > 48 ? `${m.slice(0, 48)}…` : m; } });
       if (r?.needAuth) { gd.connect({ silent: !!c.email, returnTo: '#/settings' }); return; }
-      toast(`☁️ ${r.up || 0} yüklendi · ${r.down || 0} indirildi`);
+      if (r?.skipped) toast('Drive bağlı değil');
+      else toast(`☁️ ${r.up || 0} yüklendi · ${r.down || 0} indirildi${r.failed?.length ? ` · ⚠️ ${r.failed.length} dosya alınamadı (ayrıntı aşağıda)` : ''}`, r.failed?.length ? 6000 : undefined);
     } catch (err) { toast(err.message || 'Eşitlenemedi'); }
     rerender?.();
   });
