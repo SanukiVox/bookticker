@@ -1,14 +1,6 @@
 {
  "app": "kitapligim-users",
  "users": {
-  "nurella": {
-   "name": "Nurella",
-   "salt": "hq/GTLdJ2qQAFCyVoAmXgA==",
-   "iv": "t+o1X8gOiyn53Oe5",
-   "ct": "Xj3LUBgFYtXBeHiQo/qX6aG1N0ZZAhVmpunGhi6piO1ettZJYlu0mhKd/BrLPWibBo/VqvlYpGqt6QfQ44dgvHVJn1dzKyVVs0nhE+8lojsUaVHfqaHuvUH3tNIaQ3Xfhd7lRJXJ1KOSzhnsF+c9rbWFaVrdsPIQ0EquLlXpD4mjF/S9mC7z0M7UI3G7rQ7fUSQkbOR8r9ikh3t7rkHQbUPU/WwJ85nOkX0mEB21U1jRlnrqYAAWfg==",
-   "iter": 310000,
-   "created": "2026-11-20T14:53:29.545Z"
-  },
   "sanukivox": {
    "name": "Yönetici",
    "role": "admin",
@@ -17,6 +9,22 @@
    "ct": "RTg3BXwlaJxJ2tcn7hkYIoF7GEJY1n9HaLPE7wIsZYkkFtu59GhmWxlCEIxCMKOiOwa9QMJ/mjWlagZ+Hpb5jcE3P6/F7c19sO5M30Kyy0O7YYZuZA2GuqjBsG1ydG6CjoOuRwwkAU+GAMIoXh/aJfOFAQKKH6fWheO8OmVC1bYXF8JxXfI7NHjsKr0ApuqPFZ1enAes43gG9h6ainHI8XULONd/IJnApTeGdcauWARFilwBRw2dPBWd+blJPOMZ2JL1jmV3DW6mY7Bo7XR3yZb4z9YyVFAF",
    "iter": 310000,
    "created": "2026-11-20T15:15:36.013Z"
+  },
+  "gizmo": {
+   "name": "Gizmo",
+   "salt": "xpMyd3vA1EC+VzzBMIJ9mw==",
+   "iv": "bAyfR/Gqadm4Eh/A",
+   "ct": "UELxwVLULA18jKuFckkoMfOtZ3zFLEJ9OOSEKJi/Z8ABCcXM4iiTNe4jtOHrFJVWqyyzKAblA6bu71XfEQ4P3iyYAeVma5kJ01UeyQuv5g6KdVjGFOjmWd8ItOmjdJ1gDKDpnKlHSomsBCqCq+ZCIlZgE4Lfor7a7daZronGKv5jS+elR4IKor8cmpM8J7RARWrYMZKe2xZMarCHVT6jaj6tot9JYTNA0AVpMe3vLaslF5i5VLw=",
+   "iter": 310000,
+   "created": "2026-11-21T09:19:09.379Z"
+  },
+  "nurella": {
+   "name": "nurella",
+   "salt": "jN9H0CPfI1KsipT7HGBFhA==",
+   "iv": "1A7EFeFBVq9WDgWj",
+   "ct": "oTP8+ECS2aiMVhwyW4gTTOlx0DDl8sFgJh750u/fNVJ2BKitzNpSt4kdFM0aIO4ORKpqOBKiDkoA4pYBFsJGkD6zy/Zl9LdX98yAV+XKftyExGOdC5SweE849DV1o+cM60Pjo32xmTYTQZxyVa8bXtTO6tG5HZdiSGyD8btM78K7C21/ECmylQGRCBfxF/G9K5ckVDFs+mdeadG5+sFnXPa2Ju6mM3t0lyeZD/df8VpKmmpMa6N/zw==",
+   "iter": 310000,
+   "created": "2026-11-21T09:21:42.366Z"
   }
  }
 }
