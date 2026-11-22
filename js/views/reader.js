@@ -333,22 +333,55 @@ export async function renderReader(view, [id], query) {
   });
 
   // ---------- Yapay zekâya gönder (önce ilerlemeyi kaydet ki "okuduğum yere kadar" güncel olsun) ----------
-  // Sesli kitap: okurken dinle (dokun → çal/durdur, basılı tut → oynatıcıyı aç)
+  // Sesli kitap: okurken dinle. 🎧 → alttaki denetim çubuğunu aç/kapat (gerekirse çalmaya başlar)
   const rAudio = $('#r-audio', root);
   if (rAudio) {
     const A = await import('../audio.js');
     const real = getBook(book.id) || book;
-    const paint = () => { if (rAudio.isConnected) rAudio.textContent = A.player.book?.id === real.id && A.player.playing ? '⏸' : '🎧'; };
-    const off = A.onPlayer(() => { if (!rAudio.isConnected) off(); else paint(); });
+    const bar = document.createElement('div');
+    bar.className = 'r-abar';
+    bar.innerHTML = `<button data-a="back" aria-label="15 saniye geri"><span>↺</span><small>15</small></button>
+      <button data-a="play" class="main" aria-label="Çal / durdur">▶</button>
+      <button data-a="fwd" aria-label="30 saniye ileri"><span>↻</span><small>30</small></button>
+      <button data-a="rate" class="rate" aria-label="Hız">1×</button>
+      <span class="r-at"></span>
+      <button data-a="open" aria-label="Oynatıcıyı aç">⤢</button>
+      <button data-a="hide" aria-label="Çubuğu gizle">✕</button>`;
+    root.appendChild(bar);
+    const mine = () => A.player.book?.id === real.id;
+    const show = v => { bar.classList.toggle('on', v); rAudio.classList.toggle('on', v); };
+    const paint = () => {
+      if (!bar.isConnected) return;
+      $('[data-a=play]', bar).textContent = mine() && A.player.playing ? '⏸' : '▶';
+      $('[data-a=rate]', bar).textContent = `${String(mine() ? A.player.rate : real.audioPos?.rate || state.settings.audioRate || 1).replace('.', ',')}×`;
+      const n = real.audio?.tracks?.length || 0;
+      $('.r-at', bar).textContent = mine() ? `${n > 1 ? `${A.player.idx + 1}/${n} · ` : ''}${A.fmtTime(A.player.time)}` : '';
+    };
+    const off = A.onPlayer(() => { if (!bar.isConnected) off(); else paint(); });
     paint();
-    let lp = null;
-    rAudio.addEventListener('pointerdown', () => { lp = setTimeout(() => { lp = 'done'; location.hash = `#/listen/${encodeURIComponent(real.id)}`; }, 600); });
-    rAudio.addEventListener('pointerup', () => { if (lp !== 'done') clearTimeout(lp); });
+    if (mine()) show(true); // bu kitabın sesi zaten çalıyorsa çubuk açık gelsin
+    const ensure = async (autoplay = false) => {
+      if (mine()) return true;
+      try { await A.resume(real, autoplay); return true; } catch (e) { toast(e.message); return false; }
+    };
     rAudio.addEventListener('click', async () => {
-      if (lp === 'done') { lp = null; return; }
       A.unlock();
-      try { if (A.player.book?.id === real.id) A.toggle(); else { await A.resume(real, true); toast('🎧 Sesli kitap çalıyor · basılı tutarsan oynatıcı açılır'); } }
-      catch (e) { toast(e.message); }
+      if (bar.classList.contains('on')) { show(false); return; }
+      show(true);
+      if (!mine()) await ensure(true);
+    });
+    bar.addEventListener('click', async e => {
+      const a = e.target.closest('button')?.dataset.a;
+      if (!a) return;
+      e.stopPropagation();
+      A.unlock();
+      if (a === 'hide') { show(false); return; }
+      if (a === 'open') { location.hash = `#/listen/${encodeURIComponent(real.id)}`; return; }
+      if (a === 'play') { if (!mine()) await ensure(true); else A.toggle(); return; }
+      if (!(await ensure())) return;
+      if (a === 'back') A.seek(-15);
+      else if (a === 'fwd') A.seek(30);
+      else if (a === 'rate') { const R = A.RATES, i = R.findIndex(r => Math.abs(r - A.player.rate) < 0.01); A.setRate(R[(i + 1) % R.length]); }
     });
   }
   $('#r-ai', root).addEventListener('click', async () => {
