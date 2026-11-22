@@ -12,6 +12,7 @@ const SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const API = 'https://www.googleapis.com/drive/v3';
 const UP = 'https://www.googleapis.com/upload/drive/v3';
 const FOLDER = 'Kitaplığım';
+const AUDIO_FOLDER = 'Kitaplığım - Sesli Kitaplar'; // her kitap için içinde ayrı bir alt klasör
 // Google'a hep aynı dönüş adresi gitsin: .../bookticker, .../bookticker/index.html → .../bookticker/
 // (Google Cloud'daki "Authorized redirect URIs" ile birebir aynı olmalı)
 export const redirectUri = () => {
@@ -77,7 +78,7 @@ export async function handleRedirect() {
 export async function disconnect() {
   const c = await driveConf();
   if (c.token) fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(c.token)}`, { method: 'POST' }).catch(() => {});
-  await saveConf({ token: '', exp: 0, connected: false, folderId: '' });
+  await saveConf({ token: '', exp: 0, connected: false, folderId: '', audioFolderId: '' });
 }
 
 // ---------- API ----------
@@ -91,14 +92,34 @@ async function api(path, { method = 'GET', body, headers = {}, raw = false, base
   return raw ? r : r.status === 204 ? null : r.json();
 }
 
+// Klasörü bul ya da oluştur (parent verilirse onun içinde)
+async function ensureFolder(name, parent) {
+  const esc = s => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  const q = encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name='${esc(name)}' and trashed=false${parent ? ` and '${parent}' in parents` : ''}`);
+  const found = await api(`/files?q=${q}&fields=files(id)&spaces=drive`);
+  return found.files?.[0]?.id
+    || (await api('/files?fields=id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, mimeType: 'application/vnd.google-apps.folder', ...(parent ? { parents: [parent] } : {}) }) })).id;
+}
 async function folderId() {
   const c = await driveConf();
   if (c.folderId) return c.folderId;
-  const q = encodeURIComponent(`mimeType='application/vnd.google-apps.folder' and name='${FOLDER}' and trashed=false`);
-  const found = await api(`/files?q=${q}&fields=files(id)&spaces=drive`);
-  let id = found.files?.[0]?.id;
-  if (!id) id = (await api('/files?fields=id', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: FOLDER, mimeType: 'application/vnd.google-apps.folder' }) })).id;
+  const id = await ensureFolder(FOLDER);
   await saveConf({ folderId: id });
+  return id;
+}
+async function audioRootId() {
+  const c = await driveConf();
+  if (c.audioFolderId) return c.audioFolderId;
+  const id = await ensureFolder(AUDIO_FOLDER);
+  await saveConf({ audioFolderId: id });
+  return id;
+}
+const safeName = s => s.replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 100);
+// Kitabın sesli kitap klasörü: "Kitaplığım - Sesli Kitaplar / Kitap adı - Yazar"
+async function audioBookFolder(b) {
+  if (b.audio?.driveFolder) return b.audio.driveFolder;
+  const id = await ensureFolder(safeName(`${displayTitle(b)}${b.author ? ` - ${b.author}` : ''}`), await audioRootId());
+  if (b.audio) { b.audio.driveFolder = id; await saveBook(b); }
   return id;
 }
 
@@ -109,8 +130,8 @@ async function findByHash(hash) {
   return r.files?.[0]?.id || null;
 }
 
-async function uploadBlob(blob, name, hash) {
-  const parent = await folderId();
+async function uploadBlob(blob, name, hash, parentId) {
+  const parent = parentId || (await folderId());
   const meta = { name, parents: [parent], appProperties: { hash: hash || '', app: 'kitapligim' } };
   if (blob.size <= 4.5 * 1024 * 1024) {
     const boundary = `kj${Math.random().toString(36).slice(2)}`;
@@ -140,6 +161,11 @@ export async function pendingUploads() {
     const key = await resolveLocalKey(slotBook(b, slot));
     if (key) out.push({ b, slot, f, key });
   }
+  // Sesli kitap parçaları (yalnızca bu cihazda olanlar yüklenir)
+  const keys = new Set(await db.allFileKeys());
+  for (const b of state.books) for (const t of b.audio?.tracks || []) {
+    if (!t.driveId && keys.has(t.key)) out.push({ b, audio: t, key: t.key });
+  }
   return out;
 }
 // Drive'da olup bu cihazda olmayan dosyalar
@@ -153,9 +179,15 @@ export async function pendingDownloads() {
   return out;
 }
 
-export async function uploadOne({ b, slot, f, key }) {
+export async function uploadOne({ b, slot, f, key, audio }) {
   const blob = await db.getFile(key);
   if (!blob) return false;
+  if (audio) {
+    const id = (await findByHash(audio.key)) || (await uploadBlob(blob, safeName(audio.name), audio.key, await audioBookFolder(b)));
+    const cur = (b.audio?.tracks || []).find(x => x.key === audio.key);
+    if (cur) { cur.driveId = id; b.audio = { ...b.audio }; await saveBook(b); }
+    return true;
+  }
   const id = (await findByHash(f.hash)) || (await uploadBlob(blob, fileName(b, f, slot), f.hash));
   const cur = slot === 2 ? b.file2 : b.file;
   if (cur && (cur.hash === f.hash || !cur.hash)) { cur.driveId = id; await saveBook(b); }
@@ -177,6 +209,25 @@ export async function downloadOne(b, slot, onProgress) {
   await db.putFile(key, new Blob([blob], { type: f.type === 'pdf' ? 'application/pdf' : 'application/epub+zip' }));
   if (!f.key) { f.key = key; await saveBook(b); }
   return true;
+}
+
+// Sesli kitap: bu cihazda olmayan parçaları Drive'dan indir (yalnızca istenince; otomatik değil, dosyalar büyük)
+export async function downloadAudio(b, { only, onProgress } = {}) {
+  const keys = new Set(await db.allFileKeys());
+  const list = (b.audio?.tracks || []).map((t, i) => ({ t, i })).filter(({ t, i }) => t.driveId && !keys.has(t.key) && (only == null || only === i));
+  const total = list.reduce((s, x) => s + (x.t.size || 0), 0) || 1;
+  let done = 0;
+  for (const { t } of list) {
+    const r = await api(`/files/${t.driveId}?alt=media`, { raw: true });
+    let blob;
+    if (r.body && onProgress) {
+      const reader = r.body.getReader(); const parts = [];
+      for (;;) { const { done: d, value } = await reader.read(); if (d) break; parts.push(value); done += value.length; onProgress(done / total); }
+      blob = new Blob(parts, { type: t.type || 'audio/mpeg' });
+    } else { blob = new Blob([await r.blob()], { type: t.type || 'audio/mpeg' }); done += t.size || 0; }
+    await db.putFile(t.key, blob);
+  }
+  return list.length;
 }
 
 let running = null;
@@ -242,7 +293,8 @@ export async function resumeAfterAuth(toast) {
     const b = state.books.find(x => x.id === bookId);
     if (!b) return false;
     toast?.('☁️ Drive\'dan indiriliyor…');
-    await downloadOne(b, slot);
+    if (slot === 'audio') await downloadAudio(b, { onProgress: f => toast?.(`☁️ Sesli kitap indiriliyor… %${Math.round(f * 100)}`) });
+    else await downloadOne(b, slot);
     toast?.('☁️ Dosya indirildi');
     return true;
   } catch (e) { toast?.(e.message || 'İndirilemedi'); return false; }

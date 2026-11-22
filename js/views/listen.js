@@ -3,6 +3,7 @@ import { getBook, displayTitle } from '../store.js';
 import { esc, enc, toast, sheet, confirmSheet, coverHTML, hydrateCovers, $, $$ } from '../ui.js';
 import { formatSize, formatDuration } from '../files.js';
 import * as A from '../audio.js';
+import { db } from '../db.js';
 import { backButton, wireBack } from './detail.js';
 
 const SLEEPS = [[0, 'Kapalı'], [15, '15 dk'], [30, '30 dk'], [45, '45 dk'], [60, '1 saat'], ['end', 'Bölüm sonunda']];
@@ -157,11 +158,19 @@ export function audioSectionHTML(b) {
   const pct = A.audioPercent(b);
   const mine = A.player.book?.id === b.id;
   const pos = b.audioPos;
-  const info = `<div class="file-chip">🎧 <b>${n > 1 ? `${n} bölüm` : esc(b.audio.tracks[0].name)}</b><span>${total ? `${formatDuration(total)} · ` : ''}${formatSize(size)}${b.listenSeconds ? ` · ${formatDuration(b.listenSeconds)} dinlendi` : ''}</span></div>`;
+  const info = `<div class="file-chip">🎧 <b>${n > 1 ? `${n} bölüm` : esc(b.audio.tracks[0].name)}</b><span>${total ? `${formatDuration(total)} · ` : ''}${formatSize(size)}${b.listenSeconds ? ` · ${formatDuration(b.listenSeconds)} dinlendi` : ''}${b.audio.tracks.every(x => x.driveId) ? ' · ☁️' : ''}</span></div>`;
   const prog = pct != null ? `<div><div style="display:flex;justify-content:space-between;font-size:14px"><span>${n > 1 && pos ? `Bölüm ${(pos.t || 0) + 1} / ${n} · ${A.fmtTime(pos.s)}` : pos ? A.fmtTime(pos.s) : ''}</span><b>%${Math.floor(pct)}</b></div><div class="progress" style="height:8px"><span style="width:${pct}%"></span></div></div>` : '';
+  if (where === 'drive') {
+    const miss = b.audio.tracks.filter(x => x.driveId && !(db.fileKeysSync()?.has(x.key)));
+    const mb = miss.reduce((t, x) => t + (x.size || 0), 0);
+    return `<div class="section" id="audio-sec"><h3>🎧 Sesli kitap</h3>
+      <div class="muted small" style="margin-bottom:8px">☁️ ${miss.length === b.audio.tracks.length ? 'Ses dosyaları' : `${miss.length} bölüm`} Google Drive'da (${formatSize(mb)}). Hepsini indirebilir ya da hemen dinlemeye başlayabilirsin; çalınan bölüm o an indirilir.</div>
+      <div class="read-cta"><a class="btn primary" href="#/listen/${enc(b.id)}" id="au-go">🎧 ${pct ? `Dinlemeye devam et · %${Math.floor(pct)}` : 'Dinlemeye başla'}</a></div>
+      ${prog}${info}<div class="btn-row"><button class="btn" id="au-dl">☁️ Tümünü Drive'dan indir</button><button class="mini-btn" id="au-rm" style="color:var(--danger);background:transparent">Kaldır</button></div></div>`;
+  }
   if (where !== 'local') {
     return `<div class="section" id="audio-sec"><h3>🎧 Sesli kitap</h3>
-      <div class="warn">🎧 <span>${where === 'partial' ? 'Bazı bölümler' : 'Ses dosyaları'} başka bir cihazda eklenmiş; bu cihazda yok. Aynı dosyaları burada da seç, kaldığın yer korunur.</span></div>
+      <div class="warn">🎧 <span>${where === 'partial' ? 'Bazı bölümler' : 'Ses dosyaları'} başka bir cihazda eklenmiş ve henüz Drive'a yüklenmemiş. O cihazda Google Drive bağlıysa kendiliğinden yüklenir; ya da aynı dosyaları burada seç. Kaldığın yer korunur.</span></div>
       ${prog}${info}<div class="btn-row">${picker('📎 Dosyaları ekle', 'btn primary', 'replace')}<button class="mini-btn" id="au-rm" style="color:var(--danger);background:transparent">Kaldır</button></div></div>`;
   }
   return `<div class="section" id="audio-sec"><h3>🎧 Sesli kitap</h3>
@@ -184,6 +193,22 @@ export function wireAudioSection(view, b) {
     } catch (err) { toast(err.message || 'Eklenemedi'); }
   }));
   $('#au-go', sec)?.addEventListener('click', () => A.unlock());
+  $('#au-dl', sec)?.addEventListener('click', async e => {
+    const btn = e.currentTarget;
+    const gd = await import('../gdrive.js');
+    const c = await gd.driveConf();
+    if (!c.clientId || !c.connected) { toast('Önce Ayarlar → Google Drive bölümünden bağlan'); return; }
+    if (!gd.tokenValid(c)) { gd.rememberDownload(b.id, 'audio'); gd.connect({ silent: !!c.email, returnTo: location.hash }); return; }
+    btn.disabled = true;
+    try {
+      await gd.downloadAudio(b, { onProgress: f => { btn.textContent = `☁️ İndiriliyor… %${Math.round(f * 100)}`; } });
+      toast('☁️ Sesli kitap indirildi');
+    } catch (err) {
+      btn.disabled = false; btn.textContent = '☁️ Tümünü Drive\'dan indir';
+      if (/yenilenmeli/.test(err.message)) { gd.rememberDownload(b.id, 'audio'); gd.connect({ silent: !!c.email, returnTo: location.hash }); }
+      else toast(err.name === 'QuotaExceededError' ? 'Cihazda yer yok' : err.message || 'İndirilemedi');
+    }
+  });
   $('#au-rm', sec)?.addEventListener('click', async () => {
     if (!(await confirmSheet('Sesli kitabı kaldır', 'Ses dosyaları bu cihazdan silinecek. Kaldığın yer ve dinleme süren kalır.', 'Kaldır'))) return;
     await A.removeAudio(b); toast('Sesli kitap kaldırıldı');

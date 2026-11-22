@@ -49,8 +49,10 @@ export function audioWhere(b) {
   if (!tr.length) return null;
   const keys = db.fileKeysSync();
   if (!keys) return 'local';
-  const n = tr.filter(x => keys.has(x.key)).length;
-  return n === tr.length ? 'local' : n ? 'partial' : 'missing';
+  const miss = tr.filter(x => !keys.has(x.key));
+  if (!miss.length) return 'local';
+  if (miss.every(x => x.driveId)) return 'drive';
+  return miss.length < tr.length ? 'partial' : 'missing';
 }
 
 // Dosyaları ekle. replace: true → eskilerin yerine; false → sona ekle (yeni bölümler)
@@ -67,7 +69,7 @@ export async function attachAudio(book, files, { replace = true, onProgress } = 
     const blob = f.type ? f : new Blob([f], { type });
     await db.putFile(key, blob);
     const prev = old.find(x => x.key === key);
-    tracks.push({ key, name: f.name, size: f.size, dur: prev?.dur || (await probeDuration(blob)), type });
+    tracks.push({ key, name: f.name, size: f.size, dur: prev?.dur || (await probeDuration(blob)), type, ...(prev?.driveId ? { driveId: prev.driveId } : {}) });
   }
   let next;
   if (replace) {
@@ -79,8 +81,10 @@ export async function attachAudio(book, files, { replace = true, onProgress } = 
     next = [...old];
     for (const x of tracks) if (!next.some(y => y.key === x.key)) next.push(x);
   }
-  book.audio = { tracks: next, addedAt: Date.now() };
+  book.audio = { tracks: next, addedAt: Date.now(), ...(book.audio?.driveFolder ? { driveFolder: book.audio.driveFolder } : {}) };
   await saveBook(book);
+  // Drive bağlıysa arka planda "Kitaplığım - Sesli Kitaplar" klasörüne yükle
+  import('./gdrive.js').then(m => m.syncDrive({ download: false })).catch(() => {});
   if (P.book?.id === book.id) { P.book = book; emit(); }
   return next.length;
 }
@@ -226,7 +230,14 @@ export async function open(b, idx = 0, time = 0, autoplay = true) {
   if (!tr.length) throw new Error('Bu kitabın sesli kitabı yok');
   idx = Math.max(0, Math.min(tr.length - 1, idx));
   if (P.book && (P.book.id !== b.id || P.idx !== idx)) { tick(); await save(P.book.id !== b.id); }
-  const blob = await db.getFile(tr[idx].key);
+  let blob = await db.getFile(tr[idx].key);
+  if (!blob && tr[idx].driveId) { // bu bölüm yalnız Drive'da: önce onu indir
+    const gd = await import('./gdrive.js');
+    P.error = '☁️ Bölüm Drive\'dan indiriliyor…'; emit();
+    try { await gd.downloadAudio(b, { only: idx, onProgress: f => { P.error = `☁️ Bölüm Drive'dan indiriliyor… %${Math.round(f * 100)}`; emit(); } }); }
+    catch (e) { P.error = ''; emit(); throw new Error(/yenilenmeli/.test(e.message) ? 'Drive bağlantısı yenilenmeli: kitap sayfasındaki "Drive\'dan indir" düğmesini kullan' : e.message); }
+    P.error = ''; blob = await db.getFile(tr[idx].key);
+  }
   if (!blob) throw new Error(`"${tr[idx].name}" bu cihazda yok; dosyayı yeniden ekle`);
   if (P.url) URL.revokeObjectURL(P.url);
   P.url = URL.createObjectURL(blob);

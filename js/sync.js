@@ -186,6 +186,12 @@ function mergeBook(a, b) {
   out.readingSeconds = Math.max(t(a.readingSeconds), t(b.readingSeconds)) || undefined;
   // Sesli kitap: kaldığın yer en son dinlenen cihazdan, dinleme süresi büyük olan
   if (a.audioPos || b.audioPos) out.audioPos = !a.audioPos ? b.audioPos : !b.audioPos ? a.audioPos : (t(b.audioPos.updatedAt) > t(a.audioPos.updatedAt) ? b.audioPos : a.audioPos);
+  // Sesli kitap parçalarının Drive kimlikleri hangi cihazda yazıldıysa korunur
+  if (out.audio?.tracks) {
+    const ids = new Map(), folder = a.audio?.driveFolder || b.audio?.driveFolder;
+    for (const x of [...(a.audio?.tracks || []), ...(b.audio?.tracks || [])]) if (x.driveId) ids.set(x.key, x.driveId);
+    if (ids.size || (folder && !out.audio.driveFolder)) out.audio = { ...out.audio, ...(folder && !out.audio.driveFolder ? { driveFolder: folder } : {}), tracks: out.audio.tracks.map(x => (x.driveId || !ids.has(x.key) ? x : { ...x, driveId: ids.get(x.key) })) };
+  }
   if (a.listenSeconds || b.listenSeconds) out.listenSeconds = Math.max(t(a.listenSeconds), t(b.listenSeconds));
   return out;
 }
