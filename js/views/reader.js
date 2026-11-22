@@ -100,6 +100,7 @@ export async function renderReader(view, [id], query) {
         <div class="r-title">${esc(displayTitle(book))}${otherFile ? `<div class="small muted" style="font-weight:500">${esc(langLabel(book.file))}</div>` : ''}</div>
         ${otherFile ? `<button class="icon-btn" id="r-split" aria-label="İkisini aynı anda göster" title="Orijinal ve çeviri aynı anda" style="font-size:20px">◫</button>` : ''}
         ${otherFile ? `<button class="icon-btn" id="r-swap" aria-label="Diğer dosyaya geç" title="${esc(langLabel(otherFile))} dosyasına geç" style="font-size:12px;font-weight:700;width:auto;padding:0 8px;white-space:nowrap">⇄ ${otherFile.lang === 'tr' ? 'Çeviri' : otherFile.lang === 'orig' ? 'Orijinal' : 'Diğer'}</button>` : ''}
+        ${book.audio?.tracks?.length ? '<button class="icon-btn" id="r-audio" aria-label="Sesli kitabı çal/durdur" style="font-size:20px">🎧</button>' : ''}
         <button class="icon-btn" id="r-ai" aria-label="Yapay zekâya gönder" style="font-size:20px">🤖</button>
         <button class="icon-btn" id="r-toc" aria-label="İçindekiler"><svg viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></button>
         <button class="icon-btn" id="r-bm" aria-label="Yer imi"><svg viewBox="0 0 24 24"><path d="M6 4h12v17l-6-4-6 4z"/></svg></button>
@@ -332,6 +333,24 @@ export async function renderReader(view, [id], query) {
   });
 
   // ---------- Yapay zekâya gönder (önce ilerlemeyi kaydet ki "okuduğum yere kadar" güncel olsun) ----------
+  // Sesli kitap: okurken dinle (dokun → çal/durdur, basılı tut → oynatıcıyı aç)
+  const rAudio = $('#r-audio', root);
+  if (rAudio) {
+    const A = await import('../audio.js');
+    const real = getBook(book.id) || book;
+    const paint = () => { if (rAudio.isConnected) rAudio.textContent = A.player.book?.id === real.id && A.player.playing ? '⏸' : '🎧'; };
+    const off = A.onPlayer(() => { if (!rAudio.isConnected) off(); else paint(); });
+    paint();
+    let lp = null;
+    rAudio.addEventListener('pointerdown', () => { lp = setTimeout(() => { lp = 'done'; location.hash = `#/listen/${encodeURIComponent(real.id)}`; }, 600); });
+    rAudio.addEventListener('pointerup', () => { if (lp !== 'done') clearTimeout(lp); });
+    rAudio.addEventListener('click', async () => {
+      if (lp === 'done') { lp = null; return; }
+      A.unlock();
+      try { if (A.player.book?.id === real.id) A.toggle(); else { await A.resume(real, true); toast('🎧 Sesli kitap çalıyor · basılı tutarsan oynatıcı açılır'); } }
+      catch (e) { toast(e.message); }
+    });
+  }
   $('#r-ai', root).addEventListener('click', async () => {
     await persist();
     const send = async () => (await import('./sendbook.js')).openSendBook(book);

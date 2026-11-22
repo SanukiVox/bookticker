@@ -184,6 +184,9 @@ function mergeBook(a, b) {
     if (Object.keys(del).length) out.vocabDel = del;
   }
   out.readingSeconds = Math.max(t(a.readingSeconds), t(b.readingSeconds)) || undefined;
+  // Sesli kitap: kaldığın yer en son dinlenen cihazdan, dinleme süresi büyük olan
+  if (a.audioPos || b.audioPos) out.audioPos = !a.audioPos ? b.audioPos : !b.audioPos ? a.audioPos : (t(b.audioPos.updatedAt) > t(a.audioPos.updatedAt) ? b.audioPos : a.audioPos);
+  if (a.listenSeconds || b.listenSeconds) out.listenSeconds = Math.max(t(a.listenSeconds), t(b.listenSeconds));
   return out;
 }
 
@@ -249,7 +252,7 @@ async function applyLocal(merged, head) {
   try { await replaceAll(merged.books, merged.options, merged.settings); } finally { suppress = false; }
 }
 
-const fingerprint = d => JSON.stringify([d.books.map(b => [b.id, b.updatedAt, b.progress?.updatedAt, (b.bookmarks || []).length, b.readingSeconds, b.progress2?.updatedAt, (b.bookmarks2 || []).length, (b.vocab || []).reduce((m, v) => Math.max(m, v.upd || 0), 0), (b.vocab || []).length, Object.keys(b.vocabDel || {}).length, ...[b.highlights, b.highlights2].map(l => (l || []).reduce((m, v) => Math.max(m, v.upd || 0), 0) + ':' + (l || []).length), Object.keys(b.bookmarksDel || {}).length + Object.keys(b.highlightsDel || {}).length + Object.keys(b.bookmarksDel2 || {}).length + Object.keys(b.highlightsDel2 || {}).length]).sort(), d.options?.updatedAt, d.settings?.updatedAt, Object.keys(d.deleted || {}).length]);
+const fingerprint = d => JSON.stringify([d.books.map(b => [b.id, b.updatedAt, b.progress?.updatedAt, (b.bookmarks || []).length, b.readingSeconds, b.progress2?.updatedAt, (b.bookmarks2 || []).length, b.audioPos?.updatedAt, b.listenSeconds, (b.vocab || []).reduce((m, v) => Math.max(m, v.upd || 0), 0), (b.vocab || []).length, Object.keys(b.vocabDel || {}).length, ...[b.highlights, b.highlights2].map(l => (l || []).reduce((m, v) => Math.max(m, v.upd || 0), 0) + ':' + (l || []).length), Object.keys(b.bookmarksDel || {}).length + Object.keys(b.highlightsDel || {}).length + Object.keys(b.bookmarksDel2 || {}).length + Object.keys(b.highlightsDel2 || {}).length]).sort(), d.options?.updatedAt, d.settings?.updatedAt, Object.keys(d.deleted || {}).length]);
 
 // ---------- Gönder ----------
 export async function push({ force = false } = {}) {

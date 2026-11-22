@@ -130,7 +130,7 @@ export async function downloadSharedFile(f, onProgress) {
   await db.putFile(f.key, new Blob(parts, { type: f.type === 'pdf' ? 'application/pdf' : 'application/epub+zip' }));
 }
 // Misafirin kendi okuma bilgisi (ilerleme, yer imi, vurgu) yalnızca kendi cihazında saklanır
-export const GUEST_FIELDS = ['progress', 'progress2', 'bookmarks', 'bookmarks2', 'bookmarksDel', 'bookmarksDel2', 'highlights', 'highlights2', 'highlightsDel', 'highlightsDel2', 'readingSeconds', 'status', 'startDate', 'endDate', 'vocab', 'vocabDel'];
+export const GUEST_FIELDS = ['progress', 'progress2', 'bookmarks', 'bookmarks2', 'bookmarksDel', 'bookmarksDel2', 'highlights', 'highlights2', 'highlightsDel', 'highlightsDel2', 'readingSeconds', 'status', 'startDate', 'endDate', 'vocab', 'vocabDel', 'audio', 'audioPos', 'listenSeconds'];
 export async function saveGuestReading(book) {
   const { db } = await import('./db.js');
   const o = {};

@@ -28,6 +28,7 @@ const routes = [
   [/^\/settings$/, renderSettings, 'settings'],
   [/^\/options\/([a-z]+)$/, renderOptions, 'settings'],
   [/^\/read\/([^/]+)$/, renderReader, 'read'],
+  [/^\/listen\/([^/]+)$/, async (v, m) => (await import('./views/listen.js')).renderListen(v, m), 'listen'],
   [/^\/chat$/, renderChat, 'chat'],
   [/^\/vocab(?:\/([^/]+))?$/, renderVocab, 'reading'],
   [/^\/upcoming$/, renderUpcoming, 'reading'],
@@ -61,7 +62,7 @@ async function route() {
     if (!m) continue;
     current = raw;
     $$('#tabbar a').forEach(a => a.classList.toggle('active', a.dataset.tab === tab));
-    $('#tabbar').classList.toggle('hidden', tab === 'add' || tab === 'read' || tab === 'chat');
+    $('#tabbar').classList.toggle('hidden', tab === 'add' || tab === 'read' || tab === 'chat' || tab === 'listen');
     const params = m.slice(1).map(p => (p == null ? p : decodeURIComponent(p)));
     if (cleanup) { const c = cleanup; cleanup = null; try { await c(); } catch { /* yok */ } }
     const ret = await fn(view, params, query);
@@ -75,7 +76,7 @@ async function route() {
 // Veri değişince açık ekranı yenile (düzenleme ekranı hariç; o kendi durumunu tutar).
 let pending = false;
 onChange(() => {
-  if (pending || parse().path.startsWith('/edit/') || parse().path.startsWith('/read/') || parse().path === '/chat' || (parse().path.startsWith('/vocab') && location.hash.includes('review=1'))) return;
+  if (pending || parse().path.startsWith('/edit/') || parse().path.startsWith('/listen/') || parse().path.startsWith('/read/') || parse().path === '/chat' || (parse().path.startsWith('/vocab') && location.hash.includes('review=1'))) return;
   pending = true;
   requestAnimationFrame(async () => {
     pending = false;
@@ -91,6 +92,7 @@ onSyncChange(() => {
 });
 
 async function start() {
+  import('./views/listen.js').then(m => m.initMiniPlayer()).catch(() => {});
   await Promise.all([load(), loadSync(), (async () => { try { await (await import('./db.js')).db.loadFileKeys(); } catch { /* yok */ } })()]);
   // Kullanıcı girişi yapılmışsa: yalnızca paylaşılan kitaplar, salt okunur; eşitleme ve Drive çalışmaz
   const share = await import('./share.js');

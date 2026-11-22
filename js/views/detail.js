@@ -3,6 +3,7 @@ import { goodreadsUrl, formatVotes, formatPubDate, isUpcoming, computeQuality, Q
 import { state, getBook, saveBook, computeScore, CRITERIA, SPICY_LABELS, statusInfo, displayTitle, booksInSeries, booksByAuthor } from '../store.js';
 import { esc, enc, ICON, coverHTML, bookCard, hydrateCovers, peppers, toast, sheet, $, $$, coverKeyOf, fmtScore } from '../ui.js';
 import { fileSectionShell, fillFileSection } from './bookfile.js';
+import { audioSectionHTML, wireAudioSection } from './listen.js';
 import { formatDuration } from '../files.js';
 import { similarTo } from '../similar.js';
 import { vocabSection } from './vocab.js';
@@ -83,6 +84,7 @@ export async function renderDetail(view, [id]) {
     ${seriesWarn}
     ${state.guest && (b.file || b.file2) ? guestReadHTML(b) : ''}
     ${fileSectionShell()}
+    ${audioSectionHTML(b)}
     ${vocabSection(b)}
     ${highlightsSection(b)}
     <div class="section gr-row"><span class="gr-badge">g</span>
@@ -172,6 +174,7 @@ export async function renderDetail(view, [id]) {
     }),
   }));
   fillFileSection(view, b);
+  wireAudioSection(view, b);
   wireHighlights(view, b);
   // Uzun metinler (özet, değerlendirme, notlar): ilk satırlar görünür, "Devamını gör" ile tamamı açılır
   requestAnimationFrame(() => $$('.clampable', view).forEach(el => {

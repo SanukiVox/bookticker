@@ -256,7 +256,7 @@ export function newBook(partial = {}) {
 // Dosya / ilerleme / yer imi / vurgu / kelime defteri eşitlemede ayrıca birleştirildiği için burada izlenmez.
 export const FIELD_SKIP = new Set(['id', 'createdAt', 'updatedAt', 'fieldAt', 'file', 'file2', 'progress', 'progress2',
   'bookmarks', 'bookmarks2', 'bookmarksDel', 'bookmarksDel2', 'highlights', 'highlights2', 'highlightsDel', 'highlightsDel2',
-  'vocab', 'vocabDel', 'readingSeconds']);
+  'vocab', 'vocabDel', 'readingSeconds', 'audioPos', 'listenSeconds']);
 export const FIELD_NESTED = new Set(['scores', 'quality']);
 const snap = new Map(); // kitap kimliği → { alan: JSON } (son kaydedilen hali)
 const jenc = v => (v === undefined ? undefined : JSON.stringify(v));
