@@ -34,9 +34,50 @@ function probeDuration(blob) {
     a.preload = 'metadata';
     a.onloadedmetadata = () => fin(a.duration);
     a.onerror = () => fin(0);
-    setTimeout(() => fin(0), 10000);
+    setTimeout(() => fin(0), 2500); // iPhone çalmadan süre vermeyebilir; süre ilk çalışta öğrenilir
     a.src = u;
   });
+}
+
+// ---------- Saklama ----------
+// iPhone (Safari), dosya seçiciden gelen dosyayı IndexedDB'ye doğrudan koyunca sonradan okuyamayabiliyor
+// ("WebKitBlobResource" hatası). Bu yüzden ses dosyası 8 MB'lık parçalar hâlinde kopyalanarak saklanır:
+//   key → { audioChunks: n, type, size } · key#0 … key#(n-1) → parçalar. Bellekte aynı anda tek parça tutulur.
+const CHUNK = 8 * 1024 * 1024;
+export function chunkWriter(key, type) {
+  let i = 0, buf = [], len = 0, size = 0;
+  const flush = async () => {
+    if (!len) return;
+    await db.putFile(`${key}#${i++}`, new Blob(buf, { type }));
+    buf = []; len = 0;
+  };
+  return {
+    async write(u8) { buf.push(u8); len += u8.byteLength; size += u8.byteLength; if (len >= CHUNK) await flush(); },
+    async close() { await flush(); await db.putFile(key, { audioChunks: i, type, size }); },
+  };
+}
+async function putAudioFile(key, file, type) {
+  const w = chunkWriter(key, type);
+  for (let o = 0; o < file.size; o += CHUNK) await w.write(new Uint8Array(await file.slice(o, o + CHUNK).arrayBuffer()));
+  await w.close();
+}
+export async function getAudioBlob(key, type) {
+  const v = await db.getFile(key);
+  if (!v) return null;
+  if (v.audioChunks != null) {
+    const parts = [];
+    for (let i = 0; i < v.audioChunks; i++) { const p = await db.getFile(`${key}#${i}`); if (!p) return null; parts.push(p); }
+    return new Blob(parts, { type: type || v.type || 'audio/mpeg' });
+  }
+  if (v instanceof Blob) { // eski sürümde doğrudan saklanmış: okunabiliyor mu?
+    try { await v.slice(0, 16).arrayBuffer(); return v; } catch { return null; }
+  }
+  return null;
+}
+export async function deleteAudioBlob(key) {
+  const v = await db.getFile(key);
+  if (v?.audioChunks != null) for (let i = 0; i < v.audioChunks; i++) await db.deleteFile(`${key}#${i}`);
+  await db.deleteFile(key);
 }
 
 const tracksOf = b => b?.audio?.tracks || [];
@@ -65,9 +106,10 @@ export async function attachAudio(book, files, { replace = true, onProgress } = 
     const f = list[i];
     onProgress?.(i, list.length, f.name);
     const key = await quickKey(f);
-    const type = f.type || MIME[extOf(f.name)] || 'audio/mpeg';
-    const blob = f.type ? f : new Blob([f], { type });
-    await db.putFile(key, blob);
+    // iPhone dosyalara bazen boş ya da tanımadığı tür verir (ör. audio/x-m4b): uzantıya göre bilinen türü kullan
+    const type = MIME[extOf(f.name)] || (/^audio\//.test(f.type) ? f.type : 'audio/mpeg');
+    const blob = f.type === type ? f : new Blob([f], { type });
+    await putAudioFile(key, f, type);
     const prev = old.find(x => x.key === key);
     tracks.push({ key, name: f.name, size: f.size, dur: prev?.dur || (await probeDuration(blob)), type, ...(prev?.driveId ? { driveId: prev.driveId } : {}) });
   }
@@ -75,7 +117,7 @@ export async function attachAudio(book, files, { replace = true, onProgress } = 
   if (replace) {
     next = tracks;
     const sameStart = old[0] && next[0] && old[0].key === next[0].key;
-    for (const x of old) if (!next.some(y => y.key === x.key) && !usedElsewhere(x.key, book.id)) await db.deleteFile(x.key);
+    for (const x of old) if (!next.some(y => y.key === x.key) && !usedElsewhere(x.key, book.id)) await deleteAudioBlob(x.key);
     if (!sameStart) book.audioPos = null;
   } else {
     next = [...old];
@@ -93,7 +135,7 @@ const usedElsewhere = (key, id) => state.books.some(b => b.id !== id && tracksOf
 
 export async function removeAudio(book) {
   if (P.book?.id === book.id) stop();
-  for (const x of tracksOf(book)) if (!usedElsewhere(x.key, book.id)) await db.deleteFile(x.key);
+  for (const x of tracksOf(book)) if (!usedElsewhere(x.key, book.id)) await deleteAudioBlob(x.key);
   book.audio = null;
   await saveBook(book);
 }
@@ -103,7 +145,7 @@ export async function removeTrack(book, i) {
   const x = tr[i];
   if (!x) return;
   if (P.book?.id === book.id) stop();
-  if (!usedElsewhere(x.key, book.id)) await db.deleteFile(x.key);
+  if (!usedElsewhere(x.key, book.id)) await deleteAudioBlob(x.key);
   tr.splice(i, 1);
   book.audio = tr.length ? { ...book.audio, tracks: tr } : null;
   if (book.audioPos && book.audioPos.t >= tr.length) book.audioPos = null;
@@ -168,6 +210,8 @@ function el() {
   a.addEventListener('play', () => { P.lastWall = Date.now(); P.error = ''; mediaState(); emit(); });
   a.addEventListener('pause', () => { tick(); save(true); mediaState(); emit(); });
   a.addEventListener('loadedmetadata', () => {
+    applySeek();
+    a.playbackRate = a.defaultPlaybackRate = rateFor(P.book);
     const t = tracksOf(P.book)[P.idx];
     if (t && Number.isFinite(a.duration) && Math.round(a.duration) !== t.dur) { t.dur = Math.round(a.duration); }
     mediaState(); emit();
@@ -177,7 +221,13 @@ function el() {
     if (P.idx + 1 < tracksOf(P.book).length) await open(P.book, P.idx + 1, 0, true);
     else { save(true, true); emit(); }
   });
-  a.addEventListener('error', () => { P.error = 'Ses dosyası çalınamadı (biçim desteklenmiyor olabilir)'; emit(); });
+  a.addEventListener('error', () => {
+    if (!P.book || !a.src || a.src !== P.url) return; // kilit açma sesi ya da eski kaynak
+    const c = a.error?.code;
+    P.error = c === 4 ? 'Bu ses dosyası bu cihazda çalınamıyor (biçim desteklenmiyor). MP3 ya da M4A/M4B dene.'
+      : `Ses dosyası açılamadı (hata ${c || '?'}${a.error?.message ? `: ${a.error.message}` : ''})`;
+    emit();
+  });
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden' && P.book) save(true); });
   setupMediaSession();
   return a;
@@ -230,31 +280,40 @@ export async function open(b, idx = 0, time = 0, autoplay = true) {
   if (!tr.length) throw new Error('Bu kitabın sesli kitabı yok');
   idx = Math.max(0, Math.min(tr.length - 1, idx));
   if (P.book && (P.book.id !== b.id || P.idx !== idx)) { tick(); await save(P.book.id !== b.id); }
-  let blob = await db.getFile(tr[idx].key);
+  let blob = await getAudioBlob(tr[idx].key);
+  if (!blob && db.fileKeysSync()?.has(tr[idx].key) && !tr[idx].driveId) throw new Error(`"${tr[idx].name}" bu cihazda okunamıyor (eski sürümle eklenmiş). Kitap sayfasında "Değiştir" ile dosyayı yeniden ekle.`);
   if (!blob && tr[idx].driveId) { // bu bölüm yalnız Drive'da: önce onu indir
     const gd = await import('./gdrive.js');
     P.error = '☁️ Bölüm Drive\'dan indiriliyor…'; emit();
     try { await gd.downloadAudio(b, { only: idx, onProgress: f => { P.error = `☁️ Bölüm Drive'dan indiriliyor… %${Math.round(f * 100)}`; emit(); } }); }
     catch (e) { P.error = ''; emit(); throw new Error(/yenilenmeli/.test(e.message) ? 'Drive bağlantısı yenilenmeli: kitap sayfasındaki "Drive\'dan indir" düğmesini kullan' : e.message); }
-    P.error = ''; blob = await db.getFile(tr[idx].key);
+    P.error = ''; blob = await getAudioBlob(tr[idx].key);
   }
   if (!blob) throw new Error(`"${tr[idx].name}" bu cihazda yok; dosyayı yeniden ekle`);
+  // Eski kayıtlarda tür yanlış/boş olabilir: iPhone türü bilinmeyen sesi çalmaz
+  const type = MIME[extOf(tr[idx].name)] || (/^audio\//.test(blob.type) ? blob.type : 'audio/mpeg');
+  if (blob.type !== type) blob = new Blob([blob], { type });
   if (P.url) URL.revokeObjectURL(P.url);
   P.url = URL.createObjectURL(blob);
   P.book = b; P.idx = idx; P.error = '';
+  // iPhone ses bilgisini (süre vb.) çalmaya başlamadan yüklemez: önce çal, konuma bilgi gelince git
+  P.pendingSeek = time > 0 ? time : 0;
   a.src = P.url;
-  a.playbackRate = rateFor(b);
-  a.defaultPlaybackRate = a.playbackRate;
-  await new Promise(res => {
-    const go = () => { a.removeEventListener('loadedmetadata', go); res(); };
-    a.addEventListener('loadedmetadata', go);
-    setTimeout(go, 4000);
-  });
-  if (time > 0) { try { a.currentTime = Math.min(time, (a.duration || time + 1) - 1); } catch { /* yok */ } }
-  a.playbackRate = rateFor(b);
+  a.load();
+  a.playbackRate = a.defaultPlaybackRate = rateFor(b);
   setMetadata();
   if (autoplay) await play();
+  else await new Promise(res => { const go = () => { a.removeEventListener('loadedmetadata', go); res(); }; a.addEventListener('loadedmetadata', go); setTimeout(go, 3000); });
+  applySeek();
   emit();
+}
+
+// Bekleyen konuma git (süre bilgisi geldiyse)
+function applySeek() {
+  const a = P.el, t = P.pendingSeek;
+  if (!a || !t || !(a.readyState >= 1)) return;
+  P.pendingSeek = 0;
+  try { a.currentTime = Number.isFinite(a.duration) ? Math.min(t, a.duration - 1) : t; } catch { /* yok */ }
 }
 
 // Kitabı kaldığı yerden aç (ya da zaten açıksa çal/durdur)
@@ -270,11 +329,18 @@ export async function resume(b, autoplay = true) {
 export async function play() {
   if (!P.el) return;
   try {
-    await P.el.play();
+    const pr = P.el.play();
+    P.el.playbackRate = P.el.defaultPlaybackRate = rateFor(P.book);
+    await pr;
+    P.error = '';
     const b = P.book;
     if (b && !state.guest && b.status !== 'Okunuyor' && b.status !== 'Okundu') { b.status = 'Okunuyor'; saveBook(b); }
     else if (b && state.guest && b.status !== 'Okunuyor' && b.status !== 'Okundu') { b.status = 'Okunuyor'; saveBook(b); }
-  } catch (e) { if (e?.name !== 'AbortError') { P.error = 'Çalmak için ▶️ düğmesine dokun'; emit(); } }
+  } catch (e) {
+    if (e?.name === 'AbortError') return;
+    P.error = e?.name === 'NotAllowedError' ? 'Çalmak için ▶️ düğmesine bir kez daha dokun' : `Ses başlatılamadı: ${e?.message || e?.name || 'bilinmeyen hata'}`;
+    emit();
+  }
 }
 export const pause = () => P.el?.pause();
 export const toggle = () => (player.playing ? pause() : play());

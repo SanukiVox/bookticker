@@ -180,9 +180,9 @@ export async function pendingDownloads() {
 }
 
 export async function uploadOne({ b, slot, f, key, audio }) {
-  const blob = await db.getFile(key);
-  if (!blob) return false;
   if (audio) {
+    const blob = await (await import('./audio.js')).getAudioBlob(audio.key, audio.type);
+    if (!blob) return false;
     const id = (await findByHash(audio.key)) || (await uploadBlob(blob, safeName(audio.name), audio.key, await audioBookFolder(b)));
     const cur = (b.audio?.tracks || []).find(x => x.key === audio.key);
     if (cur) { cur.driveId = id; b.audio = { ...b.audio }; await saveBook(b); }
@@ -214,18 +214,18 @@ export async function downloadOne(b, slot, onProgress) {
 // Sesli kitap: bu cihazda olmayan parçaları Drive'dan indir (yalnızca istenince; otomatik değil, dosyalar büyük)
 export async function downloadAudio(b, { only, onProgress } = {}) {
   const keys = new Set(await db.allFileKeys());
+  const { chunkWriter } = await import('./audio.js');
   const list = (b.audio?.tracks || []).map((t, i) => ({ t, i })).filter(({ t, i }) => t.driveId && !keys.has(t.key) && (only == null || only === i));
   const total = list.reduce((s, x) => s + (x.t.size || 0), 0) || 1;
   let done = 0;
   for (const { t } of list) {
     const r = await api(`/files/${t.driveId}?alt=media`, { raw: true });
-    let blob;
-    if (r.body && onProgress) {
-      const reader = r.body.getReader(); const parts = [];
-      for (;;) { const { done: d, value } = await reader.read(); if (d) break; parts.push(value); done += value.length; onProgress(done / total); }
-      blob = new Blob(parts, { type: t.type || 'audio/mpeg' });
-    } else { blob = new Blob([await r.blob()], { type: t.type || 'audio/mpeg' }); done += t.size || 0; }
-    await db.putFile(t.key, blob);
+    const w = chunkWriter(t.key, t.type || 'audio/mpeg'); // parça parça yazılır: büyük dosya belleği doldurmaz
+    if (r.body) {
+      const reader = r.body.getReader();
+      for (;;) { const { done: d, value } = await reader.read(); if (d) break; await w.write(value); done += value.length; onProgress?.(done / total); }
+    } else { await w.write(new Uint8Array(await r.arrayBuffer())); done += t.size || 0; }
+    await w.close();
   }
   return list.length;
 }

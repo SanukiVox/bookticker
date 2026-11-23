@@ -317,6 +317,9 @@ export async function deleteBook(id) {
   await db.deleteBook(id);
   if (b?.coverTr) await db.deleteCover(b.coverTr);
   if (b?.coverOrig) await db.deleteCover(b.coverOrig);
+  for (const t of b?.audio?.tracks || []) {
+    if (!state.books.some(x => x.id !== id && x.audio?.tracks?.some(y => y.key === t.key))) await (await import('./audio.js')).deleteAudioBlob(t.key).catch(() => {});
+  }
   for (const k of await db.allFileKeys()) {
     if (k === b?.file?.key || k === b?.file2?.key || k.startsWith(`${id}-`)) { await db.deleteFile(k); await db.putMeta(`loc:${k}`, null); }
   }
