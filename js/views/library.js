@@ -7,6 +7,8 @@ let trOnly = false; // yalnızca Türkçesi olanlar (durum filtresiyle birlikte 
 let fileOnly = false; // yalnızca dosyası (PDF/EPUB) eklenmiş olanlar
 let ownedOnly = false; // yalnızca kütüphanemde (basılı) olanlar
 let sharedOnly = false; // yalnızca arkadaşlarla paylaşılanlar
+let audioOnly = false; // yalnızca sesli kitabı olanlar
+const hasAudio = b => !!b.audio?.tracks?.length;
 const hasFile = b => !!(b.file || b.file2);
 const hasTr = b => b.translation === 'Var';
 let sortBy = 'recent';
@@ -65,6 +67,7 @@ export async function renderLibrary(view, [tab = 'books']) {
   $('#file-only', view)?.addEventListener('click', () => { fileOnly = !fileOnly; renderLibrary(view, [tab]); });
   $('#owned-only', view)?.addEventListener('click', () => { ownedOnly = !ownedOnly; renderLibrary(view, [tab]); });
   $('#shared-only', view)?.addEventListener('click', () => { sharedOnly = !sharedOnly; renderLibrary(view, [tab]); });
+  $('#audio-only', view)?.addEventListener('click', () => { audioOnly = !audioOnly; renderLibrary(view, [tab]); });
   $('#tip-go', view)?.addEventListener('click', async () => (await import('./autofill.js')).openAutofill());
   $('#tip-x', view)?.addEventListener('click', () => { state.settings.hideCoverTip = true; saveSettings(); });
   $('#sort', view)?.addEventListener('change', e => { sortBy = e.target.value; renderLibrary(view, [tab]); });
@@ -72,10 +75,11 @@ export async function renderLibrary(view, [tab = 'books']) {
 }
 
 function booksTab() {
-  const pool = state.books.filter(b => (!trOnly || hasTr(b)) && (!fileOnly || hasFile(b)) && (!ownedOnly || b.owned) && (!sharedOnly || b.shared));
+  const pool = state.books.filter(b => (!trOnly || hasTr(b)) && (!fileOnly || hasFile(b)) && (!ownedOnly || b.owned) && (!sharedOnly || b.shared) && (!audioOnly || hasAudio(b)));
   const ownedCount = state.books.filter(b => b.owned).length;
   const sharedCount = state.guest ? 0 : state.books.filter(b => b.shared).length;
   const fileCount = state.books.filter(hasFile).length;
+  const audioCount = state.books.filter(hasAudio).length;
   const trCount = state.books.filter(hasTr).length;
   const counts = {};
   for (const b of pool) counts[b.status] = (counts[b.status] || 0) + 1;
@@ -96,12 +100,13 @@ function booksTab() {
     <div class="chips">
       <button class="chip ${trOnly ? 'on' : ''}" id="tr-only" aria-pressed="${trOnly}">🇹🇷 Türkçesi olanlar · ${trCount}</button>
       ${fileCount || fileOnly ? `<button class="chip ${fileOnly ? 'on' : ''}" id="file-only" aria-pressed="${fileOnly}">📄 Dosyası olanlar · ${fileCount}</button>` : ''}
+      ${audioCount || audioOnly ? `<button class="chip ${audioOnly ? 'on' : ''}" id="audio-only" aria-pressed="${audioOnly}">🎧 Sesli kitabı olanlar · ${audioCount}</button>` : ''}
       ${ownedCount || ownedOnly ? `<button class="chip ${ownedOnly ? 'on' : ''}" id="owned-only" aria-pressed="${ownedOnly}">📚 Kütüphanemde · ${ownedCount}</button>` : ''}
       ${sharedCount || sharedOnly ? `<button class="chip ${sharedOnly ? 'on' : ''}" id="shared-only" aria-pressed="${sharedOnly}">👥 Paylaşılanlar · ${sharedCount}</button>` : ''}
     </div>
     <div class="result-bar"><span>${books.length} kitap</span>
       <label>Sırala: <select id="sort">${Object.entries(SORTS).map(([k, [l]]) => `<option value="${k}" ${k === sortBy ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
-    ${books.length ? booksView(books, state.settings.view) : `<div class="empty">${trOnly || fileOnly || ownedOnly || sharedOnly ? 'Seçili filtrelere uyan kitap yok.' : 'Bu durumda kitap yok.'}</div>`}`;
+    ${books.length ? booksView(books, state.settings.view) : `<div class="empty">${trOnly || fileOnly || ownedOnly || sharedOnly || audioOnly ? 'Seçili filtrelere uyan kitap yok.' : 'Bu durumda kitap yok.'}</div>`}`;
 }
 
 function initials(name) {

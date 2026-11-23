@@ -59,7 +59,9 @@ export function coverHTML(book, { key, badge = true } = {}) {
   const fs = badge ? fileSummary(book) : null;
   const fb = fs && fs.where !== 'missing'
     ? `<span class="fbadge ${fs.where}${pct !== null ? ' up' : ''}" title="${fs.where === 'local' ? 'Dosyası bu cihazda' : 'Dosyası Google Drive\'da'}">${fs.where === 'local' ? '📄' : '☁️'} ${fs.count > 1 ? '2' : esc((fs.type || '').toUpperCase())}</span>` : '';
-  return `<div class="cover"${k ? ` data-cover="${esc(k)}"` : ''}>${ph}${badges}${prog}${fb}</div>`;
+  // Sağ alt: sesli kitabı var
+  const ab = badge && book.audio?.tracks?.length ? `<span class="abadge${pct !== null ? ' up' : ''}" title="Sesli kitabı var">🎧</span>` : '';
+  return `<div class="cover"${k ? ` data-cover="${esc(k)}"` : ''}>${ph}${badges}${prog}${fb}${ab}</div>`;
 }
 
 const io = 'IntersectionObserver' in window
@@ -111,8 +113,9 @@ function rowScore(b, s) {
 
 function fileMark(b) {
   const fs = fileSummary(b);
-  if (!fs || fs.where === 'missing') return '';
-  return ` · ${fs.where === 'drive' ? '☁️' : '📄'}${fs.count > 1 ? '×2' : ''}`;
+  const au = b.audio?.tracks?.length ? ' · 🎧' : '';
+  if (!fs || fs.where === 'missing') return au;
+  return ` · ${fs.where === 'drive' ? '☁️' : '📄'}${fs.count > 1 ? '×2' : ''}${au}`;
 }
 
 export function bookRow(b, { sub } = {}) {

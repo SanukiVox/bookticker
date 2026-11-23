@@ -21,6 +21,7 @@ const S = {
   q: '',
   scope: 'all',
   hasFile: '', // 📄 dosya filtresi: '' | 'any' | 'orig' | 'tr'
+  hasAudio: false, // 🎧 yalnızca sesli kitabı olanlar
   sort: 'score',
   f: emptyFilters(),
 };
@@ -102,6 +103,7 @@ export async function renderSearch(view, _p, query) {
   }));
   const wireFile = () => {
     $('#hasfile', view).addEventListener('click', () => { S.hasFile = S.hasFile ? '' : 'any'; redrawFile(); });
+    $('#hasaudio', view)?.addEventListener('click', () => { S.hasAudio = !S.hasAudio; redrawFile(); });
     $$('[data-fmode]', view).forEach(c => c.addEventListener('click', () => { S.hasFile = c.dataset.fmode; redrawFile(); }));
   };
   const redrawFile = () => {
@@ -160,9 +162,11 @@ function renderFilterBar(view) {
 
 // Dosya filtresi: '' kapalı | 'any' dosyası olan | 'orig' orijinal dosyası olan | 'tr' Türkçe (çeviri) dosyası olan
 const fileLangs = b => [b.file, b.file2].filter(Boolean).map(f => f.lang);
+const hasAudio = b => !!b.audio?.tracks?.length;
+const AUDIO_COUNT = () => state.books.filter(hasAudio).length;
 const FILE_TEST = { any: b => !!(b.file || b.file2), orig: b => fileLangs(b).includes('orig'), tr: b => fileLangs(b).includes('tr') };
 function fileMain() {
-  return `<button class="chip ${S.hasFile ? 'on' : ''}" id="hasfile" title="Yalnızca dosyası eklenmiş kitaplar">📄 Dosyası olan · ${state.books.filter(FILE_TEST.any).length}</button>`;
+  return `<button class="chip ${S.hasFile ? 'on' : ''}" id="hasfile" title="Yalnızca dosyası eklenmiş kitaplar">📄 Dosyası olan · ${state.books.filter(FILE_TEST.any).length}</button>${AUDIO_COUNT() || S.hasAudio ? ` <button class="chip ${S.hasAudio ? 'on' : ''}" id="hasaudio" title="Yalnızca sesli kitabı olanlar">🎧 Sesli kitabı olan · ${AUDIO_COUNT()}</button>` : ''}`;
 }
 function fileSub() {
   if (!S.hasFile) return '';
@@ -175,6 +179,7 @@ function renderResults(view) {
   const res = $('#results', view);
   let books = applyFilters(state.books, S.f, S.q, S.scope);
   if (S.hasFile) books = books.filter(FILE_TEST[S.hasFile] || FILE_TEST.any);
+  if (S.hasAudio) books = books.filter(hasAudio);
   books.sort(SORTS[S.sort][1]);
   const nq = norm(S.q);
   let top = '';
@@ -187,7 +192,7 @@ function renderResults(view) {
     const ss = seriesList().filter(s => norm(s.name).includes(nq)).slice(0, 6);
     if (ss.length) top += `<h3 style="margin:6px 0 8px">Seriler</h3><div class="list" style="margin-bottom:16px">${ss.map(s => `<a class="row" href="#/series/${enc(s.name)}"><div class="body"><div class="t">${esc(s.name)}</div><div class="s">${s.books.length} kitap · ${s.books.filter(b => b.status === 'Okundu').length} okundu</div></div><span class="chev"></span></a>`).join('')}</div>`;
   }
-  const searching = nq || activeCount(S.f) || S.hasFile;
+  const searching = nq || activeCount(S.f) || S.hasFile || S.hasAudio;
   res.innerHTML = `${top}
     <div class="result-bar"><span>${searching ? `${books.length} sonuç` : `Tüm kitaplar · ${books.length}`}</span>
       <label>Sırala: <select id="ssort">${Object.entries(SORTS).map(([k, [l]]) => `<option value="${k}" ${k === S.sort ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
