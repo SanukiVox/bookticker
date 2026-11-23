@@ -646,10 +646,12 @@ body.has-mini #view { padding-bottom: calc(var(--tabbar-h) + var(--safe-bottom) 
 body.has-mini #toast { bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 84px); }
 
 /* Okuyucuda sesli kitap denetim çubuğu */
-.reader .r-abar { position: absolute; left: 10px; right: 58px; bottom: calc(var(--safe-bottom) + 34px); z-index: 30; transform: translateY(16px); justify-content: space-between; max-width: 460px; opacity: 0; pointer-events: none;
-  display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 999px; background: var(--surface); color: var(--text); box-shadow: var(--shadow);
-  border: 1px solid var(--line); transition: opacity .2s, transform .2s; }
-.reader .r-abar.on { opacity: 1; transform: none; pointer-events: auto; }
+/* Not: iPhone'da kitap çerçevesinin üstünde hareketli (transform/opacity geçişli) bir katman olunca sayfa çevirmede
+   görüntü yenilenmiyordu; bu yüzden çubuk yalnızca display ile açılıp kapanır, geçiş efekti yok. */
+.reader .r-abar { position: absolute; left: 10px; right: 58px; bottom: calc(var(--safe-bottom) + 34px); z-index: 30; justify-content: space-between; max-width: 460px;
+  display: none; align-items: center; gap: 4px; padding: 6px 8px; border-radius: 999px; background: var(--surface); color: var(--text);
+  border: 1px solid var(--line); box-shadow: 0 2px 8px rgba(0,0,0,.15); }
+.reader .r-abar.on { display: flex; }
 .reader .r-abar button { width: 38px; height: 38px; border: 0; border-radius: 50%; background: transparent; color: inherit; font-size: 18px; display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1; flex: 0 0 auto; }
 .reader .r-abar button small { font-size: 9px; font-weight: 700; }
 .reader .r-abar button.main { background: var(--accent); color: var(--accent-text); }

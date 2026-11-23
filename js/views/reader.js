@@ -349,13 +349,15 @@ export async function renderReader(view, [id], query) {
       <button data-a="hide" aria-label="Çubuğu gizle">✕</button>`;
     root.appendChild(bar);
     const mine = () => A.player.book?.id === real.id;
-    const show = v => { bar.classList.toggle('on', v); rAudio.classList.toggle('on', v); };
+    const show = v => { bar.classList.toggle('on', v); rAudio.classList.toggle('on', v); paint(); };
+    // Yalnızca değişen yazıyı güncelle (saniyede en çok bir kez): sık DOM değişikliği iPhone'da kitabın yeniden çizilmesini engelliyordu
+    const set = (el, v) => { if (el.textContent !== v) el.textContent = v; };
     const paint = () => {
-      if (!bar.isConnected) return;
-      $('[data-a=play]', bar).textContent = mine() && A.player.playing ? '⏸' : '▶';
-      $('[data-a=rate]', bar).textContent = `${String(mine() ? A.player.rate : real.audioPos?.rate || state.settings.audioRate || 1).replace('.', ',')}×`;
+      if (!bar.isConnected || !bar.classList.contains('on')) return;
+      set($('[data-a=play]', bar), mine() && A.player.playing ? '⏸' : '▶');
+      set($('[data-a=rate]', bar), `${String(mine() ? A.player.rate : real.audioPos?.rate || state.settings.audioRate || 1).replace('.', ',')}×`);
       const n = real.audio?.tracks?.length || 0;
-      $('.r-at', bar).textContent = mine() ? `${n > 1 ? `${A.player.idx + 1}/${n} · ` : ''}${A.fmtTime(A.player.time)}` : '';
+      set($('.r-at', bar), mine() ? `${n > 1 ? `${A.player.idx + 1}/${n} · ` : ''}${A.fmtTime(A.player.time)}` : '');
     };
     const off = A.onPlayer(() => { if (!bar.isConnected) off(); else paint(); });
     paint();
@@ -573,6 +575,16 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck }
     });
   }
   rendition.on('relocated', report);
+  // iPhone: sayfa çevrilince (özellikle sesli kitap çalarken) kitap çerçevesi bazen yeniden çizilmiyor;
+  // konum değişince çerçeveyi zorla yeniden çizdir.
+  rendition.on('relocated', () => {
+    const c = stage.querySelector('.epub-container');
+    if (!c) return;
+    requestAnimationFrame(() => {
+      c.style.opacity = '0.999'; void c.offsetHeight;
+      requestAnimationFrame(() => { c.style.opacity = ''; });
+    });
+  });
 
   rendition.on('keyup', e => { if (e.key === 'ArrowRight') turn(1); if (e.key === 'ArrowLeft') turn(-1); });
 
