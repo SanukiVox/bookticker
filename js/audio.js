@@ -191,23 +191,43 @@ export const player = {
   get book() { return P.book; },
   get idx() { return P.idx; },
   get playing() { return !!P.el && !P.el.paused && !P.el.ended; },
-  get time() { return P.el?.currentTime || 0; },
+  get time() { return P.pendingSeek || P.el?.currentTime || 0; },
   get duration() { const d = P.el?.duration; return Number.isFinite(d) ? d : (tracksOf(P.book)[P.idx]?.dur || 0); },
   get rate() { return P.el?.playbackRate || rateFor(P.book); },
   get sleep() { return P.sleepEnd ? 'end' : P.sleepAt ? Math.max(0, P.sleepAt - Date.now()) : 0; },
   get error() { return P.error; },
+  get started() { return !!P.started; }, // bu oturumda en az bir kez çaldı mı (küçük oynatıcı için)
 };
 const rateFor = b => b?.audioPos?.rate || state.settings.audioRate || 1;
+
+// Sorun giderme kaydı (oynatıcıdaki "🔧 Sorun giderme" bölümünde görünür)
+export const diagLog = [];
+export function L(msg) {
+  const d = new Date();
+  diagLog.push(`${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}.${String(d.getMilliseconds()).padStart(3, '0').slice(0, 1)} ${msg}`);
+  if (diagLog.length > 40) diagLog.shift();
+}
+export function diagInfo() {
+  const a = P.el, t = tracksOf(P.book)[P.idx];
+  return [
+    `Cihaz: ${navigator.userAgent.replace(/^Mozilla\/5\.0 \(|\) AppleWebKit.*?(Version\/[\d.]+)?.*$/g, (m, v) => (v ? ` ${v}` : ''))}`,
+    `Ana ekran uygulaması: ${matchMedia('(display-mode: standalone)').matches || navigator.standalone ? 'evet' : 'hayır'}`,
+    `MP3 desteği: ${document.createElement('audio').canPlayType('audio/mpeg') || 'yok'} · M4A: ${document.createElement('audio').canPlayType('audio/mp4') || 'yok'}`,
+    t ? `Bölüm: ${t.name} · tür ${t.type || '?'} · ${Math.round((t.size || 0) / 1048576)} MB` : 'Bölüm: yüklenmedi',
+    a ? `Durum: readyState ${a.readyState} · networkState ${a.networkState} · paused ${a.paused} · süre ${Number.isFinite(a.duration) ? Math.round(a.duration) : '?'} · konum ${a.currentTime.toFixed(1)}${a.error ? ` · hata ${a.error.code} ${a.error.message || ''}` : ''}` : 'Durum: oynatıcı oluşturulmadı',
+  ].join('\n');
+}
 
 function el() {
   if (P.el) return P.el;
   const a = P.el = document.createElement('audio');
+  for (const ev of ['loadstart', 'loadedmetadata', 'canplay', 'playing', 'waiting', 'stalled', 'abort', 'emptied', 'ended']) a.addEventListener(ev, () => { if (a.src === P.url) L(`olay: ${ev}`); });
   a.preload = 'auto';
   a.setAttribute('playsinline', '');
   a.style.display = 'none';
   document.body.appendChild(a);
   a.addEventListener('timeupdate', tick);
-  a.addEventListener('play', () => { P.lastWall = Date.now(); P.error = ''; mediaState(); emit(); });
+  a.addEventListener('play', () => { if (a.src === P.url) P.started = true; P.lastWall = Date.now(); P.error = ''; mediaState(); emit(); });
   a.addEventListener('pause', () => { tick(); save(true); mediaState(); emit(); });
   a.addEventListener('loadedmetadata', () => {
     applySeek();
@@ -222,6 +242,7 @@ function el() {
     else { save(true, true); emit(); }
   });
   a.addEventListener('error', () => {
+    L(`olay: error ${a.error?.code} ${a.error?.message || ''}${a.src === P.url ? '' : ' (eski kaynak)'}`);
     if (!P.book || !a.src || a.src !== P.url) return; // kilit açma sesi ya da eski kaynak
     const c = a.error?.code;
     P.error = c === 4 ? 'Bu ses dosyası bu cihazda çalınamıyor (biçim desteklenmiyor). MP3 ya da M4A/M4B dene.'
@@ -264,6 +285,7 @@ async function save(full, finished = false) {
 export function unlock() {
   const a = el();
   if (P.unlocked || a.src) return;
+  L('kilit açma sesi');
   P.unlocked = true;
   const n = 800, buf = new ArrayBuffer(44 + n), v = new DataView(buf);
   const w = (o, s) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
@@ -295,6 +317,7 @@ export async function open(b, idx = 0, time = 0, autoplay = true) {
   if (blob.type !== type) blob = new Blob([blob], { type });
   if (P.url) URL.revokeObjectURL(P.url);
   P.url = URL.createObjectURL(blob);
+  L(`aç: ${tr[idx].name} · ${Math.round(blob.size / 1024)} KB · ${blob.type} · otomatik çal ${autoplay}`);
   P.book = b; P.idx = idx; P.error = '';
   // iPhone ses bilgisini (süre vb.) çalmaya başlamadan yüklemez: önce çal, konuma bilgi gelince git
   P.pendingSeek = time > 0 ? time : 0;
@@ -303,8 +326,7 @@ export async function open(b, idx = 0, time = 0, autoplay = true) {
   a.playbackRate = a.defaultPlaybackRate = rateFor(b);
   setMetadata();
   if (autoplay) await play();
-  else await new Promise(res => { const go = () => { a.removeEventListener('loadedmetadata', go); res(); }; a.addEventListener('loadedmetadata', go); setTimeout(go, 3000); });
-  applySeek();
+  applySeek(); // süre bilgisi henüz yoksa loadedmetadata'da yapılır
   emit();
 }
 
@@ -315,6 +337,18 @@ function applySeek() {
   P.pendingSeek = 0;
   try { a.currentTime = Number.isFinite(a.duration) ? Math.min(t, a.duration - 1) : t; } catch { /* yok */ }
 }
+
+// Oynatıcı ekranı açılınca dosyayı önceden hazırla: ▶ dokunuşunda ses hemen (iPhone'un istediği gibi
+// dokunuşun içinde) başlayabilsin. Başka bir kitap çalıyorsa ona dokunulmaz.
+let preparing = null;
+export function prepare(b) {
+  if (player.playing || P.book?.id === b.id || !tracksOf(b).length) return Promise.resolve();
+  L('hazırlanıyor');
+  preparing = resume(b, false).catch(e => { L(`hazırlama hatası: ${e.message}`); }).finally(() => { preparing = null; });
+  return preparing;
+}
+export const isPreparing = () => !!preparing;
+export const whenPrepared = () => preparing || Promise.resolve();
 
 // Kitabı kaldığı yerden aç (ya da zaten açıksa çal/durdur)
 export async function resume(b, autoplay = true) {
@@ -329,14 +363,17 @@ export async function resume(b, autoplay = true) {
 export async function play() {
   if (!P.el) return;
   try {
+    L(`play() çağrıldı · readyState ${P.el.readyState}`);
     const pr = P.el.play();
-    P.el.playbackRate = P.el.defaultPlaybackRate = rateFor(P.book);
+    try { P.el.playbackRate = P.el.defaultPlaybackRate = rateFor(P.book); } catch { /* yok */ }
     await pr;
+    L('play() başarılı');
     P.error = '';
     const b = P.book;
     if (b && !state.guest && b.status !== 'Okunuyor' && b.status !== 'Okundu') { b.status = 'Okunuyor'; saveBook(b); }
     else if (b && state.guest && b.status !== 'Okunuyor' && b.status !== 'Okundu') { b.status = 'Okunuyor'; saveBook(b); }
   } catch (e) {
+    L(`play() hata: ${e?.name} ${e?.message || ''}`);
     if (e?.name === 'AbortError') return;
     P.error = e?.name === 'NotAllowedError' ? 'Çalmak için ▶️ düğmesine bir kez daha dokun' : `Ses başlatılamadı: ${e?.message || e?.name || 'bilinmeyen hata'}`;
     emit();
@@ -347,13 +384,18 @@ export const toggle = () => (player.playing ? pause() : play());
 export function seek(delta) {
   const a = P.el;
   if (!a) return;
+  if (a.readyState < 1) { P.pendingSeek = Math.max(0, (P.pendingSeek || a.currentTime) + delta); emit(); return; }
   const t = a.currentTime + delta;
   if (t < 0 && P.idx > 0) { const prev = tracksOf(P.book)[P.idx - 1]; open(P.book, P.idx - 1, Math.max(0, (prev.dur || 0) + t), !a.paused); return; }
   if (Number.isFinite(a.duration) && t > a.duration && P.idx + 1 < tracksOf(P.book).length) { open(P.book, P.idx + 1, t - a.duration, !a.paused); return; }
   a.currentTime = Math.max(0, Math.min(t, (a.duration || t) - 0.5));
   tick();
 }
-export function seekTo(sec) { if (P.el) { P.el.currentTime = Math.max(0, sec); tick(); } }
+export function seekTo(sec) {
+  if (!P.el) return;
+  if (P.el.readyState < 1) { P.pendingSeek = Math.max(0, sec); emit(); return; } // süre bilgisi gelince gidilir
+  P.el.currentTime = Math.max(0, sec); tick();
+}
 export const next = () => P.book && P.idx + 1 < tracksOf(P.book).length && open(P.book, P.idx + 1, 0, player.playing || true);
 export function prev() {
   if (!P.book) return;
@@ -381,7 +423,7 @@ export async function stop() {
   await save(true);
   P.el.removeAttribute('src'); P.el.load();
   if (P.url) URL.revokeObjectURL(P.url);
-  P.url = null; P.book = null; P.idx = 0; P.sleepAt = 0; P.sleepEnd = false;
+  P.url = null; P.book = null; P.idx = 0; P.sleepAt = 0; P.sleepEnd = false; P.started = false;
   if ('mediaSession' in navigator) navigator.mediaSession.metadata = null;
   emit();
 }

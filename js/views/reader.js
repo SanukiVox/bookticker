@@ -359,7 +359,8 @@ export async function renderReader(view, [id], query) {
     };
     const off = A.onPlayer(() => { if (!bar.isConnected) off(); else paint(); });
     paint();
-    if (mine()) show(true); // bu kitabın sesi zaten çalıyorsa çubuk açık gelsin
+    A.prepare(real); // ▶ dokunuşunda beklemeden çalabilsin diye dosyayı önceden hazırla
+    if (mine() && A.player.started) show(true); // bu kitabın sesi zaten çalıyorsa çubuk açık gelsin
     const ensure = async (autoplay = false) => {
       if (mine()) return true;
       try { await A.resume(real, autoplay); return true; } catch (e) { toast(e.message); return false; }
@@ -368,7 +369,9 @@ export async function renderReader(view, [id], query) {
       A.unlock();
       if (bar.classList.contains('on')) { show(false); return; }
       show(true);
-      if (!mine()) await ensure(true);
+      if (mine() && !A.isPreparing()) { if (!A.player.playing) A.play(); return; }
+      await A.whenPrepared();
+      if (mine()) A.play(); else await ensure(true);
     });
     bar.addEventListener('click', async e => {
       const a = e.target.closest('button')?.dataset.a;
@@ -377,7 +380,7 @@ export async function renderReader(view, [id], query) {
       A.unlock();
       if (a === 'hide') { show(false); return; }
       if (a === 'open') { location.hash = `#/listen/${encodeURIComponent(real.id)}`; return; }
-      if (a === 'play') { if (!mine()) await ensure(true); else A.toggle(); return; }
+      if (a === 'play') { if (mine() && !A.isPreparing()) A.toggle(); else { await A.whenPrepared(); if (mine()) A.play(); else await ensure(true); } return; }
       if (!(await ensure())) return;
       if (a === 'back') A.seek(-15);
       else if (a === 'fwd') A.seek(30);

@@ -34,6 +34,8 @@ export async function renderListen(view, [id]) {
       <div class="ls-opts"><button class="chip" id="ls-rate">⚡ 1×</button><button class="chip" id="ls-sleep">🌙 Uyku</button></div>
       <div class="warn" id="ls-err" style="display:none"></div>
       <div class="small muted" id="ls-total" style="text-align:center"></div>
+      <details class="ls-diag"><summary class="small muted">🔧 Sorun giderme</summary><pre id="ls-diag"></pre>
+        <button class="mini-btn" id="ls-diag-copy">📋 Kopyala</button></details>
     </div>
     <div class="section"><div style="display:flex;align-items:center;gap:8px"><h3 style="flex:1;margin:0">Bölümler</h3>
       <button class="mini-btn" id="ls-edit">✏️ Düzenle</button></div><div id="ls-list" class="ls-list"></div></div>`;
@@ -74,17 +76,27 @@ export async function renderListen(view, [id]) {
     $('#ls-err', view).style.display = err ? '' : 'none'; $('#ls-err', view).textContent = err;
     const total = A.audioTotal(b), pct = mine ? A.percentAt(b, idx, time) : A.audioPercent(b) || 0;
     $('#ls-total', view).textContent = `${total ? `Toplam ${formatDuration(total)} · ` : ''}%${Math.floor(pct)} dinlendi${b.listenSeconds ? ` · ${formatDuration(b.listenSeconds)} dinleme` : ''}`;
+    const dg = $('#ls-diag', view);
+    if (dg && dg.closest('details').open) dg.textContent = `${A.diagInfo()}\n\n${A.diagLog.join('\n')}`;
     if (idx !== lastIdx || (mine && A.player.playing) !== lastPlaying) { lastIdx = idx; lastPlaying = mine && A.player.playing; drawList(); }
   };
   unsub = A.onPlayer(update);
   update();
+  $('.ls-diag', view).addEventListener('toggle', update);
+  $('#ls-diag-copy', view).addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText($('#ls-diag', view).textContent); toast('📋 Kopyalandı'); } catch { toast('Kopyalanamadı; ekran görüntüsü alabilirsin'); }
+  });
+  A.prepare(b).then(update);
 
   const ensure = async (autoplay = false) => {
     if (A.player.book?.id === b.id) return true;
     try { await A.resume(b, autoplay); return true; } catch (e) { toast(e.message); return false; }
   };
   $('#ls-play', view).addEventListener('click', async () => {
+    // Dosya hazırsa çalma dokunuşun içinde, beklemeden başlar (iPhone bunu şart koşuyor)
+    if (A.player.book?.id === b.id && !A.isPreparing()) { A.toggle(); return; }
     A.unlock();
+    if (A.isPreparing()) { await A.whenPrepared(); if (A.player.book?.id === b.id) { A.play(); return; } }
     if (A.player.book?.id !== b.id) { await ensure(true); return; }
     A.toggle();
   });
@@ -226,7 +238,7 @@ export function initMiniPlayer() {
   const hiddenRoute = () => /^#\/(listen|read|edit|chat)\b/.test(location.hash);
   const draw = () => {
     const b = A.player.book;
-    const show = !!b && !hiddenRoute();
+    const show = !!b && A.player.started && !hiddenRoute();
     bar.hidden = !show;
     document.body.classList.toggle('has-mini', show);
     if (!b) return;

@@ -657,3 +657,6 @@ body.has-mini #toast { bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 84px)
 .reader .r-abar .r-at { font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; min-width: 0; white-space: nowrap; padding: 0 2px; }
 .reader .r-abar .r-at:empty { display: none; }
 #r-audio.on { color: var(--accent); }
+.ls-diag { width: 100%; max-width: 520px; }
+.ls-diag summary { cursor: pointer; text-align: center; list-style: none; }
+.ls-diag pre { white-space: pre-wrap; word-break: break-word; font-size: 11px; line-height: 1.4; background: var(--surface-2); border-radius: 10px; padding: 10px; margin: 8px 0; max-height: 260px; overflow: auto; }
