@@ -188,6 +188,8 @@ export async function uploadOne({ b, slot, f, key, audio }) {
     if (cur) { cur.driveId = id; b.audio = { ...b.audio }; await saveBook(b); }
     return true;
   }
+  const blob = await db.getFile(key);
+  if (!blob) return false;
   const id = (await findByHash(f.hash)) || (await uploadBlob(blob, fileName(b, f, slot), f.hash));
   const cur = slot === 2 ? b.file2 : b.file;
   if (cur && (cur.hash === f.hash || !cur.hash)) { cur.driveId = id; await saveBook(b); }
