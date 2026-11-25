@@ -28,6 +28,9 @@ const FONTS = {
   sans: ['Sans', '-apple-system, "Helvetica Neue", Arial, sans-serif'],
 };
 const rs = () => (state.settings.reader ||= { theme: 'light', fontSize: 100, font: 'publisher', pdfZoom: 1 });
+// Yatay tablette iki sayfa yan yana: ayar 'auto' (varsayılan) ya da 'off'. Ekran yatay ve tablet boyutundaysa açılır.
+const spreadOn = () => (rs().spread || 'auto') !== 'off' && window.innerWidth > window.innerHeight && window.innerWidth >= 900 && window.innerHeight >= 560;
+const spreadBlock = s => `<div class="f-block"><h3>Yatayda iki sayfa</h3><div class="chip-wrap"><button class="chip ${(s.spread || 'auto') !== 'off' ? 'on' : ''}" data-spread="auto">📖📖 Otomatik</button><button class="chip ${s.spread === 'off' ? 'on' : ''}" data-spread="off">📄 Tek sayfa</button></div><p class="small muted" style="margin-top:6px">Tablet yan çevrildiğinde iki sayfa kitap gibi yan yana gösterilir.</p></div>`;
 // Okuyucu ince ayarları (EPUB)
 const LINE_HEIGHTS = [['pub', 'Yayıncı'], ['1.4', '1,4'], ['1.6', '1,6'], ['1.8', '1,8'], ['2', '2,0']];
 const MARGINS = { s: ['Dar', 0], m: ['Orta', 14], l: ['Geniş', 30] };
@@ -299,9 +302,11 @@ export async function renderReader(view, [id], query) {
         ${isEpub ? `<div class="f-block"><h3>Yazı boyutu</h3><div class="range-row"><button class="btn" data-fs="-10">A−</button><b id="fs-val" style="flex:1;text-align:center">%${s.fontSize}</b><button class="btn" data-fs="10">A+</button></div></div>
         <div class="f-block"><h3>Okuma düzeni</h3><div class="chip-wrap"><button class="chip ${s.flow !== 'scroll' ? 'on' : ''}" data-flow="paged">📖 Sayfa sayfa</button><button class="chip ${s.flow === 'scroll' ? 'on' : ''}" data-flow="scroll">📜 Kaydırarak oku</button></div><p class="small muted" style="margin-top:6px">Sayfa çevrilemiyorsa "Kaydırarak oku"yu seç: metin web sayfası gibi parmakla aşağı kaydırılır.</p></div>
         <div class="f-block"><h3>Yazı tipi</h3><div class="chip-wrap">${Object.entries(FONTS).map(([k, [l]]) => `<button class="chip ${s.font === k ? 'on' : ''}" data-ff="${k}">${l}</button>`).join('')}</div></div>
+        ${s.flow !== 'scroll' ? spreadBlock(s) : ''}
         ${typoBlocks(s)}`
         : `<div class="f-block"><h3>Okuma düzeni</h3><div class="chip-wrap"><button class="chip ${(s.pdfFlow || 'paged') === 'paged' ? 'on' : ''}" data-pflow="paged">📖 Sayfa sayfa</button><button class="chip ${s.pdfFlow === 'scroll' ? 'on' : ''}" data-pflow="scroll">📜 Kaydırarak</button></div></div>
         <div class="f-block"><h3>Yakınlaştırma</h3><div class="chip-wrap">${[1, 1.25, 1.5, 2].map(z => `<button class="chip ${s.pdfZoom === z ? 'on' : ''}" data-zoom="${z}">%${z * 100}</button>`).join('')}</div></div>
+        ${(s.pdfFlow || 'paged') === 'paged' ? spreadBlock(s) : ''}
         <div class="f-block"><h3>Sayfaya git</h3><div class="range-row"><input id="goto-p" type="number" inputmode="numeric" min="1" max="${ctrl.rangeMax()}" placeholder="1–${ctrl.rangeMax()}" style="flex:1;height:44px;border-radius:10px;border:1px solid var(--line);padding:0 12px;background:var(--surface)"><button class="btn primary" id="goto-go">Git</button></div></div>`}`,
       onMount: (el, close) => {
         $$('[data-th]', el).forEach(b => b.addEventListener('click', () => {
@@ -326,6 +331,10 @@ export async function renderReader(view, [id], query) {
         }));
         $$('[data-zoom]', el).forEach(b => b.addEventListener('click', () => {
           s.pdfZoom = Number(b.dataset.zoom); $$('[data-zoom]', el).forEach(x => x.classList.toggle('on', x === b)); ctrl.applyStyle(); saveSettings();
+        }));
+        $$('[data-spread]', el).forEach(b => b.addEventListener('click', () => {
+          s.spread = b.dataset.spread; $$('[data-spread]', el).forEach(x => x.classList.toggle('on', x === b)); ctrl.applyStyle(); saveSettings();
+          if (!spreadOn() && s.spread !== 'off') toast('İki sayfa, cihaz yan çevrildiğinde ve ekran yeterince genişken açılır');
         }));
         $('#goto-go', el)?.addEventListener('click', () => { const n = Number($('#goto-p', el).value); if (n) { ctrl.goto(n); close(); } });
       },
@@ -444,7 +453,16 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck }
   const eb = ePub(buf);
   const rendition = eb.renderTo(stage, scroll
     ? { width: '100%', height: '100%', manager: 'continuous', flow: 'scrolled', allowScriptedContent: false }
-    : { width: '100%', height: '100%', flow: 'paginated', spread: 'none', allowScriptedContent: false });
+    : { width: '100%', height: '100%', flow: 'paginated', spread: spreadOn() ? 'always' : 'none', minSpreadWidth: 0, allowScriptedContent: false });
+  // Ekran dönünce tek/iki sayfa arasında geç
+  let spreadNow = !scroll && spreadOn();
+  const applySpread = () => {
+    if (scroll || spreadOn() === spreadNow) return;
+    spreadNow = spreadOn();
+    try { rendition.spread(spreadNow ? 'always' : 'none', 0); rendition.resize(); } catch { /* yok */ }
+  };
+  const onSpreadResize = () => setTimeout(applySpread, 150);
+  window.addEventListener('resize', onSpreadResize);
   // Kaydırma modunda dokunma katmanı yok: ortaya dokunmak menüyü açsın
   {
     // Ortaya dokununca menü (Android/bilgisayar; iPhone korumalı çerçevedeki dokunmaları bildirmediği için orada ⋯ düğmesi var)
@@ -480,6 +498,7 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck }
   let last = null;
 
   function applyStyle() {
+    applySpread();
     const s = rs(), t = THEMES[s.theme];
     rendition.themes.register(s.theme, {
       body: { background: `${t.bg} !important`, color: `${t.fg} !important` },
@@ -634,7 +653,7 @@ async function openEpub(stage, blob, book, { onLocation, onTap, start, onStuck }
       return bms.find(b => { try { return CFI.compare(b.loc, last.start.cfi) >= 0 && CFI.compare(b.loc, last.end.cfi) <= 0; } catch { return b.loc === last.start.cfi; } }) || null;
     },
     applyStyle,
-    destroy: () => { try { rendition.destroy(); eb.destroy(); } catch { /* yok */ } },
+    destroy: () => { window.removeEventListener('resize', onSpreadResize); try { rendition.destroy(); eb.destroy(); } catch { /* yok */ } },
   };
 }
 
@@ -1025,14 +1044,17 @@ async function openPdfPaged(stage, doc, pages, { onLocation, onTap, start, onAct
   let current = Math.max(1, Math.min(pages, Number(start) || 1)), sizeKey = '';
   const zoom = () => rs().pdfZoom || 1;
 
+  const spread = () => spreadOn() && zoom() === 1;
+  // İki sayfada: kapak (1) tek başına, sonra 2-3, 4-5 … (basılı kitap gibi)
+  const leftOf = n => (n <= 1 ? 1 : n % 2 === 0 ? n : n - 1);
   function draw(n) {
-    const key = `${stage.clientWidth}x${stage.clientHeight}@${zoom()}`;
+    const key = `${stage.clientWidth}x${stage.clientHeight}@${zoom()}${spread() ? 's' : ''}`;
     if (key !== sizeKey) { cache.clear(); sizeKey = key; }
     if (!cache.has(n)) {
       cache.set(n, (async () => {
         const page = await doc.getPage(n);
         const vp1 = page.getViewport({ scale: 1 });
-        const W = stage.clientWidth - 12, H = stage.clientHeight - 30;
+        const W = (spread() ? (stage.clientWidth - 24) / 2 : stage.clientWidth - 12), H = stage.clientHeight - 30;
         const fit = Math.min(W / vp1.width, H / vp1.height) * zoom();
         let scale = fit * Math.min(window.devicePixelRatio || 1, 2);
         const maxPixels = 4.5e6;
@@ -1052,23 +1074,30 @@ async function openPdfPaged(stage, doc, pages, { onLocation, onTap, start, onAct
 
   async function show(n, dir = 0) {
     n = Math.max(1, Math.min(pages, Number(n) || 1));
+    if (spread()) n = leftOf(n);
+    const two = spread() && n > 1 && n + 1 <= pages;
     current = n;
     report();
-    let c;
-    try { c = await draw(n); } catch { return; }
+    let c, c2;
+    try { [c, c2] = await Promise.all([draw(n), two ? draw(n + 1) : null]); } catch { return; }
     if (current !== n) return;
-    sheet.replaceChildren(c);
+    sheet.classList.toggle('two', !!c2);
+    sheet.replaceChildren(...[c, c2].filter(Boolean));
     stage.scrollTop = 0; stage.scrollLeft = 0;
     if (dir) { sheet.classList.remove('turn-l', 'turn-r'); void sheet.offsetWidth; sheet.classList.add(dir > 0 ? 'turn-l' : 'turn-r'); }
     if (n < pages) draw(n + 1).catch(() => {});
     if (n > 1) draw(n - 1).catch(() => {});
+    if (two && n + 2 <= pages) draw(n + 2).catch(() => {});
+    if (spread() && n > 2) draw(n - 2).catch(() => {});
   }
   function report() {
-    pgnum.textContent = `${current} / ${pages}`;
+    const r = spread() && current > 1 && current < pages ? current + 1 : current;
+    pgnum.textContent = r !== current ? `${current}–${r} / ${pages}` : `${current} / ${pages}`;
     onLocation({ loc: current, page: current, pages, percent: (current / pages) * 100, label: `Sayfa ${current} / ${pages}`, chapter: '', atEnd: current === pages });
   }
-  const next = () => { onActivity?.(); if (current < pages) show(current + 1, 1); };
-  const prev = () => { onActivity?.(); if (current > 1) show(current - 1, -1); };
+  const step = () => (spread() && current > 1 ? 2 : 1);
+  const next = () => { onActivity?.(); const to = current + step(); if (to <= pages) show(to, 1); };
+  const prev = () => { onActivity?.(); if (current > 1) show(spread() ? leftOf(current - 1) : current - 1, -1); };
 
   // Dokunma: yakınlaştırılmışsa kaydırma sayfanın içinde gezinir; değilse yana kaydırmak sayfa çevirir
   let t0 = null, swiped = false;
