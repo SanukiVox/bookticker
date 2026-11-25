@@ -58,7 +58,7 @@ export function coverHTML(book, { key, badge = true } = {}) {
   // Sol alt: kitap dosyası (📄 bu cihazda, ☁️ Drive'da); iki dosya varsa sayı
   const fs = badge ? fileSummary(book) : null;
   const fb = fs && fs.where !== 'missing'
-    ? `<span class="fbadge ${fs.where}${pct !== null ? ' up' : ''}" title="${fs.where === 'local' ? 'Dosyası bu cihazda' : 'Dosyası Google Drive\'da'}">${fs.where === 'local' ? '📄' : '☁️'} ${fs.count > 1 ? '2' : esc((fs.type || '').toUpperCase())}</span>` : '';
+    ? `<span class="fbadge ${fs.where}${pct !== null ? ' up' : ''}" title="${esc(fileTitle(fs))}">${fs.where === 'local' ? '📄' : '☁️'} ${fileLangText(fs)}</span>` : '';
   // Sağ alt: sesli kitabı var
   const ab = badge && book.audio?.tracks?.length ? `<span class="abadge${pct !== null ? ' up' : ''}" title="Sesli kitabı var">🎧</span>` : '';
   return `<div class="cover"${k ? ` data-cover="${esc(k)}"` : ''}>${ph}${badges}${prog}${fb}${ab}</div>`;
@@ -111,11 +111,21 @@ function rowScore(b, s) {
   return rs && qs ? `${rs}<div style="margin-top:4px">${qs}</div>` : rs || qs;
 }
 
+// Dosyanın dili: ORJ (orijinal metin) / TR (çeviri); dili işaretlenmemişse dosya türü (EPUB/PDF)
+function fileLangText(fs) {
+  const l = [fs.langs.has('orig') ? 'ORJ' : '', fs.langs.has('tr') ? 'TR' : ''].filter(Boolean);
+  if (l.length) return l.join('+');
+  return fs.count > 1 ? '2' : esc((fs.type || '').toUpperCase());
+}
+function fileTitle(fs) {
+  const l = [fs.langs.has('orig') ? 'orijinal metin' : '', fs.langs.has('tr') ? 'Türkçe çeviri' : ''].filter(Boolean).join(' ve ');
+  return `${l ? `Dosya: ${l}` : 'Kitap dosyası'} · ${fs.where === 'local' ? 'bu cihazda' : "Google Drive'da"}`;
+}
 function fileMark(b) {
   const fs = fileSummary(b);
   const au = b.audio?.tracks?.length ? ' · 🎧' : '';
   if (!fs || fs.where === 'missing') return au;
-  return ` · ${fs.where === 'drive' ? '☁️' : '📄'}${fs.count > 1 ? '×2' : ''}${au}`;
+  return ` · ${fs.where === 'drive' ? '☁️' : '📄'} ${fileLangText(fs)}${au}`;
 }
 
 export function bookRow(b, { sub } = {}) {
