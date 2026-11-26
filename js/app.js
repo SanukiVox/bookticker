@@ -129,6 +129,7 @@ async function start() {
   requestPersistence();
   startAutoSync();
   setTimeout(() => checkReleases().catch(() => {}), 1500);
+  setTimeout(async () => { try { (await import('./news.js')).checkNews(toast); } catch { /* yok */ } }, 6000);
   // Google Drive: yüklenmemiş dosyaları yükle, öbür cihazdan eklenenleri indir (GitHub çekişinden sonra)
   setTimeout(async () => { try { (await import('./gdrive.js')).startupDrive(toast); } catch { /* yok */ } }, 4000);
   onAutoPush(err => toast(err ? `☁️ GitHub'a gönderilemedi: ${err.message}` : '☁️ GitHub\'a kaydedildi'));

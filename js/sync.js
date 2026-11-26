@@ -86,6 +86,13 @@ async function remoteHead() {
   return { commit, treeSha: c.tree.sha, tree };
 }
 
+// Depodaki başka bir JSON dosyasını oku (örn. yenilikler.json); yoksa null
+export async function fetchRepoJSON(path) {
+  if (!isConfigured()) return null;
+  try { return await gh(`/contents/${path}?ref=${encodeURIComponent(sync.cfg.branch)}`, { accept: 'application/vnd.github.raw+json' }); }
+  catch (e) { if (e.status === 404) return null; throw e; }
+}
+
 export async function testConnection() {
   const repo = await gh('');
   if (!repo.private) return { ok: true, warn: 'Dikkat: bu depo herkese açık (public). Verilerin için gizli (private) bir depo kullanmanı öneririm.' };
