@@ -75,6 +75,8 @@ export async function renderReading(view) {
     }).join('')}</div>` : ''}
     ${top ? `<a class="next-card" href="#/book/${enc(top.b.id)}">${coverHTML(top.b, { badge: false })}
       <div><div class="lbl">Sıradaki kitap önerisi</div><div class="t">${esc(displayTitle(top.b))}</div><div class="small">${esc(top.b.author || '')}</div><div class="why">${esc(top.why)}</div></div></a>` : ''}
+    <a class="tip" href="#/pick" style="margin-bottom:18px;text-decoration:none;color:inherit"><span style="font-size:26px">🎲</span>
+      <div style="flex:1"><b>Ne okusam?</b><br><span class="small">Ruh haline göre seç ya da kitap çarkını çevir →</span></div></a>
     ${sugg.length > 1 ? `<h3 style="margin-bottom:8px">Diğer öneriler</h3><div class="strip" style="margin:0 -16px 20px;padding:2px 16px 4px">${sugg.slice(1).map(s => bookCard(s.b)).join('')}</div>` : ''}
     ${taste.length ? `<h3 style="margin-bottom:8px">Zevkine göre</h3><div class="strip" style="margin:0 -16px 20px;padding:2px 16px 4px">${taste.map(t => bookCard(t.b, '', `${displayTitle(t.because)} sevdiğin için`)).join('')}</div>` : ''}
 

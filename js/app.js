@@ -15,6 +15,7 @@ import { renderChat } from './views/chat.js';
 import { renderVocab } from './views/vocab.js';
 import { renderUpcoming, checkReleases } from './views/upcoming.js';
 import { renderYear } from './views/yearreview.js';
+import { renderPick } from './views/pick.js';
 
 const routes = [
   [/^\/?$/, renderLibrary, 'library'],
@@ -33,6 +34,7 @@ const routes = [
   [/^\/vocab(?:\/([^/]+))?$/, renderVocab, 'reading'],
   [/^\/upcoming$/, renderUpcoming, 'reading'],
   [/^\/year(?:\/(\d{4}))?$/, renderYear, 'reading'],
+  [/^\/pick$/, renderPick, 'reading'],
   [/^\/giris$/, async v => (await import('./views/sharing.js')).renderLogin(v), 'settings'],
   [/^\/paylasim$/, async v => (await import('./views/sharing.js')).renderSharingAdmin(v), 'settings'],
   [/^\/bildirim$/, async v => (await import('./views/notify.js')).renderNotify(v), 'settings'],
@@ -76,7 +78,7 @@ async function route() {
 // Veri değişince açık ekranı yenile (düzenleme ekranı hariç; o kendi durumunu tutar).
 let pending = false;
 onChange(() => {
-  if (pending || parse().path.startsWith('/edit/') || parse().path.startsWith('/listen/') || parse().path.startsWith('/read/') || parse().path === '/chat' || (parse().path.startsWith('/vocab') && location.hash.includes('review=1'))) return;
+  if (pending || parse().path.startsWith('/edit/') || parse().path.startsWith('/listen/') || parse().path.startsWith('/read/') || parse().path === '/chat' || parse().path === '/pick' || (parse().path.startsWith('/vocab') && location.hash.includes('review=1'))) return;
   pending = true;
   requestAnimationFrame(async () => {
     pending = false;
