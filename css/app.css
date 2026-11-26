@@ -665,3 +665,8 @@ body.has-mini #toast { bottom: calc(var(--tabbar-h) + var(--safe-bottom) + 84px)
 
 /* PDF: yatay tablette iki sayfa yan yana */
 .pdf-paged .pdf-sheet.two { display: flex; gap: 4px; align-items: center; }
+
+/* EPUB → sesli kitap */
+.tts-est { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); line-height: 1.5; }
+.tts-run { display: grid; gap: 6px; margin: 8px 0; }
+.tts-run .mini-btn { justify-self: start; }

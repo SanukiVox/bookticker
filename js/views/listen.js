@@ -3,6 +3,7 @@ import { getBook, displayTitle } from '../store.js';
 import { esc, enc, toast, sheet, confirmSheet, coverHTML, hydrateCovers, $, $$ } from '../ui.js';
 import { formatSize, formatDuration } from '../files.js';
 import * as A from '../audio.js';
+import { openTts, ttsStatusHTML, wireTtsStatus } from './ttsview.js';
 import { db } from '../db.js';
 import { backButton, wireBack } from './detail.js';
 
@@ -159,11 +160,13 @@ function openTrackEditor(b, view) {
 // ---------- Kitap sayfasındaki 🎧 bölümü ----------
 const picker = (label, cls, mode) => `<label class="${cls}" style="position:relative;overflow:hidden">${label}<input type="file" accept="${A.AUDIO_ACCEPT}" multiple data-mode="${mode}" style="position:absolute;inset:0;opacity:0"></label>`;
 
+const hasEpub = b => b.file?.type === 'epub' || b.file2?.type === 'epub';
 export function audioSectionHTML(b) {
   if (!A.hasAudio(b)) {
     return `<div class="section" id="audio-sec"><h3>🎧 Sesli kitap</h3>
       <div class="muted small" style="margin-bottom:8px">MP3, M4A/M4B gibi ses dosyalarını ekle; bölüm bölüm dosyalar varsa hepsini birlikte seç. Kaldığın yer kaydedilir, kitap dosyasıyla birlikte kullanabilirsin.</div>
-      <div class="btn-row">${picker('🎧 Sesli kitap ekle', 'btn', 'replace')}</div></div>`;
+      <div class="btn-row">${picker('🎧 Sesli kitap ekle', 'btn', 'replace')}${hasEpub(b) ? '<button class="btn" id="tts-open">🗣️ EPUB\'dan sesli kitap oluştur</button>' : ''}</div>
+      ${ttsStatusHTML(b)}</div>`;
   }
   const where = A.audioWhere(b);
   const n = b.audio.tracks.length, total = A.audioTotal(b), size = b.audio.tracks.reduce((t, x) => t + (x.size || 0), 0);
@@ -188,12 +191,15 @@ export function audioSectionHTML(b) {
   return `<div class="section" id="audio-sec"><h3>🎧 Sesli kitap</h3>
     <div class="read-cta"><a class="btn primary" href="#/listen/${enc(b.id)}" id="au-go">🎧 ${mine && A.player.playing ? 'Çalıyor · oynatıcıyı aç' : pct ? `Dinlemeye devam et · %${Math.floor(pct)}` : 'Dinlemeye başla'}</a></div>
     ${prog}${info}
+    ${ttsStatusHTML(b)}
     <div class="btn-row">${picker('＋ Bölüm ekle', 'mini-btn', 'append')}${picker('Değiştir', 'mini-btn', 'replace')}<button class="mini-btn" id="au-rm" style="color:var(--danger);background:transparent">Kaldır</button></div></div>`;
 }
 
 export function wireAudioSection(view, b) {
   const sec = $('#audio-sec', view);
   if (!sec) return;
+  $('#tts-open', sec)?.addEventListener('click', () => openTts(b));
+  wireTtsStatus(sec, b);
   $$('input[type=file]', sec).forEach(inp => inp.addEventListener('change', async e => {
     const files = [...(e.target.files || [])];
     e.target.value = '';

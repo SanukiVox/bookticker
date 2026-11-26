@@ -170,3 +170,43 @@ export async function chapterText(book, { which = 'current' } = {}) {
     throw new Error('Önceki bölüm bulunamadı');
   } finally { eb.destroy(); }
 }
+
+// Sesli kitap üretimi için: kitabın bölümleri [{ label, text }] (EPUB). Çok kısa ara sayfalar bir sonrakine eklenir.
+export async function epubChapters(book) {
+  const blob = await getFileBlob(book);
+  if (!blob) throw new Error('Kitap dosyası bu cihazda yok');
+  if (book.file.type !== 'epub') throw new Error('Sesli kitap üretimi şimdilik EPUB dosyalarında çalışıyor');
+  await loadScript('vendor/jszip.min.js');
+  await loadScript('vendor/epub.min.js');
+  const ePub = window.ePub;
+  const { checkEpub } = await import('./views/reader.js');
+  const eb = ePub(await checkEpub(await blob.arrayBuffer()));
+  try {
+    await eb.ready;
+    const nav = await eb.loaded.navigation;
+    const labels = new Map();
+    (function walk(items) { for (const it of items || []) { labels.set((it.href || '').split('#')[0], (it.label || '').trim()); walk(it.subitems); } })(nav.toc);
+    const labelOf = sec => labels.get(sec.href) || [...labels.entries()].find(([h]) => h && (sec.href.endsWith(h) || h.endsWith(sec.href)))?.[1] || '';
+    const sections = [];
+    eb.spine.each(s => sections.push(s));
+    const out = [];
+    let carry = '';
+    for (const sec of sections) {
+      if (sec.linear === false && out.length === 0 && !carry) continue; // kapak vb.
+      let text = '';
+      try {
+        const root = await sec.load(eb.load.bind(eb));
+        const doc = root.ownerDocument || root;
+        text = tidy(blockText(doc.body || root.querySelector?.('body') || doc.documentElement));
+      } catch { /* bozuk bölüm atlanır */ }
+      sec.unload?.();
+      if (!text) continue;
+      const label = labelOf(sec);
+      if (text.length < 600) { carry += (carry ? '\n\n' : '') + text; continue; }
+      out.push({ label: label || `Bölüm ${out.length + 1}`, text: carry ? `${carry}\n\n${text}` : text });
+      carry = '';
+    }
+    if (carry) { if (out.length) out[out.length - 1].text += `\n\n${carry}`; else out.push({ label: 'Bölüm 1', text: carry }); }
+    return out;
+  } finally { eb.destroy(); }
+}
