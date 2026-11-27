@@ -665,10 +665,14 @@ async function openPdf(stage, blob, book, { onLocation, onTap, start, onActivity
   const base = new URL('../../vendor/pdfjs/', import.meta.url).href;
   const pdfjs = await import('../../vendor/pdfjs/pdf.min.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.mjs';
+  const T = { start: performance.now() };
   const ab = await blob.arrayBuffer();
+  T.read = performance.now() - T.start;
   // pdf.js veriyi kendi işçisine taşır; hızlı yol için ayrı bir kopya tutulur
   const docP = pdfjs.getDocument({ data: new Uint8Array(ab.slice(0)), isEvalSupported: false, standardFontDataUrl: base + 'standard_fonts/' }).promise;
-  const fastP = import('../pdffast.js').then(m => m.openFast(blob, new Uint8Array(ab))).catch(() => null);
+  const t1 = performance.now();
+  const fastP = import('../pdffast.js').then(m => m.openFast(blob, new Uint8Array(ab))).then(f => { T.index = performance.now() - t1; return f; }).catch(e => { T.indexErr = String(e?.message || e).slice(0, 40); return null; });
+  docP.then(() => { T.doc = performance.now() - t1; }).catch(() => {});
   const [doc, fastDoc] = await Promise.all([docP, fastP]);
   const pages = doc.numPages;
   // Taranmış sayfalar: JPEG doğrudan tarayıcının çözücüsüyle (pdf.js Safari'de JPEG'i çok yavaş çözer)
@@ -677,7 +681,9 @@ async function openPdf(stage, blob, book, { onLocation, onTap, start, onActivity
   const slowMs = [];
   const paint = async (page, canvas, vp) => {
     const n = page.pageNumber;
-    if (fast) { try { if (await drawFast(fast, n, canvas, vp.transform)) return null; } catch { /* pdf.js ile çiz */ } }
+    const tp = performance.now();
+    const done = (kind) => { const ms = performance.now() - tp; if (T.first == null) T.first = ms + (tp - T.start); T.last = { kind, ms }; };
+    if (fast) { try { if (await drawFast(fast, n, canvas, vp.transform)) { done('hızlı'); return null; } } catch (e) { T.fastErr = String(e?.message || e).slice(0, 40); } }
     // Yavaş sayfalar (JBIG2, JPEG 2000 vb.): bir kez çizilince cihazda saklanır, sonraki açılışta anında gelir
     const key = book.file?.key ? `pdfpg:${book.file.key}:${n}:${canvas.width}x${canvas.height}` : null;
     if (key) {
@@ -686,7 +692,7 @@ async function openPdf(stage, blob, book, { onLocation, onTap, start, onActivity
         if (hit instanceof Blob) {
           const bmp = await createImageBitmap(hit);
           canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height); bmp.close?.();
-          return null;
+          done('saklanan'); return null;
         }
       } catch { /* yeniden çiz */ }
     }
@@ -694,12 +700,13 @@ async function openPdf(stage, blob, book, { onLocation, onTap, start, onActivity
     const task = page.render({ canvasContext: canvas.getContext('2d'), viewport: vp });
     task.promise.then(() => {
       const ms = performance.now() - t0;
+      done('pdf.js');
       slowMs.push(ms); if (slowMs.length > 20) slowMs.shift();
       if (key && ms > 150) pageCachePut(key, canvas);
     }).catch(() => {});
     return task;
   };
-  const info = () => ({ ...(fast ? fast.stats : { fast: 0, slow: 0, why: {}, noIndex: true }), ms: slowMs.length ? Math.round(slowMs.reduce((a, b) => a + b, 0) / slowMs.length) : null });
+  const info = () => ({ ...(fast ? fast.stats : { fast: 0, slow: 0, why: {}, noIndex: true }), ms: slowMs.length ? Math.round(slowMs.reduce((a, b) => a + b, 0) / slowMs.length) : null, T: { ...T } });
   if ((rs().pdfFlow || 'paged') === 'paged') return { ...(await openPdfPaged(stage, doc, pages, { onLocation, onTap, start, onActivity, paint })), pdfInfo: info };
   const first = (await doc.getPage(1)).getViewport({ scale: 1 });
 
@@ -861,17 +868,21 @@ const chapterNo = label => {
 function pdfInfoBlock(ctrl) {
   const i = ctrl.pdfInfo?.();
   if (!i) return '';
+  if (!i.noIndex && !i.fast && !i.slow) i.why = {};
   const ms = i.ms != null && i.ms >= 100 ? ` · yavaş sayfa ortalama ${(i.ms / 1000).toFixed(1).replace('.', ',')} sn (bir kez çizilen sayfa saklanır)` : '';
   let t;
   if (i.noIndex) t = `⚡ Hızlı görüntü kullanılamıyor: dosyanın yapısı okunamadı${ms}.`;
-  else if (!i.fast && !i.slow) return '';
+  else if (!i.fast && !i.slow) t = '⚡ Hızlı görüntü: henüz sayfa çizilmedi.';
   else if (!i.slow) t = '⚡ Hızlı görüntü açık: sayfalar telefonun kendi resim çözücüsüyle açılıyor.';
   else if (!i.fast && Object.keys(i.why).every(w => w === 'metin' || w === 'çizim')) t = `⚡ Bu PDF metin tabanlı; hızlı görüntüye gerek yok${ms}.`;
   else {
     const why = Object.entries(i.why).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
     t = `⚡ Hızlı görüntü: ${i.fast + i.slow} sayfanın ${i.fast} tanesinde${why ? ` · diğerleri: ${why}` : ''}${ms}.`;
   }
-  return `<p class="small muted" style="margin:0 0 10px">${t}</p>`;
+  const sec = v => (v == null ? '–' : `${(v / 1000).toFixed(2).replace('.', ',')} sn`);
+  const T = i.T || {};
+  const diag = `Ölçüm: dosya okuma ${sec(T.read)} · PDF hazırlık ${sec(T.doc)} · dizin ${T.indexErr ? `hata (${T.indexErr})` : sec(T.index)} · ilk sayfa ${sec(T.first)}${T.last ? ` · son sayfa ${sec(T.last.ms)} (${T.last.kind})` : ''}${T.fastErr ? ` · hızlı yol hatası: ${T.fastErr}` : ''}`;
+  return `<p class="small muted" style="margin:0 0 10px">${t}<br><span style="font-size:11px">${esc(diag)}</span></p>`;
 }
 
 // Çizilmiş PDF sayfası önbelleği (en fazla 80 sayfa; en eskisi silinir)
