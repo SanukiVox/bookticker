@@ -307,6 +307,7 @@ export async function renderReader(view, [id], query) {
         : `<div class="f-block"><h3>Okuma düzeni</h3><div class="chip-wrap"><button class="chip ${(s.pdfFlow || 'paged') === 'paged' ? 'on' : ''}" data-pflow="paged">📖 Sayfa sayfa</button><button class="chip ${s.pdfFlow === 'scroll' ? 'on' : ''}" data-pflow="scroll">📜 Kaydırarak</button></div></div>
         <div class="f-block"><h3>Yakınlaştırma</h3><div class="chip-wrap">${[1, 1.25, 1.5, 2].map(z => `<button class="chip ${s.pdfZoom === z ? 'on' : ''}" data-zoom="${z}">%${z * 100}</button>`).join('')}</div></div>
         ${(s.pdfFlow || 'paged') === 'paged' ? spreadBlock(s) : ''}
+        ${pdfInfoBlock(ctrl)}
         <div class="f-block"><h3>Sayfaya git</h3><div class="range-row"><input id="goto-p" type="number" inputmode="numeric" min="1" max="${ctrl.rangeMax()}" placeholder="1–${ctrl.rangeMax()}" style="flex:1;height:44px;border-radius:10px;border:1px solid var(--line);padding:0 12px;background:var(--surface)"><button class="btn primary" id="goto-go">Git</button></div></div>`}`,
       onMount: (el, close) => {
         $$('[data-th]', el).forEach(b => b.addEventListener('click', () => {
@@ -664,9 +665,42 @@ async function openPdf(stage, blob, book, { onLocation, onTap, start, onActivity
   const base = new URL('../../vendor/pdfjs/', import.meta.url).href;
   const pdfjs = await import('../../vendor/pdfjs/pdf.min.mjs');
   pdfjs.GlobalWorkerOptions.workerSrc = base + 'pdf.worker.min.mjs';
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(await blob.arrayBuffer()), isEvalSupported: false, standardFontDataUrl: base + 'standard_fonts/' }).promise;
+  const ab = await blob.arrayBuffer();
+  // pdf.js veriyi kendi işçisine taşır; hızlı yol için ayrı bir kopya tutulur
+  const docP = pdfjs.getDocument({ data: new Uint8Array(ab.slice(0)), isEvalSupported: false, standardFontDataUrl: base + 'standard_fonts/' }).promise;
+  const fastP = import('../pdffast.js').then(m => m.openFast(blob, new Uint8Array(ab))).catch(() => null);
+  const [doc, fastDoc] = await Promise.all([docP, fastP]);
   const pages = doc.numPages;
-  if ((rs().pdfFlow || 'paged') === 'paged') return openPdfPaged(stage, doc, pages, { onLocation, onTap, start, onActivity });
+  // Taranmış sayfalar: JPEG doğrudan tarayıcının çözücüsüyle (pdf.js Safari'de JPEG'i çok yavaş çözer)
+  const fast = fastDoc && fastDoc.pages.length === pages ? fastDoc : null;
+  const { drawFast } = fast ? await import('../pdffast.js') : {};
+  const slowMs = [];
+  const paint = async (page, canvas, vp) => {
+    const n = page.pageNumber;
+    if (fast) { try { if (await drawFast(fast, n, canvas, vp.transform)) return null; } catch { /* pdf.js ile çiz */ } }
+    // Yavaş sayfalar (JBIG2, JPEG 2000 vb.): bir kez çizilince cihazda saklanır, sonraki açılışta anında gelir
+    const key = book.file?.key ? `pdfpg:${book.file.key}:${n}:${canvas.width}x${canvas.height}` : null;
+    if (key) {
+      try {
+        const hit = await db.getMeta(key);
+        if (hit instanceof Blob) {
+          const bmp = await createImageBitmap(hit);
+          canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height); bmp.close?.();
+          return null;
+        }
+      } catch { /* yeniden çiz */ }
+    }
+    const t0 = performance.now();
+    const task = page.render({ canvasContext: canvas.getContext('2d'), viewport: vp });
+    task.promise.then(() => {
+      const ms = performance.now() - t0;
+      slowMs.push(ms); if (slowMs.length > 20) slowMs.shift();
+      if (key && ms > 150) pageCachePut(key, canvas);
+    }).catch(() => {});
+    return task;
+  };
+  const info = () => ({ ...(fast ? fast.stats : { fast: 0, slow: 0, why: {}, noIndex: true }), ms: slowMs.length ? Math.round(slowMs.reduce((a, b) => a + b, 0) / slowMs.length) : null });
+  if ((rs().pdfFlow || 'paged') === 'paged') return { ...(await openPdfPaged(stage, doc, pages, { onLocation, onTap, start, onActivity, paint })), pdfInfo: info };
   const first = (await doc.getPage(1)).getViewport({ scale: 1 });
 
   stage.innerHTML = `<div class="pdf-inner" id="pdf-inner">${Array.from({ length: pages }, (_, i) => `<div class="pdf-page" data-n="${i + 1}" style="aspect-ratio:${first.width}/${first.height}"><span class="pdf-num">${i + 1}</span></div>`).join('')}</div>`;
@@ -698,8 +732,10 @@ async function openPdf(stage, blob, book, { onLocation, onTap, start, onActivity
     const canvas = document.createElement('canvas');
     canvas.width = Math.floor(vp.width); canvas.height = Math.floor(vp.height);
     entry.canvas = canvas;
-    entry.task = page.render({ canvasContext: canvas.getContext('2d'), viewport: vp });
-    try { await entry.task.promise; } catch { return; }
+    try {
+      const task = await paint(page, canvas, vp);
+      if (task) { entry.task = task; await task.promise; }
+    } catch { return; }
     if (rendered.get(n) === entry) el.appendChild(canvas);
   }
   function release(n) {
@@ -757,6 +793,7 @@ async function openPdf(stage, blob, book, { onLocation, onTap, start, onActivity
     gotoRange: async v => goto(v),
     isBookmarked: bms => bms.find(b => Number(b.loc) === current) || null,
     applyStyle,
+    pdfInfo: info,
     destroy: () => { io.disconnect(); for (const n of [...rendered.keys()]) release(n); doc.destroy(); },
   };
 }
@@ -820,6 +857,35 @@ const chapterNo = label => {
   const m = l.match(/(?:chapter|bölüm|bolum|kapitel|chapitre|capítulo|part|kısım)\s*(\d+)/) || l.match(/^\s*(\d+)\s*[.:\-–)]?\s*(?:bölüm|bolum)?/) || l.match(/(\d+)\.\s*(?:bölüm|bolum)/);
   return m ? Number(m[1]) : null;
 };
+
+function pdfInfoBlock(ctrl) {
+  const i = ctrl.pdfInfo?.();
+  if (!i) return '';
+  const ms = i.ms != null && i.ms >= 100 ? ` · yavaş sayfa ortalama ${(i.ms / 1000).toFixed(1).replace('.', ',')} sn (bir kez çizilen sayfa saklanır)` : '';
+  let t;
+  if (i.noIndex) t = `⚡ Hızlı görüntü kullanılamıyor: dosyanın yapısı okunamadı${ms}.`;
+  else if (!i.fast && !i.slow) return '';
+  else if (!i.slow) t = '⚡ Hızlı görüntü açık: sayfalar telefonun kendi resim çözücüsüyle açılıyor.';
+  else if (!i.fast && Object.keys(i.why).every(w => w === 'metin' || w === 'çizim')) t = `⚡ Bu PDF metin tabanlı; hızlı görüntüye gerek yok${ms}.`;
+  else {
+    const why = Object.entries(i.why).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+    t = `⚡ Hızlı görüntü: ${i.fast + i.slow} sayfanın ${i.fast} tanesinde${why ? ` · diğerleri: ${why}` : ''}${ms}.`;
+  }
+  return `<p class="small muted" style="margin:0 0 10px">${t}</p>`;
+}
+
+// Çizilmiş PDF sayfası önbelleği (en fazla 80 sayfa; en eskisi silinir)
+async function pageCachePut(key, canvas) {
+  try {
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
+    if (!blob) return;
+    await db.putMeta(key, blob);
+    const list = ((await db.getMeta('pdfpg:list')) || []).filter(k => k !== key);
+    list.push(key);
+    while (list.length > 80) await db.putMeta(list.shift(), null);
+    await db.putMeta('pdfpg:list', list);
+  } catch { /* yer yoksa önemli değil */ }
+}
 
 async function renderSplit(view, id) {
   const real = getBook(id);
@@ -1036,7 +1102,7 @@ async function pdfOutline(doc) {
 
 // PDF sayfa sayfa: ekrana sığan tek sayfa; kenara dokun ya da yana kaydır → sayfa çevir, ortaya dokun → menü.
 // Sonraki/önceki sayfa önceden çizilir, çevirme anında olur.
-async function openPdfPaged(stage, doc, pages, { onLocation, onTap, start, onActivity }) {
+async function openPdfPaged(stage, doc, pages, { onLocation, onTap, start, onActivity, paint }) {
   stage.classList.add('pdf-paged');
   stage.innerHTML = '<div class="pdf-sheet"></div><div class="pdf-pgnum"></div>';
   const sheet = stage.firstElementChild, pgnum = stage.lastElementChild;
@@ -1063,7 +1129,8 @@ async function openPdfPaged(stage, doc, pages, { onLocation, onTap, start, onAct
         const c = document.createElement('canvas');
         c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
         c.style.width = `${Math.floor(vp1.width * fit)}px`; c.style.height = `${Math.floor(vp1.height * fit)}px`;
-        await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+        const task = await paint(page, c, vp);
+        if (task) await task.promise;
         return c;
       })());
       // Bellek: yakındaki sayfalar dışındakileri bırak
@@ -1085,10 +1152,9 @@ async function openPdfPaged(stage, doc, pages, { onLocation, onTap, start, onAct
     sheet.replaceChildren(...[c, c2].filter(Boolean));
     stage.scrollTop = 0; stage.scrollLeft = 0;
     if (dir) { sheet.classList.remove('turn-l', 'turn-r'); void sheet.offsetWidth; sheet.classList.add(dir > 0 ? 'turn-l' : 'turn-r'); }
-    if (n < pages) draw(n + 1).catch(() => {});
-    if (n > 1) draw(n - 1).catch(() => {});
-    if (two && n + 2 <= pages) draw(n + 2).catch(() => {});
-    if (spread() && n > 2) draw(n - 2).catch(() => {});
+    // Önden hazırlık: sırayla (aynı anda değil), böylece açık sayfayla yarışmaz
+    const ahead = two ? [n + 2, n + 3, n - 1, n - 2] : [n + 1, n + 2, n - 1];
+    (async () => { for (const k of ahead) { if (current !== n) return; if (k >= 1 && k <= pages) await draw(k).catch(() => {}); } })();
   }
   function report() {
     const r = spread() && current > 1 && current < pages ? current + 1 : current;
