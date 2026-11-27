@@ -263,9 +263,7 @@ export class FastPdf {
   async #analyze(n) {
     const pg = this.pages[n - 1];
     if (!pg) return { why: 'sayfa yok' };
-    const res = this.get(pg.res) || {};
-    const xobjs = this.get(res.XObject) || {};
-    let contents = this.get(pg.node.Contents);
+    const contents = this.get(pg.node.Contents);
     const parts = Array.isArray(contents) ? contents.map(c => this.get(c)) : [contents];
     let text = '';
     for (const p of parts) {
@@ -274,13 +272,27 @@ export class FastPdf {
       if (!d) return { why: 'içerik sıkıştırması' };
       text += `${LAT.decode(d)}\n`;
     }
+    const st = { img: null };
+    const why = await this.#run(text, this.get(pg.res) || {}, [1, 0, 0, 1, 0, 0], st, 0);
+    if (why) return { why };
+    if (!st.img) return { why: 'resim yok' };
+    // JPEG başlığı: CMYK (4 bileşen) tarayıcıda yanlış renk verebilir
+    const comps = jpegComponents(this.b.subarray(st.img.start, Math.min(st.img.end, st.img.start + 65536)));
+    if (comps !== 1 && comps !== 3) return { why: 'JPEG bileşenleri' };
+    return { img: st.img };
+  }
+
+  // İçerik akışını yorumla; sorun varsa sebebi döndürür. Form nesnelerinin (XObject Form) içine girer.
+  async #run(text, res, baseCtm, st, depth) {
+    if (depth > 4) return 'iç içe form';
+    const xobjs = this.get(res.XObject) || {};
     const lx = new Lexer(text);
-    let ctm = [1, 0, 0, 1, 0, 0], tr = 0;
+    let ctm = baseCtm.slice(), tr = 0;
     const stack = [];
-    let ops = [], img = null, inText = false;
+    let ops = [];
     for (let guard = 0; guard < 200000; guard++) {
       let v;
-      try { v = lx.value(true); } catch { return { why: 'içerik okunamadı' }; }
+      try { v = lx.value(true); } catch { return 'içerik okunamadı'; }
       if (v === undefined) break;
       if (!(v && typeof v === 'object' && 'op' in v)) { ops.push(v); continue; }
       const op = v.op;
@@ -288,40 +300,43 @@ export class FastPdf {
         case 'q': stack.push([ctm, tr]); break;
         case 'Q': if (stack.length) [ctm, tr] = stack.pop(); break;
         case 'cm': if (ops.length >= 6) ctm = mul(ops.slice(-6).map(Number), ctm); break;
-        case 'BT': inText = true; break;
-        case 'ET': inText = false; break;
         case 'Tr': tr = Number(ops[ops.length - 1]); break;
-        case 'Tj': case 'TJ': case "'": case '"': if (tr !== 3 && tr !== 7) return { why: 'metin' }; break;
+        case 'Tj': case 'TJ': case "'": case '"': if (tr !== 3 && tr !== 7) return 'metin'; break;
         case 'Do': {
-          if (img) return { why: 'birden çok resim' };
           const name = ops[ops.length - 1]?.n;
           const o = this.get(xobjs[name]);
-          if (!o?.dict) return { why: 'resim bulunamadı' };
+          if (!o?.dict) return 'resim bulunamadı';
           const d = o.dict;
-          if (d.Subtype?.n !== 'Image') return { why: 'form nesnesi' };
+          if (d.Subtype?.n === 'Form') {
+            const fd = await this.streamData(o);
+            if (!fd) return 'form sıkıştırması';
+            const m = this.get(d.Matrix);
+            const fm = Array.isArray(m) && m.length === 6 ? mul(m.map(x => Number(this.get(x))), ctm) : ctm;
+            const why = await this.#run(LAT.decode(fd), this.get(d.Resources) || res, fm, st, depth + 1);
+            if (why) return why;
+            break;
+          }
+          if (d.Subtype?.n !== 'Image') return 'bilinmeyen nesne';
+          if (st.img) return 'birden çok resim';
           const f = this.get(d.Filter);
           const fl = Array.isArray(f) ? (f.length === 1 ? this.get(f[0])?.n : 'çok') : f?.n;
-          if (fl !== 'DCTDecode' && fl !== 'DCT') return { why: fl ? `resim biçimi ${fl === 'JBIG2Decode' ? 'JBIG2' : fl === 'CCITTFaxDecode' ? 'CCITT' : fl === 'JPXDecode' ? 'JPEG 2000' : fl === 'FlateDecode' ? 'sıkıştırılmış ham' : fl}` : 'ham resim' };
-          if (d.SMask || d.Mask || d.ImageMask === true || d.Decode) return { why: 'maskeli resim' };
+          if (fl !== 'DCTDecode' && fl !== 'DCT') return fl ? `resim biçimi ${fl === 'JBIG2Decode' ? 'JBIG2' : fl === 'CCITTFaxDecode' ? 'CCITT' : fl === 'JPXDecode' ? 'JPEG 2000' : fl === 'FlateDecode' ? 'sıkıştırılmış ham' : fl}` : 'ham resim';
+          if (d.SMask || d.Mask || d.ImageMask === true || d.Decode) return 'maskeli resim';
           const cs = this.get(d.ColorSpace);
           let ok = cs?.n === 'DeviceRGB' || cs?.n === 'DeviceGray' || cs?.n === 'RGB' || cs?.n === 'G';
           if (!ok && Array.isArray(cs) && this.get(cs[0])?.n === 'ICCBased') { const icc = this.dictOf(cs[1]); ok = icc && (icc.N === 1 || icc.N === 3); }
-          if (!ok) return { why: 'renk uzayı' };
-          img = { start: o.start, end: o.end, ctm: ctm.slice(), w: d.Width, h: d.Height };
+          if (!ok) return 'renk uzayı';
+          st.img = { start: o.start, end: o.end, ctm: ctm.slice(), w: d.Width, h: d.Height };
           break;
         }
-        case 'BI': return { why: 'satır içi resim' };
-        case 'S': case 's': case 'f': case 'F': case 'f*': case 'B': case 'B*': case 'b': case 'b*': case 'sh': return { why: 'çizim' };
+        case 'BI': return 'satır içi resim';
+        case 'f': case 'F': case 'f*': if (st.img) return 'çizim'; break; // resimden önceki zemin dolgusu resmin altında kalır
+        case 'S': case 's': case 'B': case 'B*': case 'b': case 'b*': case 'sh': return 'çizim';
         default: break;
       }
       ops = [];
     }
-    if (inText) { /* kapanmamış metin bloğu sorun değil */ }
-    if (!img) return { why: 'resim yok' };
-    // JPEG başlığı: CMYK (4 bileşen) tarayıcıda yanlış renk verebilir
-    const comps = jpegComponents(this.b.subarray(img.start, Math.min(img.end, img.start + 65536)));
-    if (comps !== 1 && comps !== 3) return { why: 'JPEG bileşenleri' };
-    return { img };
+    return null;
   }
 }
 
