@@ -36,7 +36,7 @@ async function slotCard(b, slot, both) {
       <div class="read-cta"><a class="btn primary" href="${href}">📖 ${b.status === 'Okundu' && pct >= 100 ? 'Yeniden oku' : pct ? `Devam et · %${Math.floor(pct)}` : p.loc ? 'Devam et' : 'Okumaya başla'}</a></div>
       ${progressLine}
       <div class="file-chip">📄 <b>${esc(f.name)}</b><span>${f.type.toUpperCase()} · ${formatSize(f.size)}${bms.length ? ` · 🔖 ${bms.length}` : ''}${f.driveId ? ' · ☁️' : ''}</span></div>
-      <div class="btn-row"><button class="mini-btn" data-reeval="1">🔎 Metinden değerlendir</button><button class="mini-btn" data-ai="${slot}">🤖 Yapay zekâya gönder</button>${filePick('Değiştir', 'mini-btn', slot, f.lang || '')}<button class="mini-btn" data-rm="${slot}" style="color:var(--danger);background:transparent">Kaldır</button></div>
+      <div class="btn-row"><button class="mini-btn" data-reeval="1">🔎 Metinden değerlendir</button><button class="mini-btn" data-ai="${slot}">🤖 Yapay zekâya gönder</button>${f.type === 'epub' ? `<button class="mini-btn" data-topdf="${slot}">📄 PDF'e çevir</button>` : ''}${filePick('Değiştir', 'mini-btn', slot, f.lang || '')}<button class="mini-btn" data-rm="${slot}" style="color:var(--danger);background:transparent">Kaldır</button></div>
     </div>`;
 }
 
@@ -83,6 +83,7 @@ export async function fillFileSection(view, b) {
   }));
   $$('[data-dl]', sec).forEach(btn => btn.addEventListener('click', () => driveDownload(b, Number(btn.dataset.dl), btn)));
   $$('[data-reeval]', sec).forEach(btn => btn.addEventListener('click', async () => (await import('../autoeval.js')).openReEvaluate(b.id)));
+  $$('[data-topdf]', sec).forEach(btn => btn.addEventListener('click', async () => (await import('./topdf.js')).openToPdf(b, Number(btn.dataset.topdf))));
   $$('[data-ai]', sec).forEach(btn => btn.addEventListener('click', async () => (await import('./sendbook.js')).openSendBook(slotBook(b, Number(btn.dataset.ai)))));
   $$('[data-setlang]', sec).forEach(btn => btn.addEventListener('click', async () => {
     const slot = Number(btn.dataset.slot), lang = btn.dataset.setlang;
